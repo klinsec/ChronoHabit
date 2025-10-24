@@ -269,8 +269,8 @@ const StatsView: React.FC = () => {
         };
     })
     .filter(item => item.value > 0 || item.goal > 0)
-    // FIX: Explicitly cast values to numbers to handle potential type inference issues in the sort callback.
-    .sort((a, b) => (Number(b.goal) + Number(b.value)) - (Number(a.goal) + Number(a.value)));
+    // FIX: Explicitly typing sort callback parameters to prevent type inference errors.
+    .sort((a: { value: number; goal: number }, b: { value: number; goal: number }) => (b.goal + b.value) - (a.goal + a.value));
 
   }, [tasks, taskDurations, getGoalByTaskIdAndPeriod, period]);
 

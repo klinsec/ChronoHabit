@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chronohabit-v4'; // Increment version to force update
+const CACHE_NAME = 'chronohabit-v5'; // Incremented version to force update
 const urlsToCache = [
   './',
   './index.html',
@@ -29,12 +29,12 @@ self.addEventListener('install', event => {
       .then(cache => {
         console.log('Opened cache and caching files');
         const cachePromises = urlsToCache.map(urlToCache => {
-          return fetch(urlToCache, { mode: 'no-cors' })
+          return fetch(urlToCache) // Removed 'mode: no-cors'
             .then(response => {
-                if(response.type === 'opaque' || response.ok) {
+                if (response.ok) { // Only cache valid, non-opaque responses
                     return cache.put(urlToCache, response);
                 }
-                return Promise.reject('Response not ok');
+                console.warn(`Request for ${urlToCache} failed with status ${response.status}`);
             })
             .catch(err => {
               console.warn(`Could not cache ${urlToCache}:`, err);
@@ -56,29 +56,22 @@ self.addEventListener('fetch', event => {
 
         // Not in cache, go to network
         return fetch(event.request).then(
-          response => {
-            // Check if we received a valid response
-            if(!response || (response.status !== 200 && response.type !== 'opaque')) {
-              return response;
+          networkResponse => {
+            // Check if we received a valid response before caching
+            if (networkResponse && networkResponse.ok) {
+              const responseToCache = networkResponse.clone();
+              caches.open(CACHE_NAME)
+                .then(cache => {
+                  cache.put(event.request, responseToCache);
+                });
             }
-
-            // IMPORTANT: Clone the response. A response is a stream
-            // and because we want the browser to consume the response
-            // as well as the cache consuming the response, we need
-            // to clone it so we have two streams.
-            const responseToCache = response.clone();
-
-            caches.open(CACHE_NAME)
-              .then(cache => {
-                cache.put(event.request, responseToCache);
-              });
-
-            return response;
+            return networkResponse;
           }
-        ).catch(() => {
-            // Fallback for failed fetch (e.g. offline)
-            // You can return a custom offline page here if you have one
-        })
+        ).catch(error => {
+            console.log('Fetch failed:', error);
+            // The browser will show its default offline error page.
+            throw error;
+        });
       })
   );
 });
