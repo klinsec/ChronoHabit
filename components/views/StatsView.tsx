@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { BarChart, Bar, Cell, ResponsiveContainer, Tooltip, Legend, XAxis, YAxis, CartesianGrid, PieChart, Pie } from 'recharts';
 import { formatDuration } from '../../utils/helpers';
 import { GoalPeriod, GoalType } from '../../types';
 import { CogIcon } from '../Icons';
@@ -332,13 +332,13 @@ const StatsView: React.FC = () => {
                     <ResponsiveContainer>
                         <BarChart data={barData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#4a5568" />
-                            <XAxis type="number" tickFormatter={(ms) => `${(ms / 3600000).toFixed(1)}h`} stroke="#a0aec0" allowDecimals={false} />
-                            <YAxis type="category" dataKey="name" width={80} stroke="#a0aec0" interval={0} tick={{ fontSize: 12 }}/>
+                            <XAxis type="number" tickFormatter={(ms) => `${(ms / 3600000).toFixed(1)}h`} stroke="#a0aec0" />
+                            <YAxis yAxisId="left" type="category" dataKey="name" width={80} stroke="#a0aec0" interval={0} tick={{ fontSize: 12 }}/>
                             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(187, 134, 252, 0.1)' }}/>
-                            <Bar dataKey="goal" barSize={20} radius={[4, 4, 4, 4]}>
+                            <Bar yAxisId="left" dataKey="goal" barSize={20} radius={[4, 4, 4, 4]}>
                                {barData.map((entry, index) => <Cell key={`cell-goal-${index}`} fill={entry.goalFill} />)}
                             </Bar>
-                            <Bar dataKey="value" barSize={14} radius={[4, 4, 4, 4]}>
+                            <Bar yAxisId="left" dataKey="value" barSize={14} radius={[4, 4, 4, 4]}>
                                 {barData.map((entry, index) => <Cell key={`cell-value-${index}`} fill={entry.taskFill} />)}
                             </Bar>
                         </BarChart>
