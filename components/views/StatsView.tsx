@@ -269,8 +269,10 @@ const StatsView: React.FC = () => {
         };
     })
     .filter(item => item.value > 0 || item.goal > 0)
-    // FIX: Use Number() to ensure values are numeric for sorting.
-    .sort((a, b) => (Number(b.goal) + Number(b.value)) - (Number(a.goal) + Number(a.value)));
+    // FIX: The `value` and `goal` properties are already numbers.
+    // The explicit `Number()` cast was redundant and potentially confusing the type inferer, causing an `unknown` type error.
+    // Removing it allows TypeScript to correctly infer the types and perform the addition.
+    .sort((a, b) => (b.goal + b.value) - (a.goal + a.value));
 
   }, [tasks, taskDurations, getGoalByTaskIdAndPeriod, period]);
 
@@ -333,12 +335,13 @@ const StatsView: React.FC = () => {
                         <BarChart data={barData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#4a5568" />
                             <XAxis type="number" tickFormatter={(ms) => `${(ms / 3600000).toFixed(1)}h`} stroke="#a0aec0" allowDecimals={false} />
-                            <YAxis type="category" dataKey="name" width={80} stroke="#a0aec0" interval={0} tick={{ fontSize: 12 }}/>
+                            <YAxis yAxisId="labels" type="category" dataKey="name" width={80} stroke="#a0aec0" interval={0} tick={{ fontSize: 12 }}/>
+                            <YAxis yAxisId="background" type="category" dataKey="name" orientation="right" tick={false} axisLine={false} />
                             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(187, 134, 252, 0.1)' }}/>
-                            <Bar dataKey="goal" barSize={20} radius={[4, 4, 4, 4]}>
+                            <Bar yAxisId="background" dataKey="goal" barSize={20} radius={[4, 4, 4, 4]}>
                                {barData.map((entry, index) => <Cell key={`cell-goal-${index}`} fill={entry.goalFill} />)}
                             </Bar>
-                            <Bar dataKey="value" barSize={14} radius={[4, 4, 4, 4]}>
+                            <Bar yAxisId="labels" dataKey="value" barSize={14} radius={[4, 4, 4, 4]}>
                                 {barData.map((entry, index) => <Cell key={`cell-value-${index}`} fill={entry.taskFill} />)}
                             </Bar>
                         </BarChart>
