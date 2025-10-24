@@ -1,0 +1,8 @@
+{
+  "short_name": "ChronoHabit",
+  "name": "ChronoHabit",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#1e1e1e",
+  "background_color": "#121212"
+}
