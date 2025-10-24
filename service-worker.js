@@ -1,21 +1,19 @@
-
-const CACHE_NAME = 'chronohabit-v3'; // Increment version to force update
+const CACHE_NAME = 'chronohabit-v4'; // Increment version to force update
 const urlsToCache = [
   './',
   './index.html',
-  './index.tsx',
-  './App.tsx',
-  './types.ts',
+  './index.js',
+  './App.js',
   './manifest.json',
-  './utils/helpers.ts',
-  './context/TimeTrackerContext.tsx',
-  './components/BottomNav.tsx',
-  './components/Icons.tsx',
-  './components/views/TimerView.tsx',
-  './components/views/HistoryView.tsx',
-  './components/views/StatsView.tsx',
-  './components/modals/TaskModal.tsx',
-  './components/modals/EntryModal.tsx',
+  './utils/helpers.js',
+  './context/TimeTrackerContext.js',
+  './components/BottomNav.js',
+  './components/Icons.js',
+  './components/views/TimerView.js',
+  './components/views/HistoryView.js',
+  './components/views/StatsView.js',
+  './components/modals/TaskModal.js',
+  './components/modals/EntryModal.js',
   './icon-192.png',
   './icon-512.png',
   'https://cdn.tailwindcss.com',
@@ -30,15 +28,20 @@ self.addEventListener('install', event => {
     caches.open(CACHE_NAME)
       .then(cache => {
         console.log('Opened cache and caching files');
-        return Promise.all(
-          urlsToCache.map(url => {
-            // Create requests for each URL. For external URLs, use no-cors mode.
-            const request = new Request(url, { mode: url.startsWith('http') ? 'no-cors' : 'same-origin' });
-            return cache.add(request);
-          })
-        );
+        const cachePromises = urlsToCache.map(urlToCache => {
+          return fetch(urlToCache, { mode: 'no-cors' })
+            .then(response => {
+                if(response.type === 'opaque' || response.ok) {
+                    return cache.put(urlToCache, response);
+                }
+                return Promise.reject('Response not ok');
+            })
+            .catch(err => {
+              console.warn(`Could not cache ${urlToCache}:`, err);
+            });
+        });
+        return Promise.all(cachePromises);
       })
-      .catch(err => console.error('Cache addAll failed:', err))
   );
 });
 
@@ -72,7 +75,10 @@ self.addEventListener('fetch', event => {
 
             return response;
           }
-        );
+        ).catch(() => {
+            // Fallback for failed fetch (e.g. offline)
+            // You can return a custom offline page here if you have one
+        })
       })
   );
 });
