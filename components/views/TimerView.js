@@ -32,7 +32,7 @@ const TimerView = () => {
         React.createElement('div', { className: "text-gray-400 text-sm mb-2" },
           activeTask ? `Registrando: ${activeTask.name}` : 'Ninguna tarea activa'
         ),
-        React.createElement('div', { className: "text-6xl font-mono font-bold text-on-surface tracking-tighter" },
+        React.createElement('div', { className: "text-5xl font-mono font-bold text-on-surface tracking-tighter" },
           formatDuration(liveElapsedTime, true)
         ),
         activeTask && (

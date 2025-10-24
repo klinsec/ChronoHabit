@@ -33,7 +33,7 @@ const TimerView: React.FC = () => {
         <div className="text-gray-400 text-sm mb-2">
           {activeTask ? `Registrando: ${activeTask.name}` : 'Ninguna tarea activa'}
         </div>
-        <div className="text-6xl font-mono font-bold text-on-surface tracking-tighter">
+        <div className="text-5xl font-mono font-bold text-on-surface tracking-tighter">
           {formatDuration(liveElapsedTime, true)}
         </div>
         {activeTask && (
