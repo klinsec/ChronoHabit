@@ -263,6 +263,15 @@ const StatsView = () => {
     .sort((a, b) => (Number(b.goal) + Number(b.value)) - (Number(a.goal) + Number(a.value)));
   }, [tasks, taskDurations, getGoalByTaskIdAndPeriod, period]);
 
+  const maxDomainValue = useMemo(() => {
+    if (!barData || barData.length === 0) {
+      return 3600000; // Default to 1 hour if no data
+    }
+    const maxVal = Math.max(...barData.map(d => Math.max(d.value, d.goal)));
+    // Add 10% padding for better visualization, and handle the case where maxVal is 0.
+    return maxVal > 0 ? maxVal * 1.1 : 3600000;
+  }, [barData]);
+
   const totalDuration = useMemo(() => Object.values(taskDurations).reduce((sum, item) => sum + item, 0), [taskDurations]);
 
   const CustomTooltip = ({ active, payload }) => {
@@ -320,7 +329,7 @@ const StatsView = () => {
                     React.createElement(ResponsiveContainer, null,
                         React.createElement(BarChart, { data: barData, layout: "vertical", margin: { top: 5, right: 20, left: 20, bottom: 5 } },
                             React.createElement(CartesianGrid, { strokeDasharray: "3 3", stroke: "#4a5568" }),
-                            React.createElement(XAxis, { type: "number", tickFormatter: (ms) => `${(ms / 3600000).toFixed(1)}h`, stroke: "#a0aec0", domain: [0, 'auto'] }),
+                            React.createElement(XAxis, { type: "number", tickFormatter: (ms) => `${(ms / 3600000).toFixed(1)}h`, stroke: "#a0aec0", domain: [0, maxDomainValue], allowDataOverflow: true }),
                             React.createElement(YAxis, { yAxisId: "left", type: "category", dataKey: "name", width: 80, stroke: "#a0aec0", interval: 0, tick: { fontSize: 12 }}),
                             React.createElement(Tooltip, { content: React.createElement(CustomTooltip, null), cursor: { fill: 'rgba(187, 134, 252, 0.1)' }}),
                             React.createElement(Bar, { yAxisId: "left", dataKey: "goal", barSize: 20, radius: [4, 4, 4, 4] },

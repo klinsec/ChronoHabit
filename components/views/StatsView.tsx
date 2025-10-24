@@ -269,10 +269,18 @@ const StatsView: React.FC = () => {
         };
     })
     .filter(item => item.value > 0 || item.goal > 0)
-    // FIX: Explicitly casting to Number resolves the TS error where types were being inferred as 'unknown'.
     .sort((a, b) => (Number(b.goal) + Number(b.value)) - (Number(a.goal) + Number(a.value)));
 
   }, [tasks, taskDurations, getGoalByTaskIdAndPeriod, period]);
+  
+  const maxDomainValue = useMemo(() => {
+    if (!barData || barData.length === 0) {
+      return 3600000; // Default to 1 hour if no data
+    }
+    const maxVal = Math.max(...barData.map(d => Math.max(d.value, d.goal)));
+    // Add 10% padding for better visualization, and handle the case where maxVal is 0.
+    return maxVal > 0 ? maxVal * 1.1 : 3600000; 
+  }, [barData]);
 
   const totalDuration = useMemo(() => Object.values(taskDurations).reduce((sum, item) => sum + item, 0), [taskDurations]);
 
@@ -332,7 +340,7 @@ const StatsView: React.FC = () => {
                     <ResponsiveContainer>
                         <BarChart data={barData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#4a5568" />
-                            <XAxis type="number" tickFormatter={(ms) => `${(ms / 3600000).toFixed(1)}h`} stroke="#a0aec0" domain={[0, 'auto']} />
+                            <XAxis type="number" tickFormatter={(ms) => `${(ms / 3600000).toFixed(1)}h`} stroke="#a0aec0" domain={[0, maxDomainValue]} allowDataOverflow />
                             <YAxis yAxisId="left" type="category" dataKey="name" width={80} stroke="#a0aec0" interval={0} tick={{ fontSize: 12 }}/>
                             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(187, 134, 252, 0.1)' }}/>
                             <Bar yAxisId="left" dataKey="goal" barSize={20} radius={[4, 4, 4, 4]}>
