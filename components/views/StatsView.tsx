@@ -269,10 +269,8 @@ const StatsView: React.FC = () => {
         };
     })
     .filter(item => item.value > 0 || item.goal > 0)
-    // FIX: The `value` and `goal` properties are already numbers.
-    // The explicit `Number()` cast was redundant and potentially confusing the type inferer, causing an `unknown` type error.
-    // Removing it allows TypeScript to correctly infer the types and perform the addition.
-    .sort((a, b) => (b.goal + b.value) - (a.goal + a.value));
+    // FIX: Explicitly casting to Number resolves the TS error where types were being inferred as 'unknown'.
+    .sort((a, b) => (Number(b.goal) + Number(b.value)) - (Number(a.goal) + Number(a.value)));
 
   }, [tasks, taskDurations, getGoalByTaskIdAndPeriod, period]);
 
