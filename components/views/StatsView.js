@@ -321,13 +321,12 @@ const StatsView = () => {
                         React.createElement(BarChart, { data: barData, layout: "vertical", margin: { top: 5, right: 20, left: 20, bottom: 5 } },
                             React.createElement(CartesianGrid, { strokeDasharray: "3 3", stroke: "#4a5568" }),
                             React.createElement(XAxis, { type: "number", tickFormatter: (ms) => `${(ms / 3600000).toFixed(1)}h`, stroke: "#a0aec0", allowDecimals: false }),
-                            React.createElement(YAxis, { yAxisId: "labels", type: "category", dataKey: "name", width: 80, stroke: "#a0aec0", interval: 0, tick: { fontSize: 12 }}),
-                            React.createElement(YAxis, { yAxisId: "background", type: "category", dataKey: "name", orientation: "right", tick: false, axisLine: false }),
+                            React.createElement(YAxis, { type: "category", dataKey: "name", width: 80, stroke: "#a0aec0", interval: 0, tick: { fontSize: 12 }}),
                             React.createElement(Tooltip, { content: React.createElement(CustomTooltip, null), cursor: { fill: 'rgba(187, 134, 252, 0.1)' }}),
-                            React.createElement(Bar, { yAxisId: "background", dataKey: "goal", barSize: 20, radius: [4, 4, 4, 4] },
+                            React.createElement(Bar, { dataKey: "goal", barSize: 20, radius: [4, 4, 4, 4] },
                                barData.map((entry, index) => React.createElement(Cell, { key: `cell-goal-${index}`, fill: entry.goalFill }))
                             ),
-                            React.createElement(Bar, { yAxisId: "labels", dataKey: "value", barSize: 14, radius: [4, 4, 4, 4] },
+                            React.createElement(Bar, { dataKey: "value", barSize: 14, radius: [4, 4, 4, 4] },
                                 barData.map((entry, index) => React.createElement(Cell, { key: `cell-value-${index}`, fill: entry.taskFill }))
                             )
                         )

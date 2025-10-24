@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chronohabit-v5'; // Incremented version to force update
+const CACHE_NAME = 'chronohabit-v6'; // Incremented version to force update
 const urlsToCache = [
   './',
   './index.html',

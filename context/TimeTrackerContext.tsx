@@ -13,6 +13,7 @@ interface TimeTrackerContextType {
   startTask: (taskId: string) => void;
   updateEntry: (entry: TimeEntry) => void;
   deleteEntry: (entryId: string) => void;
+  deleteAllData: () => void;
   getTaskById: (taskId: string) => Task | undefined;
   setGoal: (goal: Goal) => void;
   deleteGoal: (taskId: string, period?: GoalPeriod) => void;
@@ -165,6 +166,20 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [activeEntry]);
 
+  const deleteAllData = useCallback(() => {
+    if (window.confirm("¿Estás seguro de que quieres borrar TODOS los datos? Esta acción es irreversible y recargará la aplicación.")) {
+      try {
+        localStorage.removeItem('chrono_tasks');
+        localStorage.removeItem('chrono_entries');
+        localStorage.removeItem('chrono_goals');
+        window.location.reload();
+      } catch (e) {
+        console.error("Failed to delete data from localStorage", e);
+        alert("Hubo un error al borrar los datos.");
+      }
+    }
+  }, []);
+
   const getTaskById = useCallback((taskId: string) => tasks.find(task => task.id === taskId), [tasks]);
 
   const setGoal = useCallback((goal: Goal) => {
@@ -197,6 +212,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       startTask,
       updateEntry,
       deleteEntry,
+      deleteAllData,
       getTaskById,
       setGoal,
       deleteGoal,
