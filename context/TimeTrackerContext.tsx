@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { Task, TimeEntry, Goal, GoalPeriod } from '../types';
+import { Task, TimeEntry, Goal, GoalPeriod, Subtask } from '../types';
 
 interface TimeTrackerContextType {
   tasks: Task[];
   timeEntries: TimeEntry[];
   goals: Goal[];
+  subtasks: Subtask[];
   activeEntry: TimeEntry | null;
   liveElapsedTime: number;
   addTask: (task: Task) => void;
@@ -18,6 +19,10 @@ interface TimeTrackerContextType {
   setGoal: (goal: Goal) => void;
   deleteGoal: (taskId: string, period?: GoalPeriod) => void;
   getGoalByTaskIdAndPeriod: (taskId: string, period: GoalPeriod) => Goal | undefined;
+  addSubtask: (subtask: Omit<Subtask, 'id' | 'completed' | 'createdAt'>) => void;
+  updateSubtask: (subtask: Subtask) => void;
+  deleteSubtask: (subtaskId: string) => void;
+  toggleSubtaskCompletion: (subtaskId: string) => void;
 }
 
 const TimeTrackerContext = createContext<TimeTrackerContextType | undefined>(undefined);
@@ -33,6 +38,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [tasks, setTasks] = useState<Task[]>([]);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [activeEntry, setActiveEntry] = useState<TimeEntry | null>(null);
   const [liveElapsedTime, setLiveElapsedTime] = useState(0);
 
@@ -41,6 +47,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       const storedTasks = localStorage.getItem('chrono_tasks');
       const storedEntries = localStorage.getItem('chrono_entries');
       const storedGoals = localStorage.getItem('chrono_goals');
+      const storedSubtasks = localStorage.getItem('chrono_subtasks');
       
       if (storedTasks) {
         setTasks(JSON.parse(storedTasks));
@@ -57,6 +64,10 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
 
       if(storedGoals) {
         setGoals(JSON.parse(storedGoals));
+      }
+
+      if(storedSubtasks) {
+        setSubtasks(JSON.parse(storedSubtasks));
       }
 
     } catch (e) {
@@ -88,6 +99,14 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       console.error("Failed to save goals to localStorage", e);
     }
   }, [goals]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('chrono_subtasks', JSON.stringify(subtasks));
+    } catch (e) {
+      console.error("Failed to save subtasks to localStorage", e);
+    }
+  }, [subtasks]);
   
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
@@ -142,9 +161,10 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, []);
 
   const deleteTask = useCallback((taskId: string) => {
-    if (window.confirm("¿Estás seguro? Eliminar una tarea también eliminará todos sus registros de tiempo y objetivos.")) {
+    if (window.confirm("¿Estás seguro? Eliminar una tarea también eliminará todos sus registros de tiempo, objetivos y subtareas asociadas.")) {
       setTasks(prev => prev.filter(task => task.id !== taskId));
       setTimeEntries(prev => prev.filter(entry => entry.taskId !== taskId));
+      setSubtasks(prev => prev.filter(subtask => subtask.taskId !== taskId));
       deleteGoal(taskId);
       if (activeEntry?.taskId === taskId) {
         setActiveEntry(null);
@@ -169,9 +189,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   const deleteAllData = useCallback(() => {
     if (window.confirm("¿Estás seguro de que quieres borrar TODOS los datos? Esta acción es irreversible y recargará la aplicación.")) {
       try {
-        localStorage.removeItem('chrono_tasks');
-        localStorage.removeItem('chrono_entries');
-        localStorage.removeItem('chrono_goals');
+        localStorage.clear();
         window.location.reload();
       } catch (e) {
         console.error("Failed to delete data from localStorage", e);
@@ -197,6 +215,28 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   const getGoalByTaskIdAndPeriod = useCallback((taskId: string, period: GoalPeriod) => {
     return goals.find(g => g.taskId === taskId && g.period === period);
   }, [goals]);
+  
+  const addSubtask = useCallback((subtask: Omit<Subtask, 'id' | 'completed' | 'createdAt'>) => {
+    const newSubtask: Subtask = {
+      ...subtask,
+      id: `subtask_${Date.now()}`,
+      completed: false,
+      createdAt: Date.now()
+    };
+    setSubtasks(prev => [newSubtask, ...prev]);
+  }, []);
+
+  const updateSubtask = useCallback((updatedSubtask: Subtask) => {
+    setSubtasks(prev => prev.map(s => s.id === updatedSubtask.id ? updatedSubtask : s));
+  }, []);
+
+  const deleteSubtask = useCallback((subtaskId: string) => {
+    setSubtasks(prev => prev.filter(s => s.id !== subtaskId));
+  }, []);
+
+  const toggleSubtaskCompletion = useCallback((subtaskId: string) => {
+    setSubtasks(prev => prev.map(s => s.id === subtaskId ? { ...s, completed: !s.completed } : s));
+  }, []);
 
 
   return (
@@ -204,6 +244,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       tasks,
       timeEntries,
       goals,
+      subtasks,
       activeEntry,
       liveElapsedTime,
       addTask,
@@ -217,6 +258,10 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       setGoal,
       deleteGoal,
       getGoalByTaskIdAndPeriod,
+      addSubtask,
+      updateSubtask,
+      deleteSubtask,
+      toggleSubtaskCompletion,
     }}>
       {children}
     </TimeTrackerContext.Provider>

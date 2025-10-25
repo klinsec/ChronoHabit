@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chronohabit-v6'; // Incremented version to force update
+const CACHE_NAME = 'chronohabit-v7'; // Incremented version to force update
 const urlsToCache = [
   './',
   './index.html',
@@ -12,8 +12,11 @@ const urlsToCache = [
   './components/views/TimerView.js',
   './components/views/HistoryView.js',
   './components/views/StatsView.js',
+  './components/views/TasksView.js',
   './components/modals/TaskModal.js',
   './components/modals/EntryModal.js',
+  './components/modals/GoalModal.js',
+  './components/modals/SubtaskModal.js',
   './icon-192.png',
   './icon-512.png',
   'https://cdn.tailwindcss.com',
@@ -29,9 +32,9 @@ self.addEventListener('install', event => {
       .then(cache => {
         console.log('Opened cache and caching files');
         const cachePromises = urlsToCache.map(urlToCache => {
-          return fetch(urlToCache) // Removed 'mode: no-cors'
+          return fetch(urlToCache) 
             .then(response => {
-                if (response.ok) { // Only cache valid, non-opaque responses
+                if (response.ok) { 
                     return cache.put(urlToCache, response);
                 }
                 console.warn(`Request for ${urlToCache} failed with status ${response.status}`);

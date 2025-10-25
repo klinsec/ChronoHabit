@@ -13,6 +13,7 @@ export const TimeTrackerProvider = ({ children }) => {
   const [tasks, setTasks] = useState([]);
   const [timeEntries, setTimeEntries] = useState([]);
   const [goals, setGoals] = useState([]);
+  const [subtasks, setSubtasks] = useState([]);
   const [activeEntry, setActiveEntry] = useState(null);
   const [liveElapsedTime, setLiveElapsedTime] = useState(0);
 
@@ -21,6 +22,7 @@ export const TimeTrackerProvider = ({ children }) => {
       const storedTasks = localStorage.getItem('chrono_tasks');
       const storedEntries = localStorage.getItem('chrono_entries');
       const storedGoals = localStorage.getItem('chrono_goals');
+      const storedSubtasks = localStorage.getItem('chrono_subtasks');
       
       if (storedTasks) {
         setTasks(JSON.parse(storedTasks));
@@ -37,6 +39,10 @@ export const TimeTrackerProvider = ({ children }) => {
 
       if(storedGoals) {
         setGoals(JSON.parse(storedGoals));
+      }
+
+      if(storedSubtasks) {
+        setSubtasks(JSON.parse(storedSubtasks));
       }
 
     } catch (e) {
@@ -69,6 +75,14 @@ export const TimeTrackerProvider = ({ children }) => {
     }
   }, [goals]);
   
+  useEffect(() => {
+    try {
+      localStorage.setItem('chrono_subtasks', JSON.stringify(subtasks));
+    } catch (e) {
+      console.error("Failed to save subtasks to localStorage", e);
+    }
+  }, [subtasks]);
+
   useEffect(() => {
     let interval = null;
     if (activeEntry) {
@@ -122,9 +136,10 @@ export const TimeTrackerProvider = ({ children }) => {
   }, []);
 
   const deleteTask = useCallback((taskId) => {
-    if (window.confirm("¿Estás seguro? Eliminar una tarea también eliminará todos sus registros de tiempo y objetivos.")) {
+    if (window.confirm("¿Estás seguro? Eliminar una tarea también eliminará todos sus registros de tiempo, objetivos y subtareas asociadas.")) {
       setTasks(prev => prev.filter(task => task.id !== taskId));
       setTimeEntries(prev => prev.filter(entry => entry.taskId !== taskId));
+      setSubtasks(prev => prev.filter(subtask => subtask.taskId !== taskId));
       deleteGoal(taskId);
       if (activeEntry?.taskId === taskId) {
         setActiveEntry(null);
@@ -149,9 +164,7 @@ export const TimeTrackerProvider = ({ children }) => {
   const deleteAllData = useCallback(() => {
     if (window.confirm("¿Estás seguro de que quieres borrar TODOS los datos? Esta acción es irreversible y recargará la aplicación.")) {
       try {
-        localStorage.removeItem('chrono_tasks');
-        localStorage.removeItem('chrono_entries');
-        localStorage.removeItem('chrono_goals');
+        localStorage.clear();
         window.location.reload();
       } catch (e) {
         console.error("Failed to delete data from localStorage", e);
@@ -178,11 +191,33 @@ export const TimeTrackerProvider = ({ children }) => {
     return goals.find(g => g.taskId === taskId && g.period === period);
   }, [goals]);
 
+  const addSubtask = useCallback((subtask) => {
+    const newSubtask = {
+      ...subtask,
+      id: `subtask_${Date.now()}`,
+      completed: false,
+      createdAt: Date.now()
+    };
+    setSubtasks(prev => [newSubtask, ...prev]);
+  }, []);
+
+  const updateSubtask = useCallback((updatedSubtask) => {
+    setSubtasks(prev => prev.map(s => s.id === updatedSubtask.id ? updatedSubtask : s));
+  }, []);
+
+  const deleteSubtask = useCallback((subtaskId) => {
+    setSubtasks(prev => prev.filter(s => s.id !== subtaskId));
+  }, []);
+
+  const toggleSubtaskCompletion = useCallback((subtaskId) => {
+    setSubtasks(prev => prev.map(s => s.id === subtaskId ? { ...s, completed: !s.completed } : s));
+  }, []);
 
   return React.createElement(TimeTrackerContext.Provider, { value: {
       tasks,
       timeEntries,
       goals,
+      subtasks,
       activeEntry,
       liveElapsedTime,
       addTask,
@@ -196,6 +231,10 @@ export const TimeTrackerProvider = ({ children }) => {
       setGoal,
       deleteGoal,
       getGoalByTaskIdAndPeriod,
+      addSubtask,
+      updateSubtask,
+      deleteSubtask,
+      toggleSubtaskCompletion,
     }},
     children
   );

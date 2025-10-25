@@ -12,10 +12,19 @@ export interface TimeEntry {
   endTime: number | null;
 }
 
-export type View = 'timer' | 'history' | 'stats';
+export interface Subtask {
+  id: string;
+  taskId: string;
+  title: string;
+  description: string;
+  completed: boolean;
+  createdAt: number;
+}
+
+export type View = 'timer' | 'history' | 'stats' | 'tasks';
 
 export type GoalType = 'min' | 'max';
-export type GoalPeriod = 'day' | 'week';
+export type GoalPeriod = 'day' | 'week' | 'month' | 'all';
 
 export interface Goal {
   taskId: string;

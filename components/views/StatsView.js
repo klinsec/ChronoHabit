@@ -1,91 +1,9 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext.js';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, LabelList } from 'recharts';
 import { formatDuration } from '../../utils/helpers.js';
 import { CogIcon } from '../Icons.js';
-
-// Modal component for managing all goals
-const GoalsModal = ({ onClose, period }) => {
-    const { tasks, goals, setGoal, deleteGoal } = useTimeTracker();
-    const title = period === 'day' ? 'Gestionar Objetivos Diarios' : 'Gestionar Objetivos Semanales';
-
-    const [localGoals, setLocalGoals] = useState(() => {
-        const initialState = {};
-        tasks.forEach(task => {
-            const existingGoal = goals.find(g => g.taskId === task.id && g.period === period);
-            if (existingGoal) {
-                initialState[task.id] = { type: existingGoal.type, duration: existingGoal.duration };
-            } else {
-                initialState[task.id] = { type: 'none', duration: 0 };
-            }
-        });
-        return initialState;
-    });
-
-    const handleChange = (taskId, field, value) => {
-        setLocalGoals(prev => ({ ...prev, [taskId]: { ...prev[taskId], [field]: value }}));
-    };
-
-    const handleDurationChange = (taskId, unit, value) => {
-        const numValue = parseInt(value) || 0;
-        const currentDuration = localGoals[taskId].duration;
-        const newDuration = unit === 'hours'
-            ? (numValue * 3600000) + (currentDuration % 3600000)
-            : (Math.floor(currentDuration / 3600000) * 3600000) + (numValue * 60000);
-        handleChange(taskId, 'duration', newDuration);
-    };
-
-    const handleSave = () => {
-        Object.keys(localGoals).forEach((taskId) => {
-            const goalData = localGoals[taskId];
-            if (goalData.type !== 'none' && goalData.duration > 0) {
-                setGoal({ taskId, type: goalData.type, period: period, duration: goalData.duration });
-            } else {
-                deleteGoal(taskId, period);
-            }
-        });
-        onClose();
-    };
-
-    return (
-        React.createElement('div', { className: "fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4" },
-            React.createElement('div', { className: "bg-surface rounded-2xl p-6 w-full max-w-sm flex flex-col max-h-[90vh]" },
-                React.createElement('h2', { className: "text-xl font-bold mb-4 flex-shrink-0" }, title),
-                React.createElement('div', { className: "space-y-4 overflow-y-auto pr-2 flex-grow" },
-                    tasks.map(task => {
-                        const goal = localGoals[task.id];
-                        const hours = Math.floor(goal.duration / 3600000);
-                        const minutes = Math.floor((goal.duration % 3600000) / 60000);
-                        return (
-                            React.createElement('div', { key: task.id, className: "border-t border-gray-700 pt-4" },
-                                React.createElement('p', { className: "font-bold mb-2" }, `${task.icon} ${task.name}`),
-                                React.createElement('div', { className: "grid grid-cols-2 gap-x-4 gap-y-2" },
-                                    React.createElement('select', { value: goal.type, onChange: e => handleChange(task.id, 'type', e.target.value), className: "w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white col-span-2" },
-                                        React.createElement('option', { value: "none" }, "Ninguno"),
-                                        React.createElement('option', { value: "min" }, "Mínimo"),
-                                        React.createElement('option', { value: "max" }, "Máximo")
-                                    ),
-                                    React.createElement('div', { className: "flex items-center gap-2" },
-                                        React.createElement('input', { type: "number", value: hours, onChange: e => handleDurationChange(task.id, 'hours', e.target.value), className: "w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white", disabled: goal.type === 'none', min: "0" }),
-                                        React.createElement('span', { className: "text-gray-400" }, "h")
-                                    ),
-                                    React.createElement('div', { className: "flex items-center gap-2" },
-                                        React.createElement('input', { type: "number", value: minutes, onChange: e => handleDurationChange(task.id, 'minutes', e.target.value), className: "w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white", disabled: goal.type === 'none', min: "0", max: "59"}),
-                                        React.createElement('span', { className: "text-gray-400" }, "m")
-                                    )
-                                )
-                            )
-                        );
-                    })
-                ),
-                React.createElement('div', { className: "flex justify-end space-x-2 pt-4 mt-2 border-t border-gray-700 flex-shrink-0" },
-                    React.createElement('button', { type: "button", onClick: onClose, className: "bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg" }, "Cancelar"),
-                    React.createElement('button', { type: "button", onClick: handleSave, className: "bg-primary hover:bg-purple-500 text-bkg font-bold py-2 px-4 rounded-lg" }, "Guardar")
-                )
-            )
-        )
-    );
-};
+import GoalModal from '../modals/GoalModal.js';
 
 const DateNavigator = ({ period, currentDate, setCurrentDate, dateRangeDisplay }) => {
     
@@ -134,10 +52,10 @@ const DateNavigator = ({ period, currentDate, setCurrentDate, dateRangeDisplay }
 };
 
 const StatsView = () => {
-  const { timeEntries, getTaskById, tasks, getGoalByTaskIdAndPeriod, activeEntry, liveElapsedTime } = useTimeTracker();
+  const { timeEntries, getTaskById, activeEntry, liveElapsedTime, getGoalByTaskIdAndPeriod } = useTimeTracker();
   const [period, setPeriod] = useState('week');
-  const [isGoalsModalOpen, setIsGoalsModalOpen] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
 
   useEffect(() => {
     setCurrentDate(new Date());
@@ -220,84 +138,69 @@ const StatsView = () => {
     return durations;
   }, [filteredEntries, activeEntry, liveElapsedTime, dateRange]);
 
-  const pieData = useMemo(() => {
+  const chartData = useMemo(() => {
     return Object.entries(taskDurations)
       .map(([taskId, duration]) => {
           const task = getTaskById(taskId);
+          const goal = getGoalByTaskIdAndPeriod(taskId, period);
           return {
             name: task?.name || 'Unknown',
             value: duration,
             fill: task?.color || '#8884d8',
+            icon: task?.icon || '❓',
+            goal: goal
           };
       })
-      .filter(item => Number(item.value) > 0)
+      .filter(item => Number(item.value) > 0 || (item.goal && item.goal.duration > 0))
       .sort((a, b) => Number(b.value) - Number(a.value));
-  }, [taskDurations, getTaskById]);
-
-  const barData = useMemo(() => {
-    return tasks.map(task => {
-        const duration = taskDurations[task.id] || 0;
-        const goal = (period === 'day' || period === 'week') ? getGoalByTaskIdAndPeriod(task.id, period) : undefined;
-        const goalDuration = goal?.duration || 0;
-
-        const taskFill = task.color;
-        let goalFill = '#4A5568'; // Gris por defecto (sin objetivo, o mínimo sin cumplir)
-
-        if (goalDuration > 0) {
-            if (goal?.type === 'max') {
-                goalFill = duration > goalDuration ? '#ef4444' : '#22c55e'; // Rojo si se excede, si no verde
-            } else if (goal?.type === 'min' && duration >= goalDuration) {
-                goalFill = '#22c55e'; // Verde si se cumple
-            }
-        }
-
-        return {
-            name: task.name,
-            value: duration,
-            goal: goalDuration,
-            taskFill: taskFill,
-            goalFill: goalFill,
-        };
-    })
-    .filter(item => item.value > 0 || item.goal > 0)
-    .sort((a, b) => (Number(b.goal) + Number(b.value)) - (Number(a.goal) + Number(a.value)));
-  }, [tasks, taskDurations, getGoalByTaskIdAndPeriod, period]);
-
-  const maxDomainValue = useMemo(() => {
-    if (!barData || barData.length === 0) {
-      return 3600000; // Default to 1 hour if no data
-    }
-    const maxVal = Math.max(...barData.map(d => Math.max(d.value, d.goal)));
-    // Add 10% padding for better visualization, and handle the case where maxVal is 0.
-    return maxVal > 0 ? maxVal * 1.1 : 3600000;
-  }, [barData]);
-
-  const totalDuration = useMemo(() => Object.values(taskDurations).reduce((sum, item) => sum + item, 0), [taskDurations]);
+  }, [taskDurations, getTaskById, getGoalByTaskIdAndPeriod, period]);
+  
+  const totalDuration = useMemo(() => Object.values(taskDurations).reduce((sum, item) => sum + Number(item), 0), [taskDurations]);
 
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
-      const data = payload.find(p => p.dataKey === 'value')?.payload || payload[0]?.payload;
+      const data = payload[0].payload;
       const { name, value, goal } = data;
       const percentage = totalDuration > 0 ? ((value / totalDuration) * 100).toFixed(1) : 0;
       return (
-        React.createElement('div', { className: "bg-surface p-2 border border-gray-700 rounded-md shadow-lg" },
-          React.createElement('p', { className: "font-bold" }, name),
-          React.createElement('p', null, `Tiempo: ${formatDuration(value)}`),
-          goal != null && goal > 0 && React.createElement('p', null, `Objetivo: ${formatDuration(goal)}`),
+        React.createElement('div', { className: "bg-surface p-2 border border-gray-700 rounded-md shadow-lg text-sm" },
+          React.createElement('p', { className: "font-bold text-base" }, name),
+          React.createElement('p', null, `Progreso: ${formatDuration(value)}`),
+          goal && React.createElement('p', null, `Objetivo: ${formatDuration(goal.duration)} (${goal.type === 'min' ? 'mínimo' : 'máximo'})`),
           totalDuration > 0 && React.createElement('p', null, `Porcentaje: ${percentage}%`)
         )
       );
     }
     return null;
   };
+  
+  const renderProgressLabel = (props) => {
+      const { x, y, width, value } = props;
+      if (value === 0) return null;
+      const formattedValue = formatDuration(value);
+      return (
+          React.createElement('text', { x: x + width + 5, y: y + 10, fill: "#e0e0e0", textAnchor: "start", dominantBaseline: "middle", className: "text-xs font-mono" },
+              formattedValue
+          )
+      );
+  };
+  
+  const renderGoalLabel = (props) => {
+      const { x, y, width, goal } = props;
+      if (!goal || goal.duration === 0) return null;
+      const formattedValue = formatDuration(goal.duration);
+      return (
+           React.createElement('text', { x: x + width + 5, y: y + 18, fill: "#a0a0a0", textAnchor: "start", dominantBaseline: "middle", className: "text-xs font-mono" },
+              formattedValue
+          )
+      );
+  };
 
   const periodLabels = { day: 'Día', week: 'Semana', month: 'Mes', all: 'Todo' };
 
   return (
     React.createElement('div', { className: "space-y-8" },
-      isGoalsModalOpen && (period === 'day' || period === 'week') && (
-        React.createElement(GoalsModal, { onClose: () => setIsGoalsModalOpen(false), period: period })
-      ),
+      isGoalModalOpen && React.createElement(GoalModal, { period: period, onClose: () => setIsGoalModalOpen(false) }),
       React.createElement('div', null,
         React.createElement('div', { className: "flex justify-center bg-surface p-1 rounded-xl mb-4" },
             ['day', 'week', 'month', 'all'].map(p => (
@@ -309,48 +212,16 @@ const StatsView = () => {
         
         React.createElement(DateNavigator, { period: period, currentDate: currentDate, setCurrentDate: setCurrentDate, dateRangeDisplay: dateRange.display }),
 
-        barData.length > 0 || pieData.length > 0 ? (
-            React.createElement(React.Fragment, null,
-            React.createElement('div', null,
-                 React.createElement('div', { className: "flex justify-between items-center mb-1" },
-                    React.createElement('h3', { className: "text-xl font-semibold" }, "Tiempo Total por Tarea"),
-                    React.createElement('button', 
-                        {
-                          onClick: () => setIsGoalsModalOpen(true),
-                          className: "flex items-center space-x-2 bg-gray-600 text-white font-semibold px-3 py-2 rounded-lg hover:bg-gray-500 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed",
-                          disabled: period === 'month' || period === 'all'
-                        },
-                        React.createElement(CogIcon, null),
-                        React.createElement('span', null, "Gestionar")
-                    )
-                ),
-                React.createElement('p', { className: "text-gray-400 text-sm mb-4" }, "La barra de fondo es tu objetivo. Mínimo: verde al cumplirlo. Máximo: verde, y rojo al superarlo."),
-                React.createElement('div', { style: { width: '100%', height: 300 } },
-                    React.createElement(ResponsiveContainer, null,
-                        React.createElement(BarChart, { key: period + dateRange.start, data: barData, layout: "vertical", margin: { top: 5, right: 20, left: 20, bottom: 5 } },
-                            React.createElement(CartesianGrid, { strokeDasharray: "3 3", stroke: "#4a5568" }),
-                            React.createElement(XAxis, { type: "number", tickFormatter: (ms) => `${(ms / 3600000).toFixed(1)}h`, stroke: "#a0aec0", domain: [0, maxDomainValue] }),
-                            React.createElement(YAxis, { yAxisId: "left", type: "category", dataKey: "name", width: 80, stroke: "#a0aec0", interval: 0, tick: { fontSize: 12 }}),
-                            React.createElement(Tooltip, { content: React.createElement(CustomTooltip, null), cursor: { fill: 'rgba(187, 134, 252, 0.1)' }}),
-                            React.createElement(Bar, { yAxisId: "left", dataKey: "goal", barSize: 20 },
-                               barData.map((entry, index) => React.createElement(Cell, { key: `cell-goal-${index}`, fill: entry.goalFill }))
-                            ),
-                            React.createElement(Bar, { yAxisId: "left", dataKey: "value", barSize: 14, minPointSize: 2 },
-                                barData.map((entry, index) => React.createElement(Cell, { key: `cell-value-${index}`, fill: entry.taskFill }))
-                            )
-                        )
-                    )
-                )
-            ),
-            pieData.length > 0 && (
+        chartData.length > 0 ? (
+            React.createElement('div', { className: "space-y-10" },
                 React.createElement('div', null,
-                    React.createElement('h3', { className: "text-xl font-semibold mb-2 mt-8 text-center" }, "Distribución del Tiempo"),
+                    React.createElement('h3', { className: "text-xl font-semibold mb-2 text-center" }, "Distribución del Tiempo"),
                     React.createElement('div', { style: { width: '100%', height: 300 } },
                         React.createElement(ResponsiveContainer, { width: "100%", height: "100%" },
                             React.createElement(PieChart, { margin: { top: 5, right: 20, left: 20, bottom: 5 } },
                                 React.createElement(Pie, 
                                     {
-                                      data: pieData, 
+                                      data: chartData, 
                                       cx: "50%",
                                       cy: "50%",
                                       nameKey: "name",
@@ -361,15 +232,67 @@ const StatsView = () => {
                                       labelLine: false,
                                       isAnimationActive: !activeEntry
                                     },
-                                    pieData.map((entry, index) => (React.createElement(Cell, { key: `cell-${index}`, fill: entry.fill, stroke: entry.fill })))
+                                    chartData.map((entry, index) => (React.createElement(Cell, { key: `cell-${index}`, fill: entry.fill, stroke: entry.fill })))
                                 ),
                                 React.createElement(Tooltip, { content: React.createElement(CustomTooltip, null) }),
                                 React.createElement(Legend, null)
                             )
                         )
                     )
+                ),
+                React.createElement('div', null,
+                  React.createElement('div', { className: "flex items-center justify-center gap-2" },
+                    React.createElement('h3', { className: "text-xl font-semibold text-center" }, "Desglose por Tarea"),
+                    React.createElement('button', { onClick: () => setIsGoalModalOpen(true), className: "text-gray-400 hover:text-white transition-colors", 'aria-label': "Configurar objetivos" },
+                        React.createElement(CogIcon, null)
+                    )
+                  ),
+                  React.createElement('div', { style: { width: '100%', height: chartData.length * 60 + 20, marginTop: '1rem' } },
+                    React.createElement(ResponsiveContainer, { width: "100%", height: "100%" },
+                      React.createElement(BarChart,
+                        {
+                          layout: "vertical",
+                          data: chartData,
+                          margin: { top: 5, right: 60, left: 5, bottom: 5 },
+                          barCategoryGap: "35%"
+                        },
+                        React.createElement(XAxis, { type: "number", hide: true }),
+                        React.createElement(YAxis, 
+                          { 
+                            type: "category", 
+                            dataKey: "name",
+                            width: 100,
+                            tickLine: false,
+                            axisLine: false,
+                            tick: { fill: '#e0e0e0', fontSize: 14 },
+                            tickFormatter: (value, index) => `${chartData[index]?.icon || ''} ${value}`
+                          }),
+                        React.createElement(Tooltip, { content: React.createElement(CustomTooltip, null), cursor: { fill: 'rgba(255, 255, 255, 0.1)' } }),
+                        React.createElement(Bar, { dataKey: (data) => data.goal?.duration || 0, barSize: 24, radius: [4, 4, 4, 4], isAnimationActive: !activeEntry},
+                            chartData.map((entry, index) => {
+                                const { value, goal } = entry;
+                                let color = "transparent";
+                                if (goal && goal.duration > 0) {
+                                    if (goal.type === 'min') {
+                                        color = value >= goal.duration ? '#22c55e' : '#4b5563';
+                                    } else { // max
+                                        color = value > goal.duration ? '#ef4444' : '#22c55e';
+                                    }
+                                }
+                                return React.createElement(Cell, { key: `cell-goal-${index}`, fill: color });
+                            }),
+                            React.createElement(LabelList, { dataKey: "goal.duration", content: renderGoalLabel })
+                        ),
+                        React.createElement(Bar, { dataKey: "value", barSize: 12, radius: [2, 2, 2, 2], isAnimationActive: !activeEntry },
+                          chartData.map((entry, index) => (
+                            React.createElement(Cell, { key: `cell-progress-${index}`, fill: entry.fill })
+                          )),
+                           React.createElement(LabelList, { dataKey: "value", content: renderProgressLabel })
+                        )
+                      )
+                    )
+                  )
                 )
-            )
             )
         ) : (
             React.createElement('div', { className: "text-center py-10" },
