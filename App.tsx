@@ -69,8 +69,7 @@ const App: React.FC = () => {
   return (
     <TimeTrackerProvider>
       <div className="flex flex-col h-screen max-w-md mx-auto bg-bkg font-sans">
-        <header className="p-4 bg-surface shadow-lg flex items-center justify-center gap-3">
-          <img src="./icon-192.png" alt="ChronoHabit Logo" className="w-9 h-9" />
+        <header className="p-4 bg-surface shadow-lg flex items-center justify-center">
           <h1 className="text-2xl font-bold text-primary tracking-wider">ChronoHabit</h1>
         </header>
         {showInstallBanner && (

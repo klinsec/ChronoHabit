@@ -73,8 +73,7 @@ const App = () => {
   return (
     React.createElement(TimeTrackerProvider, null,
       React.createElement('div', { className: "flex flex-col h-screen max-w-md mx-auto bg-bkg font-sans" },
-        React.createElement('header', { className: "p-4 bg-surface shadow-lg flex items-center justify-center gap-3" },
-          React.createElement('img', { src: './icon-192.png', alt: 'ChronoHabit Logo', className: 'w-9 h-9' }),
+        React.createElement('header', { className: "p-4 bg-surface shadow-lg flex items-center justify-center" },
           React.createElement('h1', { className: "text-2xl font-bold text-primary tracking-wider" }, "ChronoHabit")
         ),
         installBanner,
