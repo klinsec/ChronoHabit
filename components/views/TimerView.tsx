@@ -6,7 +6,7 @@ import TaskModal from '../modals/TaskModal';
 import { PlusIcon, EditIcon } from '../Icons';
 
 const TimerView: React.FC = () => {
-  const { tasks, activeEntry, startTask, getTaskById, liveElapsedTime } = useTimeTracker();
+  const { tasks, activeEntry, startTask, stopTask, getTaskById, liveElapsedTime } = useTimeTracker();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
@@ -37,7 +37,18 @@ const TimerView: React.FC = () => {
           {formatDuration(liveElapsedTime, true)}
         </div>
         {activeTask && (
-             <div className="mt-4 text-5xl" style={{ filter: 'saturate(0.7)' }}>{activeTask.icon}</div>
+             <div className="flex flex-col items-center">
+                <div className="mt-4 text-5xl" style={{ filter: 'saturate(0.7)' }}>{activeTask.icon}</div>
+                <div className="mt-6">
+                    <button 
+                        onClick={stopTask} 
+                        className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-8 rounded-full shadow-lg transition-transform transform hover:scale-105 flex items-center justify-center mx-auto gap-2"
+                    >
+                        <div className="w-4 h-4 bg-white rounded-sm"></div>
+                        <span>Detener</span>
+                    </button>
+                </div>
+             </div>
         )}
       </div>
 

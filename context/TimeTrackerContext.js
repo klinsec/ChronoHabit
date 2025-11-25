@@ -1,12 +1,14 @@
+
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 const TimeTrackerContext = createContext(undefined);
 
 const defaultTasks = [
   { id: '1', name: 'Trabajo', color: '#ef4444', icon: '💼' },
-  { id: '2', name: 'Dormir', color: '#3b82f6', icon: '😴' },
+  { id: '2', name: 'Ocio', color: '#eab308', icon: '🎮' },
   { id: '3', name: 'Ejercicio', color: '#22c55e', icon: '💪' },
-  { id: '4', name: 'Ocio', color: '#eab308', icon: '🎮' },
+  { id: '4', name: 'Proyecto personal', color: '#8b5cf6', icon: '🚀' },
+  { id: '5', name: 'Limpieza', color: '#06b6d4', icon: '🧹' },
 ];
 
 export const TimeTrackerProvider = ({ children }) => {
@@ -16,6 +18,7 @@ export const TimeTrackerProvider = ({ children }) => {
   const [subtasks, setSubtasks] = useState([]);
   const [activeEntry, setActiveEntry] = useState(null);
   const [liveElapsedTime, setLiveElapsedTime] = useState(0);
+  const [lastAddedSubtaskId, setLastAddedSubtaskId] = useState(null);
 
   useEffect(() => {
     try {
@@ -23,7 +26,10 @@ export const TimeTrackerProvider = ({ children }) => {
       const storedEntries = localStorage.getItem('chrono_entries');
       const storedGoals = localStorage.getItem('chrono_goals');
       const storedSubtasks = localStorage.getItem('chrono_subtasks');
+      const storedLastDate = localStorage.getItem('chrono_last_access_date');
       
+      const todayString = new Date().toDateString();
+
       if (storedTasks) {
         setTasks(JSON.parse(storedTasks));
       } else {
@@ -42,7 +48,27 @@ export const TimeTrackerProvider = ({ children }) => {
       }
 
       if(storedSubtasks) {
-        setSubtasks(JSON.parse(storedSubtasks));
+        let parsedSubtasks = JSON.parse(storedSubtasks);
+        // Migration logic: Ensure all subtasks have a status
+        parsedSubtasks = parsedSubtasks.map(s => ({
+            ...s,
+            status: s.status || 'pending' // Default old tasks to pending
+        }));
+
+        // Rollover Logic
+        if (storedLastDate !== todayString) {
+            parsedSubtasks = parsedSubtasks.map(s => {
+                if (s.status === 'today' && s.completed) {
+                    return { ...s, status: 'log' };
+                }
+                return s;
+            });
+            localStorage.setItem('chrono_last_access_date', todayString);
+        }
+
+        setSubtasks(parsedSubtasks);
+      } else {
+        localStorage.setItem('chrono_last_access_date', todayString);
       }
 
     } catch (e) {
@@ -118,6 +144,16 @@ export const TimeTrackerProvider = ({ children }) => {
     setActiveEntry(newEntry);
   }, [timeEntries]);
   
+  const stopTask = useCallback(() => {
+    if (activeEntry) {
+      const now = Date.now();
+      setTimeEntries(prev => prev.map(entry => 
+        entry.id === activeEntry.id ? { ...entry, endTime: now } : entry
+      ));
+      setActiveEntry(null);
+    }
+  }, [activeEntry]);
+  
   const addTask = useCallback((newTask) => {
     setTasks(prev => [...prev, newTask]);
   }, []);
@@ -192,13 +228,16 @@ export const TimeTrackerProvider = ({ children }) => {
   }, [goals]);
 
   const addSubtask = useCallback((subtask) => {
+    const id = `subtask_${Date.now()}`;
     const newSubtask = {
       ...subtask,
-      id: `subtask_${Date.now()}`,
+      id: id,
       completed: false,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      status: 'idea' // Default to idea
     };
     setSubtasks(prev => [newSubtask, ...prev]);
+    setLastAddedSubtaskId(id);
   }, []);
 
   const updateSubtask = useCallback((updatedSubtask) => {
@@ -213,6 +252,10 @@ export const TimeTrackerProvider = ({ children }) => {
     setSubtasks(prev => prev.map(s => s.id === subtaskId ? { ...s, completed: !s.completed } : s));
   }, []);
 
+  const moveSubtaskStatus = useCallback((subtaskId, status) => {
+    setSubtasks(prev => prev.map(s => s.id === subtaskId ? { ...s, status } : s));
+  }, []);
+
   return React.createElement(TimeTrackerContext.Provider, { value: {
       tasks,
       timeEntries,
@@ -220,10 +263,12 @@ export const TimeTrackerProvider = ({ children }) => {
       subtasks,
       activeEntry,
       liveElapsedTime,
+      lastAddedSubtaskId,
       addTask,
       updateTask,
       deleteTask,
       startTask,
+      stopTask,
       updateEntry,
       deleteEntry,
       deleteAllData,
@@ -235,6 +280,7 @@ export const TimeTrackerProvider = ({ children }) => {
       updateSubtask,
       deleteSubtask,
       toggleSubtaskCompletion,
+      moveSubtaskStatus,
     }},
     children
   );

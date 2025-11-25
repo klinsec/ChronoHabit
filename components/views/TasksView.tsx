@@ -1,27 +1,50 @@
-import React, { useMemo, useState } from 'react';
+
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext';
-import { Subtask } from '../../types';
+import { Subtask, SubtaskStatus } from '../../types';
 import SubtaskModal from '../modals/SubtaskModal';
-import { EditIcon, TrashIcon, PlusIcon } from '../Icons';
+import { EditIcon, TrashIcon, PlusIcon, EyeIcon, EyeOffIcon, CogIcon, ArrowUpIcon, ArrowDownIcon, ArchiveIcon } from '../Icons';
 
 const TasksView: React.FC = () => {
-  const { tasks, subtasks, toggleSubtaskCompletion, deleteSubtask } = useTimeTracker();
+  const { tasks, subtasks, deleteSubtask, moveSubtaskStatus, getTaskById, lastAddedSubtaskId } = useTimeTracker();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSubtask, setEditingSubtask] = useState<Subtask | null>(null);
-  const [showCompleted, setShowCompleted] = useState(false);
+  const [showIdeas, setShowIdeas] = useState(false);
+  const [showLog, setShowLog] = useState(false);
+  const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
 
-  const groupedSubtasks = useMemo(() => {
-    const groups: { [key: string]: Subtask[] } = {};
-    const sortedSubtasks = [...subtasks].sort((a, b) => a.createdAt - b.createdAt);
-    
-    sortedSubtasks.forEach(subtask => {
-      if (!groups[subtask.taskId]) {
-        groups[subtask.taskId] = [];
-      }
-      groups[subtask.taskId].push(subtask);
-    });
-    return groups;
-  }, [subtasks]);
+  // Overflow State
+  const [overflowState, setOverflowState] = useState<{ isOpen: boolean; incomingTask: Subtask | null; targetSection: 'today' | 'pending' | null }>({
+      isOpen: false,
+      incomingTask: null,
+      targetSection: null
+  });
+
+  // Group subtasks by status
+  const todayTasks = useMemo(() => subtasks.filter(s => s.status === 'today').sort((a,b) => a.createdAt - b.createdAt), [subtasks]);
+  const pendingTasks = useMemo(() => subtasks.filter(s => s.status === 'pending').sort((a,b) => a.createdAt - b.createdAt), [subtasks]);
+  const ideaTasks = useMemo(() => subtasks.filter(s => s.status === 'idea').sort((a,b) => a.createdAt - b.createdAt), [subtasks]);
+  const logTasks = useMemo(() => subtasks.filter(s => s.status === 'log').sort((a,b) => b.createdAt - a.createdAt), [subtasks]);
+
+  const activeTodayCount = todayTasks.filter(s => !s.completed).length;
+
+  // Watch for new tasks to highlight
+  useEffect(() => {
+    if (lastAddedSubtaskId) {
+        const newTask = subtasks.find(s => s.id === lastAddedSubtaskId);
+        if (newTask) {
+            // If it's an idea and ideas are hidden, show them
+            if (newTask.status === 'idea' && !showIdeas) {
+                setShowIdeas(true);
+            }
+            // Trigger highlight
+            setHighlightedTaskId(lastAddedSubtaskId);
+            // Remove highlight after animation
+            const timer = setTimeout(() => setHighlightedTaskId(null), 2000);
+            return () => clearTimeout(timer);
+        }
+    }
+  }, [lastAddedSubtaskId, subtasks]); // showIdeas added to deps would cause loop if we aren't careful, but here it's fine as we only set it true
 
   const handleEdit = (subtask: Subtask) => {
     setEditingSubtask(subtask);
@@ -37,99 +60,468 @@ const TasksView: React.FC = () => {
     setIsModalOpen(false);
     setEditingSubtask(null);
   };
+
+  const handleCloseOverflow = () => {
+      setOverflowState({ isOpen: false, incomingTask: null, targetSection: null });
+  };
   
-  const parentTasks = tasks.filter(task => groupedSubtasks[task.id]?.length > 0);
+  const checkLimitAndMove = (subtask: Subtask, targetStatus: SubtaskStatus) => {
+      if (targetStatus === 'today') {
+          if (activeTodayCount >= 5) {
+              setOverflowState({ isOpen: true, incomingTask: subtask, targetSection: 'today' });
+              return;
+          }
+      } else if (targetStatus === 'pending') {
+          if (pendingTasks.length >= 7) {
+              setOverflowState({ isOpen: true, incomingTask: subtask, targetSection: 'pending' });
+              return;
+          }
+      }
+      moveSubtaskStatus(subtask.id, targetStatus);
+  };
+  
+  const handleOverflowResolution = (evictedTask: Subtask, newStatusForEvicted: SubtaskStatus) => {
+      // 1. Move the evicted task out
+      moveSubtaskStatus(evictedTask.id, newStatusForEvicted);
+      // 2. Move the incoming task in
+      if (overflowState.incomingTask && overflowState.targetSection) {
+          moveSubtaskStatus(overflowState.incomingTask.id, overflowState.targetSection);
+      }
+      handleCloseOverflow();
+  };
+
+  // --- Actions ---
+  
+  const moveToToday = (subtask: Subtask) => checkLimitAndMove(subtask, 'today');
+  const moveToPending = (subtask: Subtask) => checkLimitAndMove(subtask, 'pending');
+  const moveToIdeas = (subtask: Subtask) => moveSubtaskStatus(subtask.id, 'idea');
 
   return (
-    <div className="relative h-full">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold text-gray-200">Lista de Tareas</h2>
-        <div className="flex items-center">
-            <label htmlFor="show-completed" className="text-sm text-gray-400 mr-2">Mostrar completadas</label>
-            <input 
-                type="checkbox" 
-                id="show-completed"
-                checked={showCompleted}
-                onChange={() => setShowCompleted(!showCompleted)}
-                className="form-checkbox h-4 w-4 text-primary bg-gray-800 border-gray-600 rounded focus:ring-primary"
-            />
+    <div className="relative h-full flex flex-col">
+      <div className="flex justify-between items-center mb-6 bg-surface p-3 rounded-xl shadow-md">
+        <h2 className="text-xl font-semibold text-primary">Modo Diario</h2>
+        <div className="flex items-center space-x-2">
+            <button
+                onClick={() => setShowLog(!showLog)}
+                className={`p-2 rounded-full transition-colors ${showLog ? 'text-secondary bg-secondary/10' : 'text-gray-400 hover:text-white'}`}
+                title={showLog ? "Ocultar completados" : "Ver completados"}
+            >
+                <ArchiveIcon />
+            </button>
+            <button 
+                onClick={() => setShowIdeas(!showIdeas)} 
+                className={`p-2 rounded-full transition-colors ${showIdeas ? 'text-primary bg-primary/10' : 'text-gray-400 hover:text-white'}`}
+                title={showIdeas ? "Ocultar ideas" : "Ver ideas"}
+            >
+                {showIdeas ? <EyeIcon /> : <EyeOffIcon />}
+            </button>
+            <button 
+                className="p-2 rounded-full text-gray-400 hover:text-white transition-colors"
+                title="Configuración"
+            >
+                <CogIcon />
+            </button>
+            <button 
+                onClick={handleAdd}
+                className="p-2 rounded-full bg-primary text-bkg hover:bg-purple-500 transition-colors shadow-lg"
+                title="Añadir nueva idea"
+            >
+                <PlusIcon />
+            </button>
         </div>
       </div>
-      <div className="space-y-6 pb-20">
-        {parentTasks.length > 0 ? parentTasks.map(task => {
-            const taskSubtasks = groupedSubtasks[task.id];
-            const pending = taskSubtasks.filter(s => !s.completed);
-            const completed = taskSubtasks.filter(s => s.completed);
 
-            if (pending.length === 0 && (!showCompleted || completed.length === 0)) {
-                return null;
-            }
+      <div className="space-y-6 pb-24 overflow-y-auto flex-grow px-1">
+        {/* Today Section */}
+        <div className="bg-surface/50 rounded-xl p-4 border border-primary/20">
+            <h3 className="text-lg font-bold mb-3 flex justify-between items-center">
+                <span>Hoy</span>
+                <span className={`text-sm px-2 py-0.5 rounded-full ${activeTodayCount >= 5 ? 'bg-red-900 text-red-200' : 'bg-gray-700 text-gray-300'}`}>
+                    {activeTodayCount}/5
+                </span>
+            </h3>
+            {todayTasks.length === 0 ? (
+                <p className="text-gray-500 text-sm italic text-center py-2">No hay tareas para hoy.</p>
+            ) : (
+                <div className="space-y-2">
+                    {todayTasks.map(subtask => (
+                        <SubtaskItem 
+                            key={subtask.id} 
+                            subtask={subtask} 
+                            onEdit={handleEdit} 
+                            getTaskById={getTaskById}
+                            isHighlighted={highlightedTaskId === subtask.id}
+                            onSwipeRight={() => moveToPending(subtask)}
+                            rightActionLabel="Pendientes"
+                            rightActionColor="text-yellow-500"
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
 
-            return (
-                <div key={task.id}>
-                    <h3 className="text-lg font-semibold mb-2" style={{color: task.color}}>{task.icon} {task.name}</h3>
+        {/* Pending Section */}
+        <div className="bg-surface/30 rounded-xl p-4">
+            <h3 className="text-lg font-bold mb-3 flex justify-between items-center text-gray-300">
+                <span>Pendientes</span>
+                <span className={`text-sm px-2 py-0.5 rounded-full ${pendingTasks.length >= 7 ? 'bg-red-900 text-red-200' : 'bg-gray-700 text-gray-300'}`}>
+                    {pendingTasks.length}/7
+                </span>
+            </h3>
+            {pendingTasks.length === 0 ? (
+                <p className="text-gray-500 text-sm italic text-center py-2">No hay tareas pendientes.</p>
+            ) : (
+                <div className="space-y-2">
+                    {pendingTasks.map(subtask => (
+                        <SubtaskItem 
+                            key={subtask.id} 
+                            subtask={subtask} 
+                            onEdit={handleEdit} 
+                            getTaskById={getTaskById}
+                            isHighlighted={highlightedTaskId === subtask.id}
+                            onSwipeLeft={() => moveToToday(subtask)}
+                            leftActionLabel="Hoy"
+                            leftActionColor="text-green-500"
+                            onSwipeRight={() => moveToIdeas(subtask)}
+                            rightActionLabel="Ideas"
+                            rightActionColor="text-blue-500"
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+
+        {/* Ideas Section (Conditional) */}
+        {showIdeas && (
+            <div className="bg-gray-800/20 rounded-xl p-4 border-t-2 border-gray-700 border-dashed transition-all duration-300">
+                <h3 className="text-lg font-bold mb-3 text-gray-400">Ideas de Tareas</h3>
+                {ideaTasks.length === 0 ? (
+                    <p className="text-gray-500 text-sm italic text-center py-2">Tu lista de ideas está vacía.</p>
+                ) : (
                     <div className="space-y-2">
-                        {pending.map(subtask => (
-                            <SubtaskItem key={subtask.id} subtask={subtask} onEdit={handleEdit} />
-                        ))}
-                        {showCompleted && completed.map(subtask => (
-                            <SubtaskItem key={subtask.id} subtask={subtask} onEdit={handleEdit} />
+                        {ideaTasks.map(subtask => (
+                            <SubtaskItem 
+                                key={subtask.id} 
+                                subtask={subtask} 
+                                onEdit={handleEdit} 
+                                getTaskById={getTaskById}
+                                isHighlighted={highlightedTaskId === subtask.id}
+                                onSwipeLeft={() => moveToPending(subtask)}
+                                leftActionLabel="Pendientes"
+                                leftActionColor="text-yellow-500"
+                            />
                         ))}
                     </div>
-                </div>
-            )
-        }) : (
-            <div className="text-center py-16">
-                <p className="text-gray-400 text-lg">Tu lista de tareas está vacía.</p>
-                <p className="text-sm text-gray-500 mt-2">Usa el botón '+' para añadir tu primera tarea.</p>
+                )}
             </div>
         )}
+
+        {/* Log/Completed Section (Conditional) */}
+        {showLog && (
+             <div className="bg-gray-900/50 rounded-xl p-4 border border-gray-800 transition-all duration-300">
+                <h3 className="text-lg font-bold mb-3 text-gray-500 flex items-center gap-2">
+                    <ArchiveIcon /> Historial Completado
+                </h3>
+                {logTasks.length === 0 ? (
+                    <p className="text-gray-600 text-sm italic text-center py-2">No hay tareas archivadas recientemente.</p>
+                ) : (
+                    <div className="space-y-2">
+                        {logTasks.map(subtask => (
+                             <SubtaskItem 
+                                key={subtask.id} 
+                                subtask={subtask} 
+                                onEdit={handleEdit} 
+                                getTaskById={getTaskById}
+                                // No swipe actions for log, or minimal ones
+                                onSwipeRight={() => moveToIdeas(subtask)}
+                                rightActionLabel="Reusar"
+                                rightActionColor="text-blue-500"
+                            />
+                        ))}
+                    </div>
+                )}
+             </div>
+        )}
+
       </div>
 
-      <button
-        onClick={handleAdd}
-        className="fixed bottom-28 right-4 bg-primary text-bkg rounded-full p-4 shadow-lg hover:bg-purple-500 transition-transform transform hover:scale-110"
-        aria-label="Añadir nueva tarea"
-      >
-        <PlusIcon />
-      </button>
-
       {isModalOpen && <SubtaskModal subtask={editingSubtask} onClose={handleCloseModal} />}
+      
+      {overflowState.isOpen && overflowState.targetSection && (
+          <OverflowModal 
+              isOpen={overflowState.isOpen}
+              onClose={handleCloseOverflow}
+              targetSection={overflowState.targetSection}
+              tasks={overflowState.targetSection === 'today' ? todayTasks : pendingTasks}
+              getTaskById={getTaskById}
+              onResolve={handleOverflowResolution}
+              isTodayFull={activeTodayCount >= 5}
+          />
+      )}
     </div>
   );
 };
 
+// --- Sub Components ---
+
 interface SubtaskItemProps {
     subtask: Subtask;
     onEdit: (subtask: Subtask) => void;
+    getTaskById: (id: string) => any;
+    isHighlighted?: boolean;
+    onSwipeLeft?: () => void;
+    leftActionLabel?: string;
+    leftActionColor?: string;
+    onSwipeRight?: () => void;
+    rightActionLabel?: string;
+    rightActionColor?: string;
 }
 
-const SubtaskItem: React.FC<SubtaskItemProps> = ({ subtask, onEdit }) => {
+const SubtaskItem: React.FC<SubtaskItemProps> = ({ 
+    subtask, onEdit, getTaskById, isHighlighted, 
+    onSwipeLeft, leftActionLabel, leftActionColor,
+    onSwipeRight, rightActionLabel, rightActionColor
+}) => {
     const { toggleSubtaskCompletion, deleteSubtask } = useTimeTracker();
+    const parentTask = getTaskById(subtask.taskId);
     
+    // Swipe Logic
+    const [touchStart, setTouchStart] = useState<number | null>(null);
+    const [touchEnd, setTouchEnd] = useState<number | null>(null);
+    const [translateX, setTranslateX] = useState(0);
+    const itemRef = useRef<HTMLDivElement>(null);
+
+    const minSwipeDistance = 75;
+
+    const onTouchStart = (e: React.TouchEvent) => {
+        setTouchEnd(null);
+        setTouchStart(e.targetTouches[0].clientX);
+    };
+
+    const onTouchMove = (e: React.TouchEvent) => {
+        setTouchEnd(e.targetTouches[0].clientX);
+        if (touchStart !== null) {
+            const currentX = e.targetTouches[0].clientX;
+            const diff = currentX - touchStart;
+            // Limit drag visual
+            if (diff > 0 && !onSwipeRight) return;
+            if (diff < 0 && !onSwipeLeft) return;
+            setTranslateX(diff);
+        }
+    };
+
+    const onTouchEnd = () => {
+        if (!touchStart || !touchEnd) {
+            setTranslateX(0);
+            return;
+        }
+        
+        const distance = touchStart - touchEnd;
+        const isLeftSwipe = distance > minSwipeDistance;
+        const isRightSwipe = distance < -minSwipeDistance;
+
+        if (isLeftSwipe && onSwipeLeft) {
+            onSwipeLeft();
+        } else if (isRightSwipe && onSwipeRight) {
+            onSwipeRight();
+        }
+
+        // Reset
+        setTranslateX(0);
+        setTouchStart(null);
+        setTouchEnd(null);
+    };
+
     return (
-        <div className={`bg-surface p-3 rounded-lg flex items-start transition-opacity duration-300 ${subtask.completed ? 'opacity-50' : ''}`}>
-            <input 
-                type="checkbox"
-                checked={subtask.completed}
-                onChange={() => toggleSubtaskCompletion(subtask.id)}
-                className="form-checkbox h-5 w-5 mt-1 text-primary bg-gray-800 border-gray-600 rounded focus:ring-primary"
-            />
-            <div className="flex-grow mx-3">
-                <p className={`font-semibold text-on-surface ${subtask.completed ? 'line-through' : ''}`}>{subtask.title}</p>
-                <p className={`text-sm text-gray-400 ${subtask.completed ? 'line-through' : ''}`}>{subtask.description}</p>
+        <div className="relative overflow-hidden rounded-lg">
+             {/* Background Actions */}
+            <div className={`absolute inset-0 flex items-center justify-between px-4 rounded-lg bg-surface border border-gray-700`}>
+                 <div className={`font-bold ${rightActionColor} flex items-center`}>
+                     {onSwipeRight && translateX > 30 && (
+                         <>
+                             <ArrowDownIcon />
+                             <span className="ml-1 text-xs uppercase">{rightActionLabel}</span>
+                         </>
+                     )}
+                 </div>
+                 <div className={`font-bold ${leftActionColor} flex items-center`}>
+                    {onSwipeLeft && translateX < -30 && (
+                        <>
+                             <span className="mr-1 text-xs uppercase">{leftActionLabel}</span>
+                             <ArrowUpIcon />
+                        </>
+                    )}
+                 </div>
             </div>
-            <div className="flex items-center space-x-2">
-                <button onClick={() => onEdit(subtask)} className="text-gray-400 hover:text-secondary p-1">
-                    <EditIcon />
-                </button>
-                <button onClick={() => deleteSubtask(subtask.id)} className="text-gray-400 hover:text-red-500 p-1">
-                    <TrashIcon />
-                </button>
+
+            {/* Foreground Content */}
+            <div 
+                ref={itemRef}
+                className={`relative bg-surface p-3 rounded-lg flex items-center transition-transform duration-200 border border-gray-800 hover:border-gray-600 
+                    ${subtask.completed ? 'opacity-50' : ''} 
+                    ${isHighlighted ? 'ring-2 ring-primary animate-pulse' : ''}`}
+                style={{ transform: `translateX(${translateX}px)` }}
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
+            >
+                <input 
+                    type="checkbox"
+                    checked={subtask.completed}
+                    onChange={() => toggleSubtaskCompletion(subtask.id)}
+                    className="form-checkbox h-5 w-5 text-primary bg-gray-800 border-gray-600 rounded focus:ring-primary flex-shrink-0"
+                />
+                
+                <div className="flex-grow mx-3 min-w-0 select-none">
+                    <div className="flex items-center gap-2">
+                        {parentTask && <span className="text-lg flex-shrink-0" title={parentTask.name}>{parentTask.icon}</span>}
+                        <p className={`font-medium text-on-surface truncate ${subtask.completed ? 'line-through text-gray-500' : ''}`}>{subtask.title}</p>
+                    </div>
+                    {subtask.description && <p className={`text-xs text-gray-400 truncate ${subtask.completed ? 'line-through' : ''}`}>{subtask.description}</p>}
+                </div>
+
+                <div className="flex items-center space-x-1 flex-shrink-0">
+                    <button onClick={() => onEdit(subtask)} className="text-gray-500 hover:text-secondary p-1">
+                        <EditIcon />
+                    </button>
+                    <button onClick={() => deleteSubtask(subtask.id)} className="text-gray-500 hover:text-red-500 p-1">
+                        <TrashIcon />
+                    </button>
+                </div>
             </div>
         </div>
     )
 }
 
+interface OverflowModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    targetSection: 'today' | 'pending';
+    tasks: Subtask[];
+    getTaskById: (id: string) => any;
+    onResolve: (evictedTask: Subtask, newStatus: SubtaskStatus) => void;
+    isTodayFull: boolean;
+}
+
+const OverflowModal: React.FC<OverflowModalProps> = ({ isOpen, onClose, targetSection, tasks, getTaskById, onResolve, isTodayFull }) => {
+    if (!isOpen) return null;
+    
+    // Sort tasks to consistent order
+    const sortedTasks = [...tasks].sort((a,b) => a.createdAt - b.createdAt);
+    
+    return (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex flex-col justify-end sm:justify-center p-4">
+             <div className="bg-surface border border-primary/30 rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl max-h-[80vh] overflow-hidden flex flex-col">
+                 <div className="mb-4 text-center">
+                    <h2 className="text-xl font-bold text-red-400 mb-1">
+                        Sección {targetSection === 'today' ? 'Hoy' : 'Pendientes'} Llena
+                    </h2>
+                    <p className="text-sm text-gray-300">
+                        {targetSection === 'today' 
+                            ? 'Desliza una tarea hacia la derecha para moverla a Pendientes y liberar espacio.' 
+                            : isTodayFull 
+                                ? 'Desliza una tarea hacia la derecha para moverla a Ideas. (Hoy está lleno)'
+                                : 'Desliza hacia izquierda (Hoy) o derecha (Ideas) para liberar espacio.'
+                        }
+                    </p>
+                 </div>
+                 
+                 <div className="flex-grow overflow-y-auto space-y-3 px-1 py-2">
+                     {sortedTasks.map(task => (
+                        <div key={task.id} className="relative overflow-hidden rounded-lg group">
+                            {/* Actions Background for Modal */}
+                            <div className="absolute inset-0 flex items-center justify-between px-4 bg-gray-900 rounded-lg">
+                                 <div className="flex items-center gap-1 text-xs font-bold text-yellow-500">
+                                      {targetSection === 'today' 
+                                        ? 'MOVER A PENDIENTES' 
+                                        : 'MOVER A IDEAS'}
+                                      <ArrowDownIcon />
+                                 </div>
+                                 
+                                 {/* Only show "Move to Today" (left side) if target is pending AND today is NOT full */}
+                                 {targetSection === 'pending' && !isTodayFull && (
+                                     <div className="flex items-center gap-1 text-xs font-bold text-green-500">
+                                          <ArrowUpIcon />
+                                          MOVER A HOY
+                                     </div>
+                                 )}
+                            </div>
+
+                             <SwipeableModalItem 
+                                task={task} 
+                                parentTask={getTaskById(task.taskId)} 
+                                onSwipeRight={() => onResolve(task, targetSection === 'today' ? 'pending' : 'idea')}
+                                onSwipeLeft={targetSection === 'pending' && !isTodayFull 
+                                    ? () => onResolve(task, 'today') 
+                                    : undefined
+                                }
+                             />
+                        </div>
+                     ))}
+                 </div>
+                 
+                 <button onClick={onClose} className="mt-4 w-full py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-bold text-gray-300">
+                     Cancelar
+                 </button>
+             </div>
+        </div>
+    )
+}
+
+// Helper for Modal Swipe
+const SwipeableModalItem = ({ task, parentTask, onSwipeRight, onSwipeLeft }: { task: Subtask, parentTask: any, onSwipeRight: () => void, onSwipeLeft?: () => void }) => {
+    const [touchStart, setTouchStart] = useState<number | null>(null);
+    const [translateX, setTranslateX] = useState(0);
+
+    const onTouchStart = (e: React.TouchEvent) => setTouchStart(e.targetTouches[0].clientX);
+    
+    const onTouchMove = (e: React.TouchEvent) => {
+        if (touchStart !== null) {
+            const diff = e.targetTouches[0].clientX - touchStart;
+            // Limit swipe directions based on props
+            if (diff > 0 && onSwipeRight) setTranslateX(diff);
+            if (diff < 0 && onSwipeLeft) setTranslateX(diff);
+        }
+    }
+
+    const onTouchEnd = () => {
+        if (translateX > 100 && onSwipeRight) {
+            onSwipeRight();
+        } else if (translateX < -100 && onSwipeLeft) {
+             onSwipeLeft();
+        } else {
+            setTranslateX(0);
+        }
+        setTouchStart(null);
+    }
+
+    return (
+        <div 
+            className="bg-surface p-4 rounded-lg border border-gray-600 shadow-md relative z-10 select-none flex items-center justify-between"
+            style={{ transform: `translateX(${translateX}px)` }}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+        >
+             {/* Left Indicator (if available) */}
+             <div className="text-gray-500 w-6">
+                {onSwipeLeft && <ArrowUpIcon />}
+            </div>
+
+            <div className="flex-grow flex items-center gap-3">
+                 <span className="text-2xl">{parentTask?.icon}</span>
+                 <div>
+                     <p className="font-bold">{task.title}</p>
+                     {task.description && <p className="text-xs text-gray-400">{task.description}</p>}
+                 </div>
+            </div>
+
+            {/* Right Indicator */}
+            <div className="text-gray-500 w-6 flex justify-end">
+                {onSwipeRight && <ArrowDownIcon />}
+            </div>
+        </div>
+    )
+}
 
 export default TasksView;

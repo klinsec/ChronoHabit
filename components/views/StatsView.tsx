@@ -173,7 +173,8 @@ const StatsView: React.FC = () => {
       .sort((a, b) => Number(b.value) - Number(a.value));
   }, [taskDurations, getTaskById, getGoalByTaskIdAndPeriod, period]);
   
-  const totalDuration = useMemo(() => Object.values(taskDurations).reduce((sum, item) => sum + item, 0), [taskDurations]);
+  // FIX: Explicitly cast `item` to a number to avoid potential type inference issues with `Object.values`.
+  const totalDuration = useMemo(() => Object.values(taskDurations).reduce((sum: number, item) => sum + Number(item), 0), [taskDurations]);
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {

@@ -5,7 +5,7 @@ import TaskModal from '../modals/TaskModal.js';
 import { PlusIcon, EditIcon } from '../Icons.js';
 
 const TimerView = () => {
-  const { tasks, activeEntry, startTask, getTaskById, liveElapsedTime } = useTimeTracker();
+  const { tasks, activeEntry, startTask, stopTask, getTaskById, liveElapsedTime } = useTimeTracker();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
 
@@ -36,7 +36,19 @@ const TimerView = () => {
           formatDuration(liveElapsedTime, true)
         ),
         activeTask && (
-             React.createElement('div', { className: "mt-4 text-5xl", style: { filter: 'saturate(0.7)' } }, activeTask.icon)
+             React.createElement('div', { className: "flex flex-col items-center" },
+                React.createElement('div', { className: "mt-4 text-5xl", style: { filter: 'saturate(0.7)' } }, activeTask.icon),
+                React.createElement('div', { className: "mt-6" },
+                    React.createElement('button', 
+                        { 
+                            onClick: stopTask,
+                            className: "bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-8 rounded-full shadow-lg transition-transform transform hover:scale-105 flex items-center justify-center mx-auto gap-2"
+                        },
+                        React.createElement('div', { className: "w-4 h-4 bg-white rounded-sm" }),
+                        React.createElement('span', null, "Detener")
+                    )
+                )
+             )
         )
       ),
 
