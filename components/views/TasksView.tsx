@@ -44,7 +44,7 @@ const TasksView: React.FC = () => {
             return () => clearTimeout(timer);
         }
     }
-  }, [lastAddedSubtaskId, subtasks]); // showIdeas added to deps would cause loop if we aren't careful, but here it's fine as we only set it true
+  }, [lastAddedSubtaskId, subtasks]);
 
   const handleEdit = (subtask: Subtask) => {
     setEditingSubtask(subtask);
@@ -151,9 +151,10 @@ const TasksView: React.FC = () => {
                             onEdit={handleEdit} 
                             getTaskById={getTaskById}
                             isHighlighted={highlightedTaskId === subtask.id}
-                            onSwipeRight={() => moveToPending(subtask)}
-                            rightActionLabel="Pendientes"
-                            rightActionColor="text-yellow-500"
+                            // Hoy -> Pendientes (Down) = Swipe Left
+                            onSwipeLeft={() => moveToPending(subtask)}
+                            leftActionLabel="Pendientes"
+                            leftActionColor="text-yellow-500"
                         />
                     ))}
                 </div>
@@ -179,12 +180,14 @@ const TasksView: React.FC = () => {
                             onEdit={handleEdit} 
                             getTaskById={getTaskById}
                             isHighlighted={highlightedTaskId === subtask.id}
-                            onSwipeLeft={() => moveToToday(subtask)}
-                            leftActionLabel="Hoy"
-                            leftActionColor="text-green-500"
-                            onSwipeRight={() => moveToIdeas(subtask)}
-                            rightActionLabel="Ideas"
-                            rightActionColor="text-blue-500"
+                            // Pendientes -> Hoy (Up) = Swipe Right
+                            onSwipeRight={() => moveToToday(subtask)}
+                            rightActionLabel="Hoy"
+                            rightActionColor="text-green-500"
+                            // Pendientes -> Ideas (Down) = Swipe Left
+                            onSwipeLeft={() => moveToIdeas(subtask)}
+                            leftActionLabel="Ideas"
+                            leftActionColor="text-blue-500"
                         />
                     ))}
                 </div>
@@ -206,9 +209,10 @@ const TasksView: React.FC = () => {
                                 onEdit={handleEdit} 
                                 getTaskById={getTaskById}
                                 isHighlighted={highlightedTaskId === subtask.id}
-                                onSwipeLeft={() => moveToPending(subtask)}
-                                leftActionLabel="Pendientes"
-                                leftActionColor="text-yellow-500"
+                                // Ideas -> Pendientes (Up) = Swipe Right
+                                onSwipeRight={() => moveToPending(subtask)}
+                                rightActionLabel="Pendientes"
+                                rightActionColor="text-yellow-500"
                             />
                         ))}
                     </div>
@@ -232,7 +236,7 @@ const TasksView: React.FC = () => {
                                 subtask={subtask} 
                                 onEdit={handleEdit} 
                                 getTaskById={getTaskById}
-                                // No swipe actions for log, or minimal ones
+                                // Log -> Ideas (Up/Revive) = Swipe Right
                                 onSwipeRight={() => moveToIdeas(subtask)}
                                 rightActionLabel="Reusar"
                                 rightActionColor="text-blue-500"
@@ -339,7 +343,7 @@ const SubtaskItem: React.FC<SubtaskItemProps> = ({
                  <div className={`font-bold ${rightActionColor} flex items-center`}>
                      {onSwipeRight && translateX > 30 && (
                          <>
-                             <ArrowDownIcon />
+                             <ArrowUpIcon /> {/* Right Swipe = UP */}
                              <span className="ml-1 text-xs uppercase">{rightActionLabel}</span>
                          </>
                      )}
@@ -348,7 +352,7 @@ const SubtaskItem: React.FC<SubtaskItemProps> = ({
                     {onSwipeLeft && translateX < -30 && (
                         <>
                              <span className="mr-1 text-xs uppercase">{leftActionLabel}</span>
-                             <ArrowUpIcon />
+                             <ArrowDownIcon /> {/* Left Swipe = DOWN */}
                         </>
                     )}
                  </div>
@@ -418,10 +422,10 @@ const OverflowModal: React.FC<OverflowModalProps> = ({ isOpen, onClose, targetSe
                     </h2>
                     <p className="text-sm text-gray-300">
                         {targetSection === 'today' 
-                            ? 'Desliza una tarea hacia la derecha para moverla a Pendientes y liberar espacio.' 
+                            ? 'Desliza una tarea hacia la IZQUIERDA para moverla a Pendientes y liberar espacio.' 
                             : isTodayFull 
-                                ? 'Desliza una tarea hacia la derecha para moverla a Ideas. (Hoy está lleno)'
-                                : 'Desliza hacia izquierda (Hoy) o derecha (Ideas) para liberar espacio.'
+                                ? 'Desliza una tarea hacia la IZQUIERDA para moverla a Ideas. (Hoy está lleno)'
+                                : 'Desliza hacia izquierda (Ideas) o derecha (Hoy) para liberar espacio.'
                         }
                     </p>
                  </div>
@@ -431,27 +435,49 @@ const OverflowModal: React.FC<OverflowModalProps> = ({ isOpen, onClose, targetSe
                         <div key={task.id} className="relative overflow-hidden rounded-lg group">
                             {/* Actions Background for Modal */}
                             <div className="absolute inset-0 flex items-center justify-between px-4 bg-gray-900 rounded-lg">
+                                 {/* Left Action (was Right) -> Move Down */}
                                  <div className="flex items-center gap-1 text-xs font-bold text-yellow-500">
+                                      {/* Only show label on left if we are swiping left. 
+                                          The SwipeableModalItem handles visual reveal, but background is static or needs logic? 
+                                          Actually background logic in SwipeableModalItem is hardcoded in the subcomponent? 
+                                          No, I need to render background here. 
+                                      */}
+                                      {/* Fix: In modal we usually want to show what happens. 
+                                          Left side of background shows when swiping Right (UP).
+                                          Right side of background shows when swiping Left (DOWN).
+                                      */}
+                                 </div>
+                                 
+                                 {/* Background logic in modal is simpler if we just render static hints or use same SubtaskItem logic? 
+                                     Let's replicate the structure: Left side (visible on Right Swipe), Right side (visible on Left Swipe)
+                                 */}
+                                 
+                                 {/* Left Side (visible when swiping RIGHT -> UP) */}
+                                 <div className="absolute left-4 flex items-center gap-1 text-xs font-bold text-green-500">
+                                     {targetSection === 'pending' && !isTodayFull && (
+                                         <>
+                                            <ArrowUpIcon />
+                                            MOVER A HOY
+                                         </>
+                                     )}
+                                 </div>
+
+                                 {/* Right Side (visible when swiping LEFT -> DOWN) */}
+                                 <div className="absolute right-4 flex items-center gap-1 text-xs font-bold text-yellow-500">
                                       {targetSection === 'today' 
                                         ? 'MOVER A PENDIENTES' 
                                         : 'MOVER A IDEAS'}
                                       <ArrowDownIcon />
                                  </div>
-                                 
-                                 {/* Only show "Move to Today" (left side) if target is pending AND today is NOT full */}
-                                 {targetSection === 'pending' && !isTodayFull && (
-                                     <div className="flex items-center gap-1 text-xs font-bold text-green-500">
-                                          <ArrowUpIcon />
-                                          MOVER A HOY
-                                     </div>
-                                 )}
                             </div>
 
                              <SwipeableModalItem 
                                 task={task} 
                                 parentTask={getTaskById(task.taskId)} 
-                                onSwipeRight={() => onResolve(task, targetSection === 'today' ? 'pending' : 'idea')}
-                                onSwipeLeft={targetSection === 'pending' && !isTodayFull 
+                                // Swipe Left -> Down
+                                onSwipeLeft={() => onResolve(task, targetSection === 'today' ? 'pending' : 'idea')}
+                                // Swipe Right -> Up
+                                onSwipeRight={targetSection === 'pending' && !isTodayFull 
                                     ? () => onResolve(task, 'today') 
                                     : undefined
                                 }
@@ -469,7 +495,7 @@ const OverflowModal: React.FC<OverflowModalProps> = ({ isOpen, onClose, targetSe
 }
 
 // Helper for Modal Swipe
-const SwipeableModalItem = ({ task, parentTask, onSwipeRight, onSwipeLeft }: { task: Subtask, parentTask: any, onSwipeRight: () => void, onSwipeLeft?: () => void }) => {
+const SwipeableModalItem = ({ task, parentTask, onSwipeRight, onSwipeLeft }: { task: Subtask, parentTask: any, onSwipeRight?: () => void, onSwipeLeft?: () => void }) => {
     const [touchStart, setTouchStart] = useState<number | null>(null);
     const [translateX, setTranslateX] = useState(0);
 
@@ -503,9 +529,9 @@ const SwipeableModalItem = ({ task, parentTask, onSwipeRight, onSwipeLeft }: { t
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
         >
-             {/* Left Indicator (if available) */}
+             {/* Left Indicator (visible when swiping Right -> UP) */}
              <div className="text-gray-500 w-6">
-                {onSwipeLeft && <ArrowUpIcon />}
+                {onSwipeRight && <ArrowUpIcon />}
             </div>
 
             <div className="flex-grow flex items-center gap-3">
@@ -516,9 +542,9 @@ const SwipeableModalItem = ({ task, parentTask, onSwipeRight, onSwipeLeft }: { t
                  </div>
             </div>
 
-            {/* Right Indicator */}
+            {/* Right Indicator (visible when swiping Left -> DOWN) */}
             <div className="text-gray-500 w-6 flex justify-end">
-                {onSwipeRight && <ArrowDownIcon />}
+                {onSwipeLeft && <ArrowDownIcon />}
             </div>
         </div>
     )
