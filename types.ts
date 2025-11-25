@@ -1,3 +1,4 @@
+
 export interface Task {
   id: string;
   name: string;
@@ -12,6 +13,8 @@ export interface TimeEntry {
   endTime: number | null;
 }
 
+export type SubtaskStatus = 'today' | 'pending' | 'idea' | 'log';
+
 export interface Subtask {
   id: string;
   taskId: string;
@@ -19,6 +22,7 @@ export interface Subtask {
   description: string;
   completed: boolean;
   createdAt: number;
+  status: SubtaskStatus;
 }
 
 export type View = 'timer' | 'history' | 'stats' | 'tasks';
