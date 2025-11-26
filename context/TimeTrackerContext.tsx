@@ -27,6 +27,7 @@ interface TimeTrackerContextType {
   deleteSubtask: (subtaskId: string) => void;
   toggleSubtaskCompletion: (subtaskId: string) => void;
   moveSubtaskStatus: (subtaskId: string, status: SubtaskStatus) => void;
+  requestNotificationPermission: () => void;
 }
 
 const TimeTrackerContext = createContext<TimeTrackerContextType | undefined>(undefined);
@@ -48,10 +49,31 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [liveElapsedTime, setLiveElapsedTime] = useState(0);
   const [lastAddedSubtaskId, setLastAddedSubtaskId] = useState<string | null>(null);
 
-  // Request notification permissions on mount
+  // Auto-request on mount if permission is default (may be blocked by browser)
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
+    }
+  }, []);
+
+  const requestNotificationPermission = useCallback(() => {
+    if ('Notification' in window) {
+      Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+          console.log('Notification permission granted.');
+          // Test notification
+          if ('serviceWorker' in navigator) {
+             navigator.serviceWorker.ready.then(registration => {
+                registration.showNotification('ChronoHabit', {
+                    body: 'Las notificaciones están activadas.',
+                    icon: './icon-192.png'
+                });
+             });
+          }
+        }
+      });
+    } else {
+        alert("Tu navegador no soporta notificaciones.");
     }
   }, []);
 
@@ -364,6 +386,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       deleteSubtask,
       toggleSubtaskCompletion,
       moveSubtaskStatus,
+      requestNotificationPermission
     }}>
       {children}
     </TimeTrackerContext.Provider>
