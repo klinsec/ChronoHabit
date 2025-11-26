@@ -48,6 +48,13 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [liveElapsedTime, setLiveElapsedTime] = useState(0);
   const [lastAddedSubtaskId, setLastAddedSubtaskId] = useState<string | null>(null);
 
+  // Request notification permissions on mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
   useEffect(() => {
     try {
       const storedTasks = localStorage.getItem('chrono_tasks');
@@ -157,10 +164,30 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
     };
   }, [activeEntry]);
 
+  // Handle SW Messages for stopping timer
+  useEffect(() => {
+    const handleServiceWorkerMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'STOP_TIMER_FROM_SW') {
+        // We need to call stopTask, but we need to ensure we have the latest state reference or use functional update if possible.
+        // Since stopTask depends on activeEntry, and this effect runs when dependencies change, it should work if we include stopTask in deps.
+        stopTask();
+      }
+    };
+
+    navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+
+    return () => {
+      navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+    };
+  }, [activeEntry]); // Re-bind if activeEntry changes so stopTask has correct context
+
+  const getTaskById = useCallback((taskId: string) => tasks.find(task => task.id === taskId), [tasks]);
+
   const startTask = useCallback((taskId: string) => {
     const now = Date.now();
     let newEntries = [...timeEntries];
 
+    // Close existing active task if any
     const currentActiveIndex = newEntries.findIndex(e => e.endTime === null);
     if (currentActiveIndex > -1) {
       newEntries[currentActiveIndex] = { ...newEntries[currentActiveIndex], endTime: now };
@@ -171,7 +198,25 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
     
     setTimeEntries(newEntries);
     setActiveEntry(newEntry);
-  }, [timeEntries]);
+
+    // Send Notification
+    if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+      const task = tasks.find(t => t.id === taskId);
+      navigator.serviceWorker.ready.then(registration => {
+        registration.showNotification('ChronoHabit', {
+          body: `Cronómetro activo: ${task ? task.name : 'Tarea'}`,
+          icon: './icon-192.png',
+          tag: 'timer-active',
+          renotify: true,
+          requireInteraction: true, // Keep notification visible on desktop
+          actions: [
+            { action: 'stop-timer', title: 'Detener', icon: './icon-192.png' } // Icon is optional/placeholder
+          ]
+        } as any);
+      });
+    }
+
+  }, [timeEntries, tasks]);
   
   const stopTask = useCallback(() => {
     if (activeEntry) {
@@ -180,6 +225,15 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
         entry.id === activeEntry.id ? { ...entry, endTime: now } : entry
       ));
       setActiveEntry(null);
+
+      // Close Notification
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(registration => {
+          registration.getNotifications({ tag: 'timer-active' }).then(notifications => {
+            notifications.forEach(notification => notification.close());
+          });
+        });
+      }
     }
   }, [activeEntry]);
 
@@ -237,8 +291,6 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       }
     }
   }, []);
-
-  const getTaskById = useCallback((taskId: string) => tasks.find(task => task.id === taskId), [tasks]);
 
   const setGoal = useCallback((goal: Goal) => {
     setGoals(prev => {

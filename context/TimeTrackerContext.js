@@ -1,4 +1,5 @@
 
+
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 const TimeTrackerContext = createContext(undefined);
@@ -19,6 +20,13 @@ export const TimeTrackerProvider = ({ children }) => {
   const [activeEntry, setActiveEntry] = useState(null);
   const [liveElapsedTime, setLiveElapsedTime] = useState(0);
   const [lastAddedSubtaskId, setLastAddedSubtaskId] = useState(null);
+
+  // Request notification permissions on mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -128,6 +136,23 @@ export const TimeTrackerProvider = ({ children }) => {
     };
   }, [activeEntry]);
 
+  // Handle SW Messages for stopping timer
+  useEffect(() => {
+    const handleServiceWorkerMessage = (event) => {
+      if (event.data && event.data.type === 'STOP_TIMER_FROM_SW') {
+        stopTask();
+      }
+    };
+
+    navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+
+    return () => {
+      navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+    };
+  }, [activeEntry]); // Dependency ensures stopTask has right closure
+
+  const getTaskById = useCallback((taskId) => tasks.find(task => task.id === taskId), [tasks]);
+
   const startTask = useCallback((taskId) => {
     const now = Date.now();
     let newEntries = [...timeEntries];
@@ -142,7 +167,25 @@ export const TimeTrackerProvider = ({ children }) => {
     
     setTimeEntries(newEntries);
     setActiveEntry(newEntry);
-  }, [timeEntries]);
+
+    // Send Notification
+    if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+      const task = tasks.find(t => t.id === taskId);
+      navigator.serviceWorker.ready.then(registration => {
+        registration.showNotification('ChronoHabit', {
+          body: `Cronómetro activo: ${task ? task.name : 'Tarea'}`,
+          icon: './icon-192.png',
+          tag: 'timer-active',
+          renotify: true,
+          requireInteraction: true,
+          actions: [
+            { action: 'stop-timer', title: 'Detener', icon: './icon-192.png' }
+          ]
+        });
+      });
+    }
+
+  }, [timeEntries, tasks]);
   
   const stopTask = useCallback(() => {
     if (activeEntry) {
@@ -151,6 +194,15 @@ export const TimeTrackerProvider = ({ children }) => {
         entry.id === activeEntry.id ? { ...entry, endTime: now } : entry
       ));
       setActiveEntry(null);
+
+      // Close Notification
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(registration => {
+          registration.getNotifications({ tag: 'timer-active' }).then(notifications => {
+            notifications.forEach(notification => notification.close());
+          });
+        });
+      }
     }
   }, [activeEntry]);
   
@@ -208,8 +260,6 @@ export const TimeTrackerProvider = ({ children }) => {
       }
     }
   }, []);
-
-  const getTaskById = useCallback((taskId) => tasks.find(task => task.id === taskId), [tasks]);
 
   const setGoal = useCallback((goal) => {
     setGoals(prev => {
