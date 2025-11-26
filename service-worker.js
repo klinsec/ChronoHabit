@@ -1,4 +1,5 @@
-const CACHE_NAME = 'chronohabit-v7'; // Incremented version to force update
+
+const CACHE_NAME = 'chronohabit-v8'; // Incremented version to force update
 const urlsToCache = [
   './',
   './index.html',
@@ -93,4 +94,10 @@ self.addEventListener('activate', event => {
       );
     })
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
