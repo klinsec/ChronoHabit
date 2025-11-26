@@ -101,36 +101,3 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
 });
-
-// Notification Click Handler
-self.addEventListener('notificationclick', function(event) {
-  event.notification.close();
-
-  if (event.action === 'stop-timer') {
-    // Send a message to the client to stop the timer
-    event.waitUntil(
-      self.clients.matchAll().then(function(clients) {
-        clients.forEach(function(client) {
-          client.postMessage({
-            type: 'STOP_TIMER_FROM_SW'
-          });
-        });
-      })
-    );
-  } else {
-    // Focus the window if the user clicks the notification body
-    event.waitUntil(
-      self.clients.matchAll({ type: 'window' }).then(function(clientList) {
-        for (let i = 0; i < clientList.length; i++) {
-          const client = clientList[i];
-          if (client.url === '/' || 'focus' in client) {
-            return client.focus();
-          }
-        }
-        if (self.clients.openWindow) {
-          return self.clients.openWindow('/');
-        }
-      })
-    );
-  }
-});

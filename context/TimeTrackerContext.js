@@ -20,34 +20,6 @@ export const TimeTrackerProvider = ({ children }) => {
   const [liveElapsedTime, setLiveElapsedTime] = useState(0);
   const [lastAddedSubtaskId, setLastAddedSubtaskId] = useState(null);
 
-  // Auto-request on mount if permission is default (may be blocked by browser)
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  }, []);
-
-  const requestNotificationPermission = useCallback(() => {
-    if ('Notification' in window) {
-      Notification.requestPermission().then(permission => {
-        if (permission === 'granted') {
-          console.log('Notification permission granted.');
-          // Test notification
-          if ('serviceWorker' in navigator) {
-             navigator.serviceWorker.ready.then(registration => {
-                registration.showNotification('ChronoHabit', {
-                    body: 'Las notificaciones están activadas.',
-                    icon: './icon-192.png'
-                });
-             });
-          }
-        }
-      });
-    } else {
-        alert("Tu navegador no soporta notificaciones.");
-    }
-  }, []);
-
   useEffect(() => {
     try {
       const storedTasks = localStorage.getItem('chrono_tasks');
@@ -156,23 +128,6 @@ export const TimeTrackerProvider = ({ children }) => {
     };
   }, [activeEntry]);
 
-  // Handle SW Messages for stopping timer
-  useEffect(() => {
-    const handleServiceWorkerMessage = (event) => {
-      if (event.data && event.data.type === 'STOP_TIMER_FROM_SW') {
-        stopTask();
-      }
-    };
-
-    navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
-
-    return () => {
-      navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
-    };
-  }, [activeEntry]); // Dependency ensures stopTask has right closure
-
-  const getTaskById = useCallback((taskId) => tasks.find(task => task.id === taskId), [tasks]);
-
   const startTask = useCallback((taskId) => {
     const now = Date.now();
     let newEntries = [...timeEntries];
@@ -187,25 +142,7 @@ export const TimeTrackerProvider = ({ children }) => {
     
     setTimeEntries(newEntries);
     setActiveEntry(newEntry);
-
-    // Send Notification
-    if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator) {
-      const task = tasks.find(t => t.id === taskId);
-      navigator.serviceWorker.ready.then(registration => {
-        registration.showNotification('ChronoHabit', {
-          body: `Cronómetro activo: ${task ? task.name : 'Tarea'}`,
-          icon: './icon-192.png',
-          tag: 'timer-active',
-          renotify: true,
-          requireInteraction: true,
-          actions: [
-            { action: 'stop-timer', title: 'Detener', icon: './icon-192.png' }
-          ]
-        });
-      });
-    }
-
-  }, [timeEntries, tasks]);
+  }, [timeEntries]);
   
   const stopTask = useCallback(() => {
     if (activeEntry) {
@@ -214,15 +151,6 @@ export const TimeTrackerProvider = ({ children }) => {
         entry.id === activeEntry.id ? { ...entry, endTime: now } : entry
       ));
       setActiveEntry(null);
-
-      // Close Notification
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.ready.then(registration => {
-          registration.getNotifications({ tag: 'timer-active' }).then(notifications => {
-            notifications.forEach(notification => notification.close());
-          });
-        });
-      }
     }
   }, [activeEntry]);
   
@@ -280,6 +208,8 @@ export const TimeTrackerProvider = ({ children }) => {
       }
     }
   }, []);
+
+  const getTaskById = useCallback((taskId) => tasks.find(task => task.id === taskId), [tasks]);
 
   const setGoal = useCallback((goal) => {
     setGoals(prev => {
@@ -351,7 +281,6 @@ export const TimeTrackerProvider = ({ children }) => {
       deleteSubtask,
       toggleSubtaskCompletion,
       moveSubtaskStatus,
-      requestNotificationPermission
     }},
     children
   );

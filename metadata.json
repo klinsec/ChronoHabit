@@ -1,8 +1,5 @@
-
 {
   "name": "ChronoHabit",
   "description": "Una aplicación para registrar el tiempo que dedicas a diferentes actividades con un cronómetro infinito. Te ayuda a ser consciente de tus hábitos a través de un historial y gráficos visuales, permitiéndote editar entradas y gestionar tus tareas para fomentar un cambio positivo.",
-  "requestFramePermissions": [
-    "notifications"
-  ]
+  "requestFramePermissions": []
 }
