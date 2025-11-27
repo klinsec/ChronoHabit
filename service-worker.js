@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'chronohabit-v8'; // Incremented version to force update
+const CACHE_NAME = 'chronohabit-v9'; // Incremented version
 const urlsToCache = [
   './',
   './index.html',
@@ -99,5 +99,43 @@ self.addEventListener('activate', event => {
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+  }
+  
+  if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
+      const { title, options } = event.data;
+      self.registration.showNotification(title, options);
+  }
+
+  if (event.data && event.data.type === 'CANCEL_NOTIFICATION') {
+      const { tag } = event.data;
+      self.registration.getNotifications({ tag }).then(notifications => {
+          notifications.forEach(notification => notification.close());
+      });
+  }
+});
+
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+
+  if (event.action === 'stop-timer') {
+      // Send a message to the client to stop the timer
+      self.clients.matchAll().then(clients => {
+          clients.forEach(client => client.postMessage({ type: 'STOP_TIMER' }));
+      });
+  } else {
+      // Open the app window
+      event.waitUntil(
+          self.clients.matchAll({ type: 'window' }).then(windowClients => {
+              for (let i = 0; i < windowClients.length; i++) {
+                  const client = windowClients[i];
+                  if (client.url === '/' && 'focus' in client) {
+                      return client.focus();
+                  }
+              }
+              if (self.clients.openWindow) {
+                  return self.clients.openWindow('./');
+              }
+          })
+      );
   }
 });

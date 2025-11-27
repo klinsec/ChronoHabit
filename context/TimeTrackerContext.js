@@ -142,7 +142,25 @@ export const TimeTrackerProvider = ({ children }) => {
     
     setTimeEntries(newEntries);
     setActiveEntry(newEntry);
-  }, [timeEntries]);
+    
+    // Notification Logic
+    if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        const task = tasks.find(t => t.id === taskId);
+        navigator.serviceWorker.controller.postMessage({
+            type: 'SHOW_NOTIFICATION',
+            title: 'ChronoHabit',
+            options: {
+                body: `Registrando: ${task?.name || 'Tarea'}`,
+                icon: './icon-192.png',
+                tag: 'timer-notification',
+                renotify: true,
+                silent: true,
+                requireInteraction: true,
+                actions: [{ action: 'stop-timer', title: 'Detener' }]
+            }
+        });
+    }
+  }, [timeEntries, tasks]);
   
   const stopTask = useCallback(() => {
     if (activeEntry) {
@@ -151,8 +169,34 @@ export const TimeTrackerProvider = ({ children }) => {
         entry.id === activeEntry.id ? { ...entry, endTime: now } : entry
       ));
       setActiveEntry(null);
+
+      // Cancel Notification
+      if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+              type: 'CANCEL_NOTIFICATION',
+              tag: 'timer-notification'
+          });
+      }
     }
   }, [activeEntry]);
+
+  // Listen for stop command from Service Worker
+  useEffect(() => {
+      const handleMessage = (event) => {
+          if (event.data && event.data.type === 'STOP_TIMER') {
+              stopTask();
+          }
+      };
+      
+      if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.addEventListener('message', handleMessage);
+      }
+      return () => {
+          if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.removeEventListener('message', handleMessage);
+          }
+      }
+  }, [stopTask]);
   
   const addTask = useCallback((newTask) => {
     setTasks(prev => [...prev, newTask]);
@@ -256,6 +300,45 @@ export const TimeTrackerProvider = ({ children }) => {
     setSubtasks(prev => prev.map(s => s.id === subtaskId ? { ...s, status } : s));
   }, []);
 
+  const requestNotificationPermission = useCallback(async () => {
+    if (!('Notification' in window)) {
+      alert("Tu navegador no soporta notificaciones.");
+      return;
+    }
+    
+    if (Notification.permission === 'granted') {
+       alert("Las notificaciones ya están activadas.");
+       // Test notification
+       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+              type: 'SHOW_NOTIFICATION',
+              title: 'ChronoHabit',
+              options: {
+                  body: 'Las notificaciones funcionan correctamente.',
+                  icon: './icon-192.png'
+              }
+          });
+       }
+       return;
+    }
+    
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+              type: 'SHOW_NOTIFICATION',
+              title: 'Notificaciones Activadas',
+              options: {
+                  body: 'Ahora verás el cronómetro aquí.',
+                  icon: './icon-192.png'
+              }
+          });
+      }
+    } else {
+        alert("Permiso denegado. Por favor, habilítalo en la configuración de tu navegador.");
+    }
+  }, []);
+
   return React.createElement(TimeTrackerContext.Provider, { value: {
       tasks,
       timeEntries,
@@ -281,6 +364,7 @@ export const TimeTrackerProvider = ({ children }) => {
       deleteSubtask,
       toggleSubtaskCompletion,
       moveSubtaskStatus,
+      requestNotificationPermission,
     }},
     children
   );
