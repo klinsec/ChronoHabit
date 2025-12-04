@@ -11,6 +11,28 @@ const defaultTasks = [
   { id: '5', name: 'Limpieza', color: '#06b6d4', icon: '🧹' },
 ];
 
+// Helper to determine status based on deadline
+const determineStatusFromDeadline = (deadline, currentStatus) => {
+    if (!deadline) return currentStatus;
+    
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const date = new Date(deadline);
+    date.setHours(0, 0, 0, 0);
+    
+    // Difference in days
+    const diffTime = date.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 0) {
+        return 'today';
+    } else if (diffDays <= 7) {
+        return 'pending';
+    }
+    
+    return 'idea';
+};
+
 export const TimeTrackerProvider = ({ children }) => {
   const [tasks, setTasks] = useState([]);
   const [timeEntries, setTimeEntries] = useState([]);
@@ -55,14 +77,28 @@ export const TimeTrackerProvider = ({ children }) => {
             status: s.status || 'pending' // Default old tasks to pending
         }));
 
-        // Rollover Logic
+        // AUTOMATION LOGIC ON LOAD
+        const now = new Date();
+        now.setHours(0,0,0,0);
+
+        parsedSubtasks = parsedSubtasks.map(s => {
+            // 1. Rollover Logic
+            if (storedLastDate !== todayString && s.status === 'today' && s.completed) {
+                return { ...s, status: 'log' };
+            }
+
+            // 2. Deadline Automation
+            if (s.deadline && !s.completed && s.status !== 'log') {
+                 const newStatus = determineStatusFromDeadline(s.deadline, s.status);
+                 if (newStatus !== s.status) {
+                     if (newStatus === 'today' && s.status !== 'today') return { ...s, status: 'today' };
+                     if (newStatus === 'pending' && s.status === 'idea') return { ...s, status: 'pending' };
+                 }
+            }
+            return s;
+        });
+
         if (storedLastDate !== todayString) {
-            parsedSubtasks = parsedSubtasks.map(s => {
-                if (s.status === 'today' && s.completed) {
-                    return { ...s, status: 'log' };
-                }
-                return s;
-            });
             localStorage.setItem('chrono_last_access_date', todayString);
         }
 
@@ -273,19 +309,35 @@ export const TimeTrackerProvider = ({ children }) => {
 
   const addSubtask = useCallback((subtask) => {
     const id = `subtask_${Date.now()}`;
+    let initialStatus = 'idea';
+    if (subtask.deadline) {
+        initialStatus = determineStatusFromDeadline(subtask.deadline, 'idea');
+    }
+
     const newSubtask = {
       ...subtask,
       id: id,
       completed: false,
       createdAt: Date.now(),
-      status: 'idea' // Default to idea
+      status: initialStatus
     };
     setSubtasks(prev => [newSubtask, ...prev]);
     setLastAddedSubtaskId(id);
   }, []);
 
   const updateSubtask = useCallback((updatedSubtask) => {
-    setSubtasks(prev => prev.map(s => s.id === updatedSubtask.id ? updatedSubtask : s));
+    setSubtasks(prev => prev.map(s => {
+        if (s.id === updatedSubtask.id) {
+            let newStatus = updatedSubtask.status;
+            if (updatedSubtask.deadline) {
+                const autoStatus = determineStatusFromDeadline(updatedSubtask.deadline, s.status);
+                if (autoStatus === 'today') newStatus = 'today';
+                else if (autoStatus === 'pending' && s.status === 'idea') newStatus = 'pending';
+            }
+            return { ...updatedSubtask, status: newStatus };
+        }
+        return s;
+    }));
   }, []);
 
   const deleteSubtask = useCallback((subtaskId) => {

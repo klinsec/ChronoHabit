@@ -4,16 +4,6 @@ import { useTimeTracker } from '../../context/TimeTrackerContext';
 import { Subtask, SubtaskStatus } from '../../types';
 import SubtaskModal from '../modals/SubtaskModal';
 import { EditIcon, TrashIcon, PlusIcon, EyeIcon, EyeOffIcon, CogIcon, ArrowUpIcon, ArrowDownIcon, ArchiveIcon } from '../Icons';
-import SettingsModal from '../modals/SettingsModal';
-
-// Mock component for SettingsModal if it doesn't exist yet in the codebase provided context
-// Assuming it was added in previous steps or I should implement a simple one here inside if needed.
-// Based on previous turn, SettingsModal logic was inside TasksView or separate. 
-// I will implement the toggle for notification inside a small modal here if not separate.
-// Actually, looking at previous user prompt, they asked for "Settings Modal".
-// I will include a simple settings modal logic inline if I can't find the file, 
-// but based on "Updated files" list from previous turn, I should just stick to TasksView logic modifications.
-// I will implement the "Configuración" button action to open a modal.
 
 const TasksView: React.FC = () => {
   const { tasks, subtasks, deleteSubtask, moveSubtaskStatus, getTaskById, lastAddedSubtaskId, requestNotificationPermission } = useTimeTracker();
@@ -377,6 +367,28 @@ const SubtaskItem: React.FC<SubtaskItemProps> = ({
         setTouchStart(null);
         setTouchEnd(null);
     };
+    
+    // Deadline visual helper
+    const getDeadlineBadge = (deadline?: number) => {
+        if (!deadline) return null;
+        const now = new Date();
+        now.setHours(0,0,0,0);
+        const date = new Date(deadline);
+        date.setHours(0,0,0,0);
+        
+        const diffDays = (date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+        
+        let colorClass = 'bg-green-500/20 text-green-400';
+        if (diffDays <= 0) colorClass = 'bg-red-500/20 text-red-400 animate-pulse font-bold';
+        else if (diffDays <= 2) colorClass = 'bg-orange-500/20 text-orange-400';
+        else if (diffDays <= 7) colorClass = 'bg-yellow-500/20 text-yellow-400';
+
+        return (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded ml-2 whitespace-nowrap ${colorClass}`}>
+                {date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+            </span>
+        );
+    };
 
     return (
         <div className="relative overflow-hidden rounded-lg">
@@ -421,9 +433,10 @@ const SubtaskItem: React.FC<SubtaskItemProps> = ({
                 />
                 
                 <div className="flex-grow mx-3 min-w-0 select-none">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center flex-wrap gap-x-2">
                         {parentTask && <span className="text-lg flex-shrink-0" title={parentTask.name}>{parentTask.icon}</span>}
                         <p className={`font-medium text-on-surface truncate ${subtask.completed ? 'line-through text-gray-500' : ''}`}>{subtask.title}</p>
+                        {getDeadlineBadge(subtask.deadline)}
                     </div>
                     {subtask.description && <p className={`text-xs text-gray-400 truncate ${subtask.completed ? 'line-through' : ''}`}>{subtask.description}</p>}
                 </div>

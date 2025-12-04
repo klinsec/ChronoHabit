@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext';
 import { Subtask } from '../../types';
@@ -13,6 +14,14 @@ const SubtaskModal: React.FC<SubtaskModalProps> = ({ subtask, onClose }) => {
   const [title, setTitle] = useState(subtask?.title || '');
   const [description, setDescription] = useState(subtask?.description || '');
   const [taskId, setTaskId] = useState(subtask?.taskId || (tasks.length > 0 ? tasks[0].id : ''));
+  
+  // Format existing date to YYYY-MM-DD for input or empty string
+  const formatDateForInput = (timestamp?: number) => {
+      if (!timestamp) return '';
+      return new Date(timestamp).toISOString().split('T')[0];
+  };
+  
+  const [deadline, setDeadline] = useState(formatDateForInput(subtask?.deadline));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,8 +29,17 @@ const SubtaskModal: React.FC<SubtaskModalProps> = ({ subtask, onClose }) => {
         alert("El título y la tarea principal son obligatorios.");
         return;
     }
+    
+    // Parse Date
+    let deadlineTimestamp: number | undefined = undefined;
+    if (deadline) {
+        const dateObj = new Date(deadline);
+        // Set to noon to avoid timezone issues shifting the day
+        dateObj.setHours(12, 0, 0, 0);
+        deadlineTimestamp = dateObj.getTime();
+    }
 
-    const subtaskData = { title, description, taskId };
+    const subtaskData = { title, description, taskId, deadline: deadlineTimestamp };
 
     if (subtask) {
       updateSubtask({ ...subtask, ...subtaskData });
@@ -74,6 +92,18 @@ const SubtaskModal: React.FC<SubtaskModalProps> = ({ subtask, onClose }) => {
                 <option key={task.id} value={task.id}>{task.icon} {task.name}</option>
               ))}
             </select>
+          </div>
+          
+          <div>
+              <label htmlFor="subtask-date" className="block text-sm font-medium text-gray-300 mb-1">Fecha Límite (Opcional)</label>
+              <input 
+                id="subtask-date"
+                type="date"
+                value={deadline}
+                onChange={e => setDeadline(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-primary focus:border-primary"
+              />
+              <p className="text-xs text-gray-500 mt-1">Si la fecha está cerca, la tarea se moverá automáticamente a Pendientes o Hoy.</p>
           </div>
           
           <div className="flex justify-end space-x-2 pt-4 border-t border-gray-700">

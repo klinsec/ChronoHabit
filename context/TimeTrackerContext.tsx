@@ -40,6 +40,33 @@ const defaultTasks: Task[] = [
   { id: '5', name: 'Limpieza', color: '#06b6d4', icon: '🧹' },
 ];
 
+// Helper to determine status based on deadline
+const determineStatusFromDeadline = (deadline: number | undefined, currentStatus: SubtaskStatus): SubtaskStatus => {
+    if (!deadline) return currentStatus;
+    
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const date = new Date(deadline);
+    date.setHours(0, 0, 0, 0);
+    
+    // Difference in days
+    const diffTime = date.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 0) {
+        return 'today';
+    } else if (diffDays <= 7) {
+        return 'pending';
+    }
+    
+    // If it's far in the future, we generally keep it as idea, unless it was already pending/today
+    // But strictly following the prompt: "if less than 7 days... automatically to pending"
+    // implies if > 7 days it might be an idea. 
+    // However, if user manually put it in pending, we shouldn't demote it unless necessary?
+    // Let's stick to the prompt's automation rule logic for NEW/UPDATED tasks.
+    return 'idea';
+};
+
 export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -85,14 +112,34 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
             status: s.status || 'pending' // Default old tasks to pending
         }));
 
-        // Rollover Logic: If new day, move completed 'today' tasks to 'log'
-        if (storedLastDate !== todayString) {
-             parsedSubtasks = parsedSubtasks.map(s => {
-                 if (s.status === 'today' && s.completed) {
-                     return { ...s, status: 'log' };
+        // AUTOMATION LOGIC ON LOAD (Daily Rollover & Deadline Checks)
+        const now = new Date();
+        now.setHours(0,0,0,0);
+
+        parsedSubtasks = parsedSubtasks.map(s => {
+             // 1. Move completed 'today' tasks to 'log' if it's a new day
+             if (storedLastDate !== todayString && s.status === 'today' && s.completed) {
+                 return { ...s, status: 'log' };
+             }
+
+             // 2. Deadline Automation: Check dates and move if necessary
+             // Only apply this to non-completed, non-log tasks to avoid messing up archive
+             if (s.deadline && !s.completed && s.status !== 'log') {
+                 const newStatus = determineStatusFromDeadline(s.deadline, s.status);
+                 // Only change if it's an "upgrade" (Idea -> Pending, Pending -> Today)
+                 // or if it ensures consistency.
+                 if (newStatus !== s.status) {
+                     // Specifically handle the flow described:
+                     // <= 0 days -> Today
+                     // <= 7 days -> Pending
+                     if (newStatus === 'today' && s.status !== 'today') return { ...s, status: 'today' };
+                     if (newStatus === 'pending' && s.status === 'idea') return { ...s, status: 'pending' };
                  }
-                 return s;
-             });
+             }
+             return s;
+        });
+
+        if (storedLastDate !== todayString) {
              localStorage.setItem('chrono_last_access_date', todayString);
         }
 
@@ -303,19 +350,40 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   
   const addSubtask = useCallback((subtask: Omit<Subtask, 'id' | 'completed' | 'createdAt' | 'status'>) => {
     const id = `subtask_${Date.now()}`;
+    // Determine status based on deadline immediately on creation
+    let initialStatus: SubtaskStatus = 'idea';
+    if (subtask.deadline) {
+        initialStatus = determineStatusFromDeadline(subtask.deadline, 'idea');
+    }
+
     const newSubtask: Subtask = {
       ...subtask,
       id: id,
       completed: false,
       createdAt: Date.now(),
-      status: 'idea' // Default to idea as requested
+      status: initialStatus
     };
     setSubtasks(prev => [newSubtask, ...prev]);
     setLastAddedSubtaskId(id);
   }, []);
 
   const updateSubtask = useCallback((updatedSubtask: Subtask) => {
-    setSubtasks(prev => prev.map(s => s.id === updatedSubtask.id ? updatedSubtask : s));
+    setSubtasks(prev => prev.map(s => {
+        if (s.id === updatedSubtask.id) {
+            // Check if deadline changed or needs re-evaluation
+            let newStatus = updatedSubtask.status;
+            if (updatedSubtask.deadline) {
+                const autoStatus = determineStatusFromDeadline(updatedSubtask.deadline, s.status);
+                // Apply auto status if it forces a promotion (Idea -> Pending -> Today)
+                if (autoStatus === 'today') newStatus = 'today';
+                else if (autoStatus === 'pending' && s.status === 'idea') newStatus = 'pending';
+                // If the user manually moved it to Pending/Today but deadline allows idea, keep user preference?
+                // The prompt says "moves automatically". It implies enforcement.
+            }
+            return { ...updatedSubtask, status: newStatus };
+        }
+        return s;
+    }));
   }, []);
 
   const deleteSubtask = useCallback((subtaskId: string) => {

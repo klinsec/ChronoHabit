@@ -364,6 +364,28 @@ const SubtaskItem = ({ subtask, onEdit, getTaskById, isHighlighted, onSwipeLeft,
         setTouchEnd(null);
     };
 
+    // Deadline visual helper
+    const getDeadlineBadge = (deadline) => {
+        if (!deadline) return null;
+        const now = new Date();
+        now.setHours(0,0,0,0);
+        const date = new Date(deadline);
+        date.setHours(0,0,0,0);
+        
+        const diffDays = (date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+        
+        let colorClass = 'bg-green-500/20 text-green-400';
+        if (diffDays <= 0) colorClass = 'bg-red-500/20 text-red-400 animate-pulse font-bold';
+        else if (diffDays <= 2) colorClass = 'bg-orange-500/20 text-orange-400';
+        else if (diffDays <= 7) colorClass = 'bg-yellow-500/20 text-yellow-400';
+
+        return (
+            React.createElement('span', { className: `text-[10px] px-1.5 py-0.5 rounded ml-2 whitespace-nowrap ${colorClass}` },
+                date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+            )
+        );
+    };
+
     return (
         React.createElement('div', { className: "relative overflow-hidden rounded-lg" },
              /* Background Actions */
@@ -410,9 +432,10 @@ const SubtaskItem = ({ subtask, onEdit, getTaskById, isHighlighted, onSwipeLeft,
                 ),
                 
                 React.createElement('div', { className: "flex-grow mx-3 min-w-0 select-none" },
-                    React.createElement('div', { className: "flex items-center gap-2" },
+                    React.createElement('div', { className: "flex items-center flex-wrap gap-x-2" },
                         parentTask && React.createElement('span', { className: "text-lg flex-shrink-0", title: parentTask.name }, parentTask.icon),
-                        React.createElement('p', { className: `font-medium text-on-surface truncate ${subtask.completed ? 'line-through text-gray-500' : ''}` }, subtask.title)
+                        React.createElement('p', { className: `font-medium text-on-surface truncate ${subtask.completed ? 'line-through text-gray-500' : ''}` }, subtask.title),
+                        getDeadlineBadge(subtask.deadline)
                     ),
                     subtask.description && React.createElement('p', { className: `text-xs text-gray-400 truncate ${subtask.completed ? 'line-through' : ''}` }, subtask.description)
                 ),

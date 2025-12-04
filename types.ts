@@ -23,6 +23,7 @@ export interface Subtask {
   completed: boolean;
   createdAt: number;
   status: SubtaskStatus;
+  deadline?: number; // Timestamp for the deadline
 }
 
 export type View = 'timer' | 'history' | 'stats' | 'tasks';
