@@ -47,6 +47,9 @@
           navigator.serviceWorker.register('./service-worker.js').then(registration => {
             console.log('ServiceWorker registration successful with scope: ', registration.scope);
             
+            // Force an update check immediately
+            registration.update().catch(err => console.log('SW Update failed (likely environment):', err));
+
             // Check if there is an update waiting
             if (registration.waiting) {
               window.dispatchEvent(new CustomEvent('sw-update-found', { detail: registration }));

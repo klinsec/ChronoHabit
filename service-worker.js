@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'chronohabit-v9'; // Incremented version
+const CACHE_NAME = 'chronohabit-v10'; // Incremented version
 const urlsToCache = [
   './',
   './index.html',
@@ -128,7 +128,9 @@ self.addEventListener('notificationclick', function(event) {
           self.clients.matchAll({ type: 'window' }).then(windowClients => {
               for (let i = 0; i < windowClients.length; i++) {
                   const client = windowClients[i];
-                  if (client.url === '/' && 'focus' in client) {
+                  // Strict equality check against '/' fails for absolute URLs in preview environments
+                  // Relaxed check: if it's a focusable client, focus it.
+                  if ('focus' in client) {
                       return client.focus();
                   }
               }

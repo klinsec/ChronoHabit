@@ -35,6 +35,20 @@ const App: React.FC = () => {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('sw-update-found', handleSWUpdateFound);
 
+    // Initial check for waiting worker in case event missed
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration()
+        .then(reg => {
+          if (reg && reg.waiting) {
+            setWaitingWorker(reg.waiting);
+            setShowUpdateModal(true);
+          }
+        })
+        .catch(err => {
+          console.warn('Service Worker getRegistration failed (likely environment restriction):', err);
+        });
+    }
+
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('sw-update-found', handleSWUpdateFound);
