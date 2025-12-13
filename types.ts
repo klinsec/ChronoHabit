@@ -37,3 +37,12 @@ export interface Goal {
   duration: number; // in milliseconds
   period: GoalPeriod;
 }
+
+export interface BackupData {
+  tasks: Task[];
+  timeEntries: TimeEntry[];
+  goals: Goal[];
+  subtasks: Subtask[];
+  timestamp: number;
+  version: number;
+}

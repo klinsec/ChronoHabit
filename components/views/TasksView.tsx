@@ -3,10 +3,11 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext';
 import { Subtask, SubtaskStatus } from '../../types';
 import SubtaskModal from '../modals/SubtaskModal';
+import SettingsModal from '../modals/SettingsModal';
 import { EditIcon, TrashIcon, PlusIcon, EyeIcon, EyeOffIcon, CogIcon, ArrowUpIcon, ArrowDownIcon, ArchiveIcon } from '../Icons';
 
 const TasksView: React.FC = () => {
-  const { tasks, subtasks, deleteSubtask, moveSubtaskStatus, getTaskById, lastAddedSubtaskId, requestNotificationPermission } = useTimeTracker();
+  const { tasks, subtasks, deleteSubtask, moveSubtaskStatus, getTaskById, lastAddedSubtaskId } = useTimeTracker();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSubtask, setEditingSubtask] = useState<Subtask | null>(null);
   const [showIdeas, setShowIdeas] = useState(false);
@@ -266,33 +267,7 @@ const TasksView: React.FC = () => {
       )}
 
       {isSettingsOpen && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-surface rounded-2xl p-6 w-full max-w-sm border border-gray-700 shadow-2xl">
-                  <h2 className="text-xl font-bold mb-4 text-on-surface">Configuración</h2>
-                  <div className="space-y-4">
-                      <div className="flex items-center justify-between p-3 bg-gray-800 rounded-xl">
-                          <div>
-                              <p className="font-semibold">Notificaciones</p>
-                              <p className="text-xs text-gray-400">Activar avisos de cronómetro</p>
-                          </div>
-                          <button 
-                              onClick={requestNotificationPermission}
-                              className="bg-primary text-bkg font-bold px-3 py-1.5 rounded-lg text-sm hover:bg-purple-400 transition-colors"
-                          >
-                              Activar
-                          </button>
-                      </div>
-                  </div>
-                  <div className="mt-6 flex justify-end">
-                      <button 
-                          onClick={() => setIsSettingsOpen(false)}
-                          className="text-gray-400 hover:text-white font-bold py-2 px-4 rounded-lg"
-                      >
-                          Cerrar
-                      </button>
-                  </div>
-              </div>
-          </div>
+          <SettingsModal onClose={() => setIsSettingsOpen(false)} />
       )}
     </div>
   );

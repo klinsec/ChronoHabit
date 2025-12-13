@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { Task, TimeEntry, Goal, GoalPeriod, Subtask, SubtaskStatus } from '../types';
+import { Task, TimeEntry, Goal, GoalPeriod, Subtask, SubtaskStatus, BackupData } from '../types';
 
 interface TimeTrackerContextType {
   tasks: Task[];
@@ -28,6 +28,8 @@ interface TimeTrackerContextType {
   toggleSubtaskCompletion: (subtaskId: string) => void;
   moveSubtaskStatus: (subtaskId: string, status: SubtaskStatus) => void;
   requestNotificationPermission: () => Promise<void>;
+  exportData: () => string;
+  importData: (jsonData: string) => boolean;
 }
 
 const TimeTrackerContext = createContext<TimeTrackerContextType | undefined>(undefined);
@@ -40,7 +42,6 @@ const defaultTasks: Task[] = [
   { id: '5', name: 'Limpieza', color: '#06b6d4', icon: '🧹' },
 ];
 
-// Helper to determine status based on deadline
 const determineStatusFromDeadline = (deadline: number | undefined, currentStatus: SubtaskStatus): SubtaskStatus => {
     if (!deadline) return currentStatus;
     
@@ -49,7 +50,6 @@ const determineStatusFromDeadline = (deadline: number | undefined, currentStatus
     const date = new Date(deadline);
     date.setHours(0, 0, 0, 0);
     
-    // Difference in days
     const diffTime = date.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -59,11 +59,6 @@ const determineStatusFromDeadline = (deadline: number | undefined, currentStatus
         return 'pending';
     }
     
-    // If it's far in the future, we generally keep it as idea, unless it was already pending/today
-    // But strictly following the prompt: "if less than 7 days... automatically to pending"
-    // implies if > 7 days it might be an idea. 
-    // However, if user manually put it in pending, we shouldn't demote it unless necessary?
-    // Let's stick to the prompt's automation rule logic for NEW/UPDATED tasks.
     return 'idea';
 };
 
@@ -106,32 +101,21 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       if(storedSubtasks) {
         let parsedSubtasks: Subtask[] = JSON.parse(storedSubtasks);
         
-        // Migration logic: Ensure all subtasks have a status
         parsedSubtasks = parsedSubtasks.map(s => ({
             ...s,
-            status: s.status || 'pending' // Default old tasks to pending
+            status: s.status || 'pending'
         }));
 
-        // AUTOMATION LOGIC ON LOAD (Daily Rollover & Deadline Checks)
         const now = new Date();
         now.setHours(0,0,0,0);
 
         parsedSubtasks = parsedSubtasks.map(s => {
-             // 1. Move completed 'today' tasks to 'log' if it's a new day
              if (storedLastDate !== todayString && s.status === 'today' && s.completed) {
                  return { ...s, status: 'log' };
              }
-
-             // 2. Deadline Automation: Check dates and move if necessary
-             // Only apply this to non-completed, non-log tasks to avoid messing up archive
              if (s.deadline && !s.completed && s.status !== 'log') {
                  const newStatus = determineStatusFromDeadline(s.deadline, s.status);
-                 // Only change if it's an "upgrade" (Idea -> Pending, Pending -> Today)
-                 // or if it ensures consistency.
                  if (newStatus !== s.status) {
-                     // Specifically handle the flow described:
-                     // <= 0 days -> Today
-                     // <= 7 days -> Pending
                      if (newStatus === 'today' && s.status !== 'today') return { ...s, status: 'today' };
                      if (newStatus === 'pending' && s.status === 'idea') return { ...s, status: 'pending' };
                  }
@@ -220,7 +204,6 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
     setTimeEntries(newEntries);
     setActiveEntry(newEntry);
 
-    // Notification Logic
     if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
         const task = tasks.find(t => t.id === taskId);
         navigator.serviceWorker.controller.postMessage({
@@ -247,7 +230,6 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       ));
       setActiveEntry(null);
       
-      // Cancel Notification
       if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
           navigator.serviceWorker.controller.postMessage({
               type: 'CANCEL_NOTIFICATION',
@@ -257,7 +239,6 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, [activeEntry]);
 
-  // Listen for stop command from Service Worker (Notification action)
   useEffect(() => {
       const handleMessage = (event: MessageEvent) => {
           if (event.data && event.data.type === 'STOP_TIMER') {
@@ -350,7 +331,6 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   
   const addSubtask = useCallback((subtask: Omit<Subtask, 'id' | 'completed' | 'createdAt' | 'status'>) => {
     const id = `subtask_${Date.now()}`;
-    // Determine status based on deadline immediately on creation
     let initialStatus: SubtaskStatus = 'idea';
     if (subtask.deadline) {
         initialStatus = determineStatusFromDeadline(subtask.deadline, 'idea');
@@ -370,15 +350,11 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   const updateSubtask = useCallback((updatedSubtask: Subtask) => {
     setSubtasks(prev => prev.map(s => {
         if (s.id === updatedSubtask.id) {
-            // Check if deadline changed or needs re-evaluation
             let newStatus = updatedSubtask.status;
             if (updatedSubtask.deadline) {
                 const autoStatus = determineStatusFromDeadline(updatedSubtask.deadline, s.status);
-                // Apply auto status if it forces a promotion (Idea -> Pending -> Today)
                 if (autoStatus === 'today') newStatus = 'today';
                 else if (autoStatus === 'pending' && s.status === 'idea') newStatus = 'pending';
-                // If the user manually moved it to Pending/Today but deadline allows idea, keep user preference?
-                // The prompt says "moves automatically". It implies enforcement.
             }
             return { ...updatedSubtask, status: newStatus };
         }
@@ -406,7 +382,6 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
     
     if (Notification.permission === 'granted') {
        alert("Las notificaciones ya están activadas.");
-       // Test notification
        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
           navigator.serviceWorker.controller.postMessage({
               type: 'SHOW_NOTIFICATION',
@@ -437,6 +412,49 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, []);
 
+  // --- Export / Import / Backup Logic ---
+
+  const exportData = useCallback(() => {
+    const backup: BackupData = {
+        tasks,
+        timeEntries,
+        goals,
+        subtasks,
+        timestamp: Date.now(),
+        version: 1
+    };
+    return JSON.stringify(backup);
+  }, [tasks, timeEntries, goals, subtasks]);
+
+  const importData = useCallback((jsonData: string): boolean => {
+    try {
+        const backup: BackupData = JSON.parse(jsonData);
+        
+        // Simple validation
+        if (!Array.isArray(backup.tasks) || !Array.isArray(backup.timeEntries)) {
+            throw new Error("Invalid backup format");
+        }
+
+        if (window.confirm("Esto reemplazará todos tus datos actuales con los del archivo de respaldo. ¿Estás seguro?")) {
+            setTasks(backup.tasks);
+            setTimeEntries(backup.timeEntries);
+            setGoals(backup.goals || []);
+            setSubtasks(backup.subtasks || []);
+            
+            // Force save to local storage immediately
+            localStorage.setItem('chrono_tasks', JSON.stringify(backup.tasks));
+            localStorage.setItem('chrono_entries', JSON.stringify(backup.timeEntries));
+            localStorage.setItem('chrono_goals', JSON.stringify(backup.goals || []));
+            localStorage.setItem('chrono_subtasks', JSON.stringify(backup.subtasks || []));
+            return true;
+        }
+        return false;
+    } catch (e) {
+        console.error("Import failed", e);
+        alert("Error al importar el archivo. El formato no es válido.");
+        return false;
+    }
+  }, []);
 
   return (
     <TimeTrackerContext.Provider value={{
@@ -465,6 +483,8 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       toggleSubtaskCompletion,
       moveSubtaskStatus,
       requestNotificationPermission,
+      exportData,
+      importData
     }}>
       {children}
     </TimeTrackerContext.Provider>

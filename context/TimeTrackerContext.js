@@ -11,7 +11,6 @@ const defaultTasks = [
   { id: '5', name: 'Limpieza', color: '#06b6d4', icon: '🧹' },
 ];
 
-// Helper to determine status based on deadline
 const determineStatusFromDeadline = (deadline, currentStatus) => {
     if (!deadline) return currentStatus;
     
@@ -20,7 +19,6 @@ const determineStatusFromDeadline = (deadline, currentStatus) => {
     const date = new Date(deadline);
     date.setHours(0, 0, 0, 0);
     
-    // Difference in days
     const diffTime = date.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -71,23 +69,19 @@ export const TimeTrackerProvider = ({ children }) => {
 
       if(storedSubtasks) {
         let parsedSubtasks = JSON.parse(storedSubtasks);
-        // Migration logic: Ensure all subtasks have a status
         parsedSubtasks = parsedSubtasks.map(s => ({
             ...s,
-            status: s.status || 'pending' // Default old tasks to pending
+            status: s.status || 'pending'
         }));
 
-        // AUTOMATION LOGIC ON LOAD
         const now = new Date();
         now.setHours(0,0,0,0);
 
         parsedSubtasks = parsedSubtasks.map(s => {
-            // 1. Rollover Logic
             if (storedLastDate !== todayString && s.status === 'today' && s.completed) {
                 return { ...s, status: 'log' };
             }
 
-            // 2. Deadline Automation
             if (s.deadline && !s.completed && s.status !== 'log') {
                  const newStatus = determineStatusFromDeadline(s.deadline, s.status);
                  if (newStatus !== s.status) {
@@ -179,7 +173,6 @@ export const TimeTrackerProvider = ({ children }) => {
     setTimeEntries(newEntries);
     setActiveEntry(newEntry);
     
-    // Notification Logic
     if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
         const task = tasks.find(t => t.id === taskId);
         navigator.serviceWorker.controller.postMessage({
@@ -206,7 +199,6 @@ export const TimeTrackerProvider = ({ children }) => {
       ));
       setActiveEntry(null);
 
-      // Cancel Notification
       if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
           navigator.serviceWorker.controller.postMessage({
               type: 'CANCEL_NOTIFICATION',
@@ -216,7 +208,6 @@ export const TimeTrackerProvider = ({ children }) => {
     }
   }, [activeEntry]);
 
-  // Listen for stop command from Service Worker
   useEffect(() => {
       const handleMessage = (event) => {
           if (event.data && event.data.type === 'STOP_TIMER') {
@@ -360,7 +351,6 @@ export const TimeTrackerProvider = ({ children }) => {
     
     if (Notification.permission === 'granted') {
        alert("Las notificaciones ya están activadas.");
-       // Test notification
        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
           navigator.serviceWorker.controller.postMessage({
               type: 'SHOW_NOTIFICATION',
@@ -391,6 +381,46 @@ export const TimeTrackerProvider = ({ children }) => {
     }
   }, []);
 
+  const exportData = useCallback(() => {
+    const backup = {
+        tasks,
+        timeEntries,
+        goals,
+        subtasks,
+        timestamp: Date.now(),
+        version: 1
+    };
+    return JSON.stringify(backup);
+  }, [tasks, timeEntries, goals, subtasks]);
+
+  const importData = useCallback((jsonData) => {
+    try {
+        const backup = JSON.parse(jsonData);
+        
+        if (!Array.isArray(backup.tasks) || !Array.isArray(backup.timeEntries)) {
+            throw new Error("Invalid backup format");
+        }
+
+        if (window.confirm("Esto reemplazará todos tus datos actuales con los del archivo de respaldo. ¿Estás seguro?")) {
+            setTasks(backup.tasks);
+            setTimeEntries(backup.timeEntries);
+            setGoals(backup.goals || []);
+            setSubtasks(backup.subtasks || []);
+            
+            localStorage.setItem('chrono_tasks', JSON.stringify(backup.tasks));
+            localStorage.setItem('chrono_entries', JSON.stringify(backup.timeEntries));
+            localStorage.setItem('chrono_goals', JSON.stringify(backup.goals || []));
+            localStorage.setItem('chrono_subtasks', JSON.stringify(backup.subtasks || []));
+            return true;
+        }
+        return false;
+    } catch (e) {
+        console.error("Import failed", e);
+        alert("Error al importar el archivo. El formato no es válido.");
+        return false;
+    }
+  }, []);
+
   return React.createElement(TimeTrackerContext.Provider, { value: {
       tasks,
       timeEntries,
@@ -417,6 +447,8 @@ export const TimeTrackerProvider = ({ children }) => {
       toggleSubtaskCompletion,
       moveSubtaskStatus,
       requestNotificationPermission,
+      exportData,
+      importData
     }},
     children
   );

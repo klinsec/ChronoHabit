@@ -2,10 +2,11 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext.js';
 import SubtaskModal from '../modals/SubtaskModal.js';
+import SettingsModal from '../modals/SettingsModal.js';
 import { EditIcon, TrashIcon, PlusIcon, EyeIcon, EyeOffIcon, CogIcon, ArrowUpIcon, ArrowDownIcon, ArchiveIcon } from '../Icons.js';
 
 const TasksView = () => {
-  const { tasks, subtasks, deleteSubtask, moveSubtaskStatus, getTaskById, lastAddedSubtaskId, requestNotificationPermission } = useTimeTracker();
+  const { tasks, subtasks, deleteSubtask, moveSubtaskStatus, getTaskById, lastAddedSubtaskId } = useTimeTracker();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSubtask, setEditingSubtask] = useState(null);
   const [showIdeas, setShowIdeas] = useState(false);
@@ -279,35 +280,7 @@ const TasksView = () => {
       ),
 
       isSettingsOpen && (
-          React.createElement('div', { className: "fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" },
-              React.createElement('div', { className: "bg-surface rounded-2xl p-6 w-full max-w-sm border border-gray-700 shadow-2xl" },
-                  React.createElement('h2', { className: "text-xl font-bold mb-4 text-on-surface" }, "Configuración"),
-                  React.createElement('div', { className: "space-y-4" },
-                      React.createElement('div', { className: "flex items-center justify-between p-3 bg-gray-800 rounded-xl" },
-                          React.createElement('div', null,
-                              React.createElement('p', { className: "font-semibold" }, "Notificaciones"),
-                              React.createElement('p', { className: "text-xs text-gray-400" }, "Activar avisos de cronómetro")
-                          ),
-                          React.createElement('button', 
-                              {
-                                onClick: requestNotificationPermission,
-                                className: "bg-primary text-bkg font-bold px-3 py-1.5 rounded-lg text-sm hover:bg-purple-400 transition-colors"
-                              },
-                              "Activar"
-                          )
-                      )
-                  ),
-                  React.createElement('div', { className: "mt-6 flex justify-end" },
-                      React.createElement('button', 
-                          {
-                            onClick: () => setIsSettingsOpen(false),
-                            className: "text-gray-400 hover:text-white font-bold py-2 px-4 rounded-lg"
-                          },
-                          "Cerrar"
-                      )
-                  )
-              )
-          )
+          React.createElement(SettingsModal, { onClose: () => setIsSettingsOpen(false) })
       )
     )
   );
