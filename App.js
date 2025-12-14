@@ -7,6 +7,7 @@ import StatsView from './components/views/StatsView.js';
 import TasksView from './components/views/TasksView.js';
 import BottomNav from './components/BottomNav.js';
 import { ClockIcon, ListIcon, ChartIcon, ChecklistIcon } from './components/Icons.js';
+import ErrorBoundary from './components/ErrorBoundary.js';
 
 const App = () => {
   const [currentView, setCurrentView] = useState('timer');
@@ -33,7 +34,6 @@ const App = () => {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('sw-update-found', handleSWUpdateFound);
 
-    // Initial check for waiting worker in case event missed
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistration()
         .then(reg => {
@@ -95,7 +95,7 @@ const App = () => {
     { id: 'tasks', label: 'Tareas', icon: React.createElement(ChecklistIcon, null) },
   ];
 
-  const installBanner = showInstallBanner && React.createElement('div', { className: "bg-surface p-3 flex items-center justify-between gap-4 border-b border-gray-700" },
+  const installBanner = showInstallBanner && React.createElement('div', { className: "bg-surface p-3 flex items-center justify-between gap-4 border-b border-gray-700 flex-shrink-0 z-20" },
     React.createElement('p', { className: "text-sm text-on-surface flex-grow" }, "Instala ChronoHabit en tu dispositivo para una mejor experiencia."),
     React.createElement('div', { className: "flex-shrink-0 flex gap-2" },
       React.createElement('button', { onClick: () => setShowInstallBanner(false), className: "text-xs font-semibold text-gray-400 px-3 py-1 rounded-md hover:bg-gray-700" }, "Ahora no"),
@@ -130,17 +130,19 @@ const App = () => {
 
 
   return (
-    React.createElement(TimeTrackerProvider, null,
-      React.createElement('div', { className: "flex flex-col h-screen max-w-md mx-auto bg-bkg font-sans relative" },
-        React.createElement('header', { className: "p-4 bg-surface shadow-lg flex items-center justify-center" },
-          React.createElement('h1', { className: "text-2xl font-bold text-primary tracking-wider" }, "ChronoHabit")
-        ),
-        installBanner,
-        React.createElement('main', { className: "flex-grow p-4 overflow-y-auto pb-28" },
-          renderView()
-        ),
-        React.createElement(BottomNav, { items: navItems, currentView: currentView, setCurrentView: setCurrentView }),
-        updateModal
+    React.createElement(ErrorBoundary, null,
+      React.createElement(TimeTrackerProvider, null,
+        React.createElement('div', { className: "flex flex-col min-h-screen h-[100dvh] max-w-md mx-auto bg-bkg text-on-bkg font-sans relative overflow-hidden" },
+          React.createElement('header', { className: "p-4 bg-surface shadow-lg flex items-center justify-center flex-shrink-0 z-20" },
+            React.createElement('h1', { className: "text-2xl font-bold text-primary tracking-wider" }, "ChronoHabit")
+          ),
+          installBanner,
+          React.createElement('main', { className: "flex-grow p-4 overflow-y-auto pb-28 relative z-0" },
+            renderView()
+          ),
+          React.createElement(BottomNav, { items: navItems, currentView: currentView, setCurrentView: setCurrentView }),
+          updateModal
+        )
       )
     )
   );
