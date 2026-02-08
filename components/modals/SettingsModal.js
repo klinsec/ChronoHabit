@@ -55,7 +55,8 @@ const SettingsModal = ({ onClose }) => {
           await connectToCloud();
           setStatusMsg('');
       } catch (err) {
-          setStatusMsg('Fallo al conectar.');
+          console.error("Manual connect error:", err);
+          setStatusMsg('Fallo al conectar: ' + (err.message || 'Revisa tu conexión'));
       } finally {
           setIsLoading(false);
       }
@@ -72,7 +73,7 @@ const SettingsModal = ({ onClose }) => {
             React.createElement('div', { className: "bg-gray-800/80 p-4 rounded-xl border border-gray-700" },
                 React.createElement('div', { className: "flex items-center justify-between mb-4" },
                     React.createElement('h3', { className: "text-sm font-bold uppercase tracking-widest text-gray-400" }, "Nube Personal"),
-                    React.createElement('span', { className: `text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${cloudStatus === 'connected' ? 'bg-green-900 text-green-400' : 'bg-gray-700 text-gray-400'}` },
+                    React.createElement('span', { className: `text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${cloudStatus === 'connected' ? 'bg-green-900 text-green-400' : cloudStatus === 'error' ? 'bg-red-900 text-red-400' : 'bg-gray-700 text-gray-400'}` },
                         cloudStatus === 'connected' ? 'Activa' : cloudStatus
                     )
                 ),
@@ -100,10 +101,10 @@ const SettingsModal = ({ onClose }) => {
                             { 
                                 onClick: handleConnect, 
                                 disabled: isLoading,
-                                className: "w-full bg-primary text-bkg font-bold py-3 rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2"
+                                className: "w-full bg-primary text-bkg font-bold py-3 rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
                             },
                             React.createElement('span', { className: "text-lg" }, "☁️"),
-                            React.createElement('span', null, "Conectar con Google")
+                            React.createElement('span', null, isLoading ? "Cargando..." : "Conectar con Google")
                         )
                     )
                 ),
