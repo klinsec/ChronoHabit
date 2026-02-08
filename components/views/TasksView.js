@@ -14,6 +14,30 @@ const TasksView = () => {
   const [highlightedTaskId, setHighlightedTaskId] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+  // Deep Link Handling (Assistant Integration) - Mejorado para mayor estabilidad
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('add') === 'task') {
+        const title = params.get('title') || '';
+        const desc = params.get('desc') || '';
+        
+        // Pequeño retardo para asegurar que el contexto de tareas esté listo
+        const timer = setTimeout(() => {
+            setEditingSubtask({
+                title: title,
+                description: desc,
+                taskId: tasks.length > 0 ? tasks[0].id : '',
+                status: 'idea'
+            });
+            setIsModalOpen(true);
+            // Limpiamos la URL sin recargar para que el botón "Atrás" funcione bien
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }
+  }, [tasks.length]); // Solo re-ejecutar si cambia el número de categorías base
+
   // Overflow State
   const [overflowState, setOverflowState] = useState({
       isOpen: false,
@@ -34,13 +58,10 @@ const TasksView = () => {
     if (lastAddedSubtaskId) {
         const newTask = subtasks.find(s => s.id === lastAddedSubtaskId);
         if (newTask) {
-            // If it's an idea and ideas are hidden, show them
             if (newTask.status === 'idea' && !showIdeas) {
                 setShowIdeas(true);
             }
-            // Trigger highlight
             setHighlightedTaskId(lastAddedSubtaskId);
-            // Remove highlight after animation
             const timer = setTimeout(() => setHighlightedTaskId(null), 2000);
             return () => clearTimeout(timer);
         }
@@ -82,17 +103,13 @@ const TasksView = () => {
   };
   
   const handleOverflowResolution = (evictedTask, newStatusForEvicted) => {
-      // 1. Move the evicted task out
       moveSubtaskStatus(evictedTask.id, newStatusForEvicted);
-      // 2. Move the incoming task in
       if (overflowState.incomingTask && overflowState.targetSection) {
           moveSubtaskStatus(overflowState.incomingTask.id, overflowState.targetSection);
       }
       handleCloseOverflow();
   };
 
-  // --- Actions ---
-  
   const moveToToday = (subtask) => checkLimitAndMove(subtask, 'today');
   const moveToPending = (subtask) => checkLimitAndMove(subtask, 'pending');
   const moveToIdeas = (subtask) => moveSubtaskStatus(subtask.id, 'idea');
@@ -138,7 +155,6 @@ const TasksView = () => {
       ),
 
       React.createElement('div', { className: "space-y-6 pb-24 overflow-y-auto flex-grow px-1" },
-        /* Today Section */
         React.createElement('div', { className: "bg-surface/50 rounded-xl p-4 border border-primary/20" },
             React.createElement('h3', { className: "text-lg font-bold mb-3 flex justify-between items-center" },
                 React.createElement('span', null, "Hoy"),
@@ -158,7 +174,6 @@ const TasksView = () => {
                                 onEdit: handleEdit, 
                                 getTaskById: getTaskById,
                                 isHighlighted: highlightedTaskId === subtask.id,
-                                // Hoy -> Pendientes (Down) = Swipe Right
                                 onSwipeRight: () => moveToPending(subtask),
                                 rightActionLabel: "Pendientes",
                                 rightActionColor: "text-yellow-500"
@@ -169,7 +184,6 @@ const TasksView = () => {
             )
         ),
 
-        /* Pending Section */
         React.createElement('div', { className: "bg-surface/30 rounded-xl p-4" },
             React.createElement('h3', { className: "text-lg font-bold mb-3 flex justify-between items-center text-gray-300" },
                 React.createElement('span', null, "Pendientes"),
@@ -189,11 +203,9 @@ const TasksView = () => {
                                 onEdit: handleEdit, 
                                 getTaskById: getTaskById,
                                 isHighlighted: highlightedTaskId === subtask.id,
-                                // Pendientes -> Hoy (Up) = Swipe Left
                                 onSwipeLeft: () => moveToToday(subtask),
                                 leftActionLabel: "Hoy",
                                 leftActionColor: "text-green-500",
-                                // Pendientes -> Ideas (Down) = Swipe Right
                                 onSwipeRight: () => moveToIdeas(subtask),
                                 rightActionLabel: "Ideas",
                                 rightActionColor: "text-blue-500"
@@ -204,7 +216,6 @@ const TasksView = () => {
             )
         ),
 
-        /* Ideas Section (Conditional) */
         showIdeas && (
             React.createElement('div', { className: "bg-gray-800/20 rounded-xl p-4 border-t-2 border-gray-700 border-dashed transition-all duration-300" },
                 React.createElement('h3', { className: "text-lg font-bold mb-3 text-gray-400" }, "Ideas de Tareas"),
@@ -220,7 +231,6 @@ const TasksView = () => {
                                     onEdit: handleEdit, 
                                     getTaskById: getTaskById,
                                     isHighlighted: highlightedTaskId === subtask.id,
-                                    // Ideas -> Pendientes (Up) = Swipe Left
                                     onSwipeLeft: () => moveToPending(subtask),
                                     leftActionLabel: "Pendientes",
                                     leftActionColor: "text-yellow-500"
@@ -232,7 +242,6 @@ const TasksView = () => {
             )
         ),
 
-         /* Log/Completed Section (Conditional) */
         showLog && (
              React.createElement('div', { className: "bg-gray-900/50 rounded-xl p-4 border border-gray-800 transition-all duration-300" },
                 React.createElement('h3', { className: "text-lg font-bold mb-3 text-gray-500 flex items-center gap-2" },
@@ -250,7 +259,6 @@ const TasksView = () => {
                                     subtask: subtask, 
                                     onEdit: handleEdit, 
                                     getTaskById: getTaskById,
-                                    // Log -> Ideas (Up/Revive) = Swipe Left
                                     onSwipeLeft: () => moveToIdeas(subtask),
                                     leftActionLabel: "Reusar",
                                     leftActionColor: "text-blue-500"
@@ -290,7 +298,6 @@ const SubtaskItem = ({ subtask, onEdit, getTaskById, isHighlighted, onSwipeLeft,
     const { toggleSubtaskCompletion, deleteSubtask } = useTimeTracker();
     const parentTask = getTaskById(subtask.taskId);
     
-    // Swipe Logic
     const [touchStart, setTouchStart] = useState(null);
     const [touchEnd, setTouchEnd] = useState(null);
     const [translateX, setTranslateX] = useState(0);
@@ -308,7 +315,6 @@ const SubtaskItem = ({ subtask, onEdit, getTaskById, isHighlighted, onSwipeLeft,
         if (touchStart !== null) {
             const currentX = e.targetTouches[0].clientX;
             const diff = currentX - touchStart;
-            // Limit drag visual
             if (diff > 0 && !onSwipeRight) return;
             if (diff < 0 && !onSwipeLeft) return;
             setTranslateX(diff);
@@ -331,22 +337,18 @@ const SubtaskItem = ({ subtask, onEdit, getTaskById, isHighlighted, onSwipeLeft,
             onSwipeRight();
         }
 
-        // Reset
         setTranslateX(0);
         setTouchStart(null);
         setTouchEnd(null);
     };
 
-    // Deadline visual helper
     const getDeadlineBadge = (deadline) => {
         if (!deadline) return null;
         const now = new Date();
         now.setHours(0,0,0,0);
         const date = new Date(deadline);
         date.setHours(0,0,0,0);
-        
         const diffDays = (date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-        
         let colorClass = 'bg-green-500/20 text-green-400';
         if (diffDays <= 0) colorClass = 'bg-red-500/20 text-red-400 animate-pulse font-bold';
         else if (diffDays <= 2) colorClass = 'bg-orange-500/20 text-orange-400';
@@ -361,9 +363,7 @@ const SubtaskItem = ({ subtask, onEdit, getTaskById, isHighlighted, onSwipeLeft,
 
     return (
         React.createElement('div', { className: "relative overflow-hidden rounded-lg" },
-             /* Background Actions */
             React.createElement('div', { className: `absolute inset-0 flex items-center justify-between px-4 rounded-lg bg-surface border border-gray-700` },
-                 /* Left side of background (visible when swiping RIGHT) -> DOWN ACTION */
                  React.createElement('div', { className: `font-bold ${rightActionColor} flex items-center` },
                      onSwipeRight && translateX > 30 && (
                          React.createElement(React.Fragment, null,
@@ -372,7 +372,6 @@ const SubtaskItem = ({ subtask, onEdit, getTaskById, isHighlighted, onSwipeLeft,
                          )
                      )
                  ),
-                 /* Right side of background (visible when swiping LEFT) -> UP ACTION */
                  React.createElement('div', { className: `font-bold ${leftActionColor} flex items-center` },
                     onSwipeLeft && translateX < -30 && (
                         React.createElement(React.Fragment, null,
@@ -383,7 +382,6 @@ const SubtaskItem = ({ subtask, onEdit, getTaskById, isHighlighted, onSwipeLeft,
                  )
             ),
 
-            /* Foreground Content */
             React.createElement('div', 
                 {
                     ref: itemRef,
@@ -428,10 +426,7 @@ const SubtaskItem = ({ subtask, onEdit, getTaskById, isHighlighted, onSwipeLeft,
 
 const OverflowModal = ({ isOpen, onClose, targetSection, tasks, getTaskById, onResolve, isTodayFull }) => {
     if (!isOpen) return null;
-    
-    // Sort tasks to consistent order
     const sortedTasks = [...tasks].sort((a,b) => a.createdAt - b.createdAt);
-    
     return (
         React.createElement('div', { className: "fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex flex-col justify-end sm:justify-center p-4" },
              React.createElement('div', { className: "bg-surface border border-primary/30 rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl max-h-[80vh] overflow-hidden flex flex-col" },
@@ -451,19 +446,15 @@ const OverflowModal = ({ isOpen, onClose, targetSection, tasks, getTaskById, onR
                  React.createElement('div', { className: "flex-grow overflow-y-auto space-y-3 px-1 py-2" },
                      sortedTasks.map(task => (
                         React.createElement('div', { key: task.id, className: "relative overflow-hidden rounded-lg group" },
-                            /* Actions Background for Modal */
                             React.createElement('div', { className: "absolute inset-0 flex items-center justify-between px-4 bg-gray-900 rounded-lg" },
                                  React.createElement('div', { className: "flex items-center gap-1 text-xs font-bold text-yellow-500" },
-                                      // Left Side (visible when swiping RIGHT -> DOWN)
                                       React.createElement(React.Fragment, null,
                                           targetSection === 'today' 
                                             ? React.createElement(React.Fragment, null, React.createElement(ArrowDownIcon, null), " MOVER A PENDIENTES")
                                             : React.createElement(React.Fragment, null, React.createElement(ArrowDownIcon, null), " MOVER A IDEAS")
                                       )
                                  ),
-                                 
                                  React.createElement('div', { className: "flex items-center gap-1 text-xs font-bold text-green-500" },
-                                     // Right Side (visible when swiping LEFT -> UP)
                                      targetSection === 'pending' && !isTodayFull && (
                                          React.createElement(React.Fragment, null,
                                             "MOVER A HOY",
@@ -472,14 +463,11 @@ const OverflowModal = ({ isOpen, onClose, targetSection, tasks, getTaskById, onR
                                      )
                                  )
                             ),
-
                              React.createElement(SwipeableModalItem, 
                                 {
                                     task: task, 
                                     parentTask: getTaskById(task.taskId), 
-                                    // Swipe Right -> Down
                                     onSwipeRight: () => onResolve(task, targetSection === 'today' ? 'pending' : 'idea'),
-                                    // Swipe Left -> Up
                                     onSwipeLeft: targetSection === 'pending' && !isTodayFull 
                                         ? () => onResolve(task, 'today') 
                                         : undefined
@@ -488,7 +476,6 @@ const OverflowModal = ({ isOpen, onClose, targetSection, tasks, getTaskById, onR
                         )
                      ))
                  ),
-                 
                  React.createElement('button', { onClick: onClose, className: "mt-4 w-full py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-bold text-gray-300" },
                      "Cancelar"
                  )
@@ -497,22 +484,17 @@ const OverflowModal = ({ isOpen, onClose, targetSection, tasks, getTaskById, onR
     )
 }
 
-// Helper for Modal Swipe
 const SwipeableModalItem = ({ task, parentTask, onSwipeRight, onSwipeLeft }) => {
     const [touchStart, setTouchStart] = useState(null);
     const [translateX, setTranslateX] = useState(0);
-
     const onTouchStart = (e) => setTouchStart(e.targetTouches[0].clientX);
-    
     const onTouchMove = (e) => {
         if (touchStart !== null) {
             const diff = e.targetTouches[0].clientX - touchStart;
-            // Limit swipe directions based on props
             if (diff > 0 && onSwipeRight) setTranslateX(diff);
             if (diff < 0 && onSwipeLeft) setTranslateX(diff);
         }
     }
-
     const onTouchEnd = () => {
         if (translateX > 100 && onSwipeRight) {
             onSwipeRight();
@@ -523,7 +505,6 @@ const SwipeableModalItem = ({ task, parentTask, onSwipeRight, onSwipeLeft }) => 
         }
         setTouchStart(null);
     }
-
     return (
         React.createElement('div', 
             {
@@ -533,11 +514,9 @@ const SwipeableModalItem = ({ task, parentTask, onSwipeRight, onSwipeLeft }) => 
                 onTouchMove: onTouchMove,
                 onTouchEnd: onTouchEnd
             },
-             /* Left Indicator (visible when swiping Right -> DOWN) */
              React.createElement('div', { className: "text-gray-500 w-6" },
                 onSwipeRight && React.createElement(ArrowDownIcon, null)
             ),
-
             React.createElement('div', { className: "flex-grow flex items-center gap-3" },
                  React.createElement('span', { className: "text-2xl" }, parentTask?.icon),
                  React.createElement('div', null,
@@ -545,8 +524,6 @@ const SwipeableModalItem = ({ task, parentTask, onSwipeRight, onSwipeLeft }) => 
                      task.description && React.createElement('p', { className: "text-xs text-gray-400" }, task.description)
                  )
             ),
-
-            /* Right Indicator (visible when swiping Left -> UP) */
             React.createElement('div', { className: "text-gray-500 w-6 flex justify-end" },
                 onSwipeLeft && React.createElement(ArrowUpIcon, null)
             )

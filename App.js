@@ -36,6 +36,12 @@ const AppContent = () => {
   const [waitingWorker, setWaitingWorker] = useState(null);
 
   useEffect(() => {
+    // Assistant Deep Link Check
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('add') === 'task') {
+        setCurrentView('tasks');
+    }
+
     const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
       setInstallPrompt(e);

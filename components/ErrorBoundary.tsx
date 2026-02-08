@@ -1,4 +1,3 @@
-
 import React, { ErrorInfo, ReactNode } from 'react';
 
 interface Props {
@@ -14,14 +13,10 @@ interface State {
  * ErrorBoundary component to catch rendering errors in child components.
  */
 class ErrorBoundary extends React.Component<Props, State> {
-  // Fix: Explicitly initialize state and call super(props) in constructor for better type detection and inheritance
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null
-    };
-  }
+  public state: State = {
+    hasError: false,
+    error: null
+  };
 
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
@@ -32,7 +27,6 @@ class ErrorBoundary extends React.Component<Props, State> {
   }
 
   public render() {
-    // Fix: Access state from this.state
     const { hasError, error } = this.state;
 
     if (hasError) {
@@ -74,7 +68,6 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
-    // Fix: Properly access children from this.props
     return this.props.children;
   }
 }

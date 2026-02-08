@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext.js';
 import { findBackupFile, downloadBackupFile } from '../../utils/googleDrive.js';
 
@@ -16,6 +16,12 @@ const SettingsModal = ({ onClose }) => {
   
   const [statusMsg, setStatusMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showVoiceHelp, setShowVoiceHelp] = useState(false);
+  const [currentOrigin, setCurrentOrigin] = useState('');
+
+  useEffect(() => {
+    setCurrentOrigin(window.location.origin);
+  }, []);
 
   const handleDownloadBackup = () => {
       const data = exportData();
@@ -62,9 +68,11 @@ const SettingsModal = ({ onClose }) => {
       }
   };
 
+  const voiceUrl = `${currentOrigin}/?add=task`;
+
   return (
     React.createElement('div', { className: "fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" },
-      React.createElement('div', { className: "bg-surface rounded-2xl p-6 w-full max-w-sm border border-gray-700 shadow-2xl" },
+      React.createElement('div', { className: "bg-surface rounded-2xl p-6 w-full max-w-sm border border-gray-700 shadow-2xl max-h-[90vh] overflow-y-auto" },
         React.createElement('h2', { className: "text-xl font-bold mb-6 text-on-surface border-b border-gray-700 pb-2" }, "Configuración"),
         
         React.createElement('div', { className: "space-y-6" },
@@ -111,8 +119,33 @@ const SettingsModal = ({ onClose }) => {
                 statusMsg && React.createElement('p', { className: "text-[10px] text-center text-primary mt-2 animate-pulse" }, statusMsg)
             ),
 
+            /* Voice Assistant Section */
+            React.createElement('div', { className: "space-y-3 pt-4 border-t border-gray-800" },
+                React.createElement('div', { className: "flex justify-between items-center" },
+                    React.createElement('h3', { className: "text-xs font-bold text-gray-500 uppercase tracking-widest" }, "Asistente de Voz (Ok Google)"),
+                    React.createElement('button', { onClick: () => setShowVoiceHelp(!showVoiceHelp), className: "text-xs text-blue-400 hover:underline" },
+                        showVoiceHelp ? 'Ocultar' : 'Configurar'
+                    )
+                ),
+                
+                showVoiceHelp && (
+                     React.createElement('div', { className: "p-4 bg-gray-800 border border-gray-700 rounded-xl space-y-3 text-xs text-gray-300" },
+                        React.createElement('p', null, "Para usar \"Ok Google\":"),
+                        React.createElement('ol', { className: "list-decimal list-inside space-y-2 opacity-90" },
+                            React.createElement('li', null, "Ve a la app ", React.createElement('b', null, "Google"), " > Ajustes > Rutinas."),
+                            React.createElement('li', null, "Crea una nueva Rutina (ej: \"Añadir tarea\")."),
+                            React.createElement('li', null, "En ", React.createElement('b', null, "Acción"), ", elige \"Navegar a sitio web\" y pega:")
+                        ),
+                        React.createElement('div', { className: "bg-black p-2 rounded border border-gray-600 font-mono text-green-400 break-all select-all" },
+                            `Abrir ${voiceUrl}`
+                        ),
+                        React.createElement('p', { className: "italic text-[10px] text-gray-500" }, "Copia la URL exacta de arriba.")
+                     )
+                )
+            ),
+
             /* Local Options */
-            React.createElement('div', { className: "space-y-3" },
+            React.createElement('div', { className: "space-y-3 pt-4 border-t border-gray-800" },
                  React.createElement('button', 
                     {
                         onClick: requestNotificationPermission,
