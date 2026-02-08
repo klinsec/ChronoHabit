@@ -50,10 +50,15 @@ const SettingsModal = ({ onClose }) => {
 
   const handleConnect = async () => {
       setIsLoading(true);
-      setStatusMsg('Conectando...');
-      await connectToCloud();
-      setIsLoading(false);
-      setStatusMsg('');
+      setStatusMsg('Conectando con Google...');
+      try {
+          await connectToCloud();
+          setStatusMsg('');
+      } catch (err) {
+          setStatusMsg('Fallo al conectar.');
+      } finally {
+          setIsLoading(false);
+      }
   };
 
   return (

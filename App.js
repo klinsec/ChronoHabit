@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { TimeTrackerProvider } from './context/TimeTrackerContext.js';
+import { TimeTrackerProvider, useTimeTracker } from './context/TimeTrackerContext.js';
 import TimerView from './components/views/TimerView.js';
 import HistoryView from './components/views/HistoryView.js';
 import StatsView from './components/views/StatsView.js';
@@ -9,7 +9,26 @@ import BottomNav from './components/BottomNav.js';
 import { ClockIcon, ListIcon, ChartIcon, ChecklistIcon } from './components/Icons.js';
 import ErrorBoundary from './components/ErrorBoundary.js';
 
-const App = () => {
+const CloudIconIndicator = () => {
+    const { cloudStatus } = useTimeTracker();
+    let color = 'text-gray-600';
+    let animation = '';
+    
+    if (cloudStatus === 'connected') color = 'text-green-500';
+    if (cloudStatus === 'syncing') { color = 'text-primary'; animation = 'animate-bounce'; }
+    if (cloudStatus === 'error') color = 'text-red-500';
+
+    return React.createElement('div', { 
+        className: `ml-2 transition-colors duration-300 ${color} ${animation}`, 
+        title: `Nube: ${cloudStatus}` 
+    },
+        React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", className: "h-5 w-5", viewBox: "0 0 20 20", fill: "currentColor" },
+            React.createElement('path', { d: "M5.5 13a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.977A4.5 4.5 0 1113.5 13H5.5z" })
+        )
+    );
+};
+
+const AppContent = () => {
   const [currentView, setCurrentView] = useState('timer');
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
@@ -55,12 +74,9 @@ const App = () => {
 
   const handleInstallClick = async () => {
     if (!installPrompt) return;
-    
     installPrompt.prompt();
-    
     const { outcome } = await installPrompt.userChoice;
     console.log(`User response to the install prompt: ${outcome}`);
-    
     setInstallPrompt(null);
     setShowInstallBanner(false);
   };
@@ -72,19 +88,13 @@ const App = () => {
     setShowUpdateModal(false);
   };
 
-
   const renderView = () => {
     switch (currentView) {
-      case 'timer':
-        return React.createElement(TimerView, null);
-      case 'history':
-        return React.createElement(HistoryView, null);
-      case 'stats':
-        return React.createElement(StatsView, null);
-      case 'tasks':
-        return React.createElement(TasksView, null);
-      default:
-        return React.createElement(TimerView, null);
+      case 'timer': return React.createElement(TimerView, null);
+      case 'history': return React.createElement(HistoryView, null);
+      case 'stats': return React.createElement(StatsView, null);
+      case 'tasks': return React.createElement(TasksView, null);
+      default: return React.createElement(TimerView, null);
     }
   };
 
@@ -128,24 +138,28 @@ const App = () => {
     )
   );
 
-
-  return (
-    React.createElement(ErrorBoundary, null,
-      React.createElement(TimeTrackerProvider, null,
-        React.createElement('div', { className: "flex flex-col min-h-screen h-[100dvh] max-w-md mx-auto bg-bkg text-on-bkg font-sans relative overflow-hidden" },
-          React.createElement('header', { className: "p-4 bg-surface shadow-lg flex items-center justify-center flex-shrink-0 z-20" },
-            React.createElement('h1', { className: "text-2xl font-bold text-primary tracking-wider" }, "ChronoHabit")
-          ),
-          installBanner,
-          React.createElement('main', { className: "flex-grow p-4 overflow-y-auto pb-28 relative z-0" },
-            renderView()
-          ),
-          React.createElement(BottomNav, { items: navItems, currentView: currentView, setCurrentView: setCurrentView }),
-          updateModal
-        )
+  return React.createElement('div', { className: "flex flex-col min-h-screen h-[100dvh] max-w-md mx-auto bg-bkg text-on-bkg font-sans relative overflow-hidden" },
+    React.createElement('header', { className: "p-4 bg-surface shadow-lg flex items-center justify-center flex-shrink-0 z-20" },
+      React.createElement('h1', { className: "text-2xl font-bold text-primary tracking-wider flex items-center" }, 
+        "ChronoHabit",
+        React.createElement(CloudIconIndicator, null)
       )
-    )
+    ),
+    installBanner,
+    React.createElement('main', { className: "flex-grow p-4 overflow-y-auto pb-28 relative z-0" },
+      renderView()
+    ),
+    React.createElement(BottomNav, { items: navItems, currentView: currentView, setCurrentView: setCurrentView }),
+    updateModal
   );
 };
+
+const App = () => (
+    React.createElement(ErrorBoundary, null,
+      React.createElement(TimeTrackerProvider, null,
+        React.createElement(AppContent, null)
+      )
+    )
+);
 
 export default App;

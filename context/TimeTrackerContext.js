@@ -114,12 +114,11 @@ export const TimeTrackerProvider = ({ children }) => {
         setCloudStatus('connected');
     } catch (e) {
         console.error("Sync failed", e);
-        // If it's a 401, the token might have expired
         setCloudStatus('error');
     }
   }, [cloudStatus, exportData]);
 
-  // Periodic Auto-Sync if connected (every 10 minutes just in case)
+  // Periodic Auto-Sync if connected (every 10 minutes)
   useEffect(() => {
       if (cloudStatus === 'connected') {
           const interval = setInterval(triggerCloudSync, 600000);

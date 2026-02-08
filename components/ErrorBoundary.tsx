@@ -1,5 +1,5 @@
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children?: ReactNode;
@@ -13,14 +13,13 @@ interface State {
 /**
  * ErrorBoundary component to catch rendering errors in child components.
  */
-class ErrorBoundary extends Component<Props, State> {
-  // Fix: Explicitly initialize state as a class property to ensure it's recognized by the TypeScript compiler
+// Fix: Use React.Component to ensure compatibility and proper inheritance detection by the TypeScript compiler
+class ErrorBoundary extends React.Component<Props, State> {
+  // Fix: Explicitly initialize state as a class property
   public state: State = {
     hasError: false,
     error: null
   };
-
-  // Fix: Removed constructor to use class property initialization which is more compatible with some TS environments
 
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
@@ -31,8 +30,10 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   public render() {
-    // Fix: Accessing hasError and error from this.state
-    if (this.state.hasError) {
+    // Fix: Safely access state
+    const { hasError, error } = this.state;
+
+    if (hasError) {
       return (
         <div className="flex flex-col items-center justify-center h-screen bg-[#121212] p-6 text-center">
             <div className="bg-[#1e1e1e] p-8 rounded-2xl shadow-2xl border border-red-900/50 max-w-sm w-full">
@@ -43,7 +44,7 @@ class ErrorBoundary extends Component<Props, State> {
                 <details className="mb-6 text-left">
                     <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-300">Ver detalles técnicos</summary>
                     <pre className="mt-2 bg-black p-2 rounded text-[10px] text-red-300 overflow-auto max-h-32">
-                        {this.state.error?.toString()}
+                        {error?.toString()}
                     </pre>
                 </details>
 
@@ -71,7 +72,7 @@ class ErrorBoundary extends Component<Props, State> {
       );
     }
 
-    // Fix: Properly access children from this.props which is inherited from Component
+    // Fix: Properly access children from this.props which is inherited from React.Component
     return this.props.children;
   }
 }
