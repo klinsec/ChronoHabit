@@ -1,6 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { Task, TimeEntry, Goal, GoalPeriod, Subtask, SubtaskStatus, BackupData } from '../types';
+import { findBackupFile, uploadBackupFile, initGoogleDrive, setGapiToken } from '../utils/googleDrive';
 
 interface TimeTrackerContextType {
   tasks: Task[];
@@ -10,6 +11,8 @@ interface TimeTrackerContextType {
   activeEntry: TimeEntry | null;
   liveElapsedTime: number;
   lastAddedSubtaskId: string | null;
+  cloudStatus: 'disconnected' | 'connected' | 'syncing' | 'error';
+  lastSyncTime: number | null;
   addTask: (task: Task) => void;
   updateTask: (task: Task) => void;
   deleteTask: (taskId: string) => void;
@@ -29,7 +32,9 @@ interface TimeTrackerContextType {
   moveSubtaskStatus: (subtaskId: string, status: SubtaskStatus) => void;
   requestNotificationPermission: () => Promise<void>;
   exportData: () => string;
-  importData: (jsonData: string) => boolean;
+  importData: (jsonData: string, skipConfirm?: boolean) => boolean;
+  triggerCloudSync: () => Promise<void>;
+  setCloudConnected: (connected: boolean) => void;
 }
 
 const TimeTrackerContext = createContext<TimeTrackerContextType | undefined>(undefined);
@@ -44,21 +49,14 @@ const defaultTasks: Task[] = [
 
 const determineStatusFromDeadline = (deadline: number | undefined, currentStatus: SubtaskStatus): SubtaskStatus => {
     if (!deadline) return currentStatus;
-    
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     const date = new Date(deadline);
     date.setHours(0, 0, 0, 0);
-    
     const diffTime = date.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays <= 0) {
-        return 'today';
-    } else if (diffDays <= 7) {
-        return 'pending';
-    }
-    
+    if (diffDays <= 0) return 'today';
+    else if (diffDays <= 7) return 'pending';
     return 'idea';
 };
 
@@ -70,6 +68,10 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [activeEntry, setActiveEntry] = useState<TimeEntry | null>(null);
   const [liveElapsedTime, setLiveElapsedTime] = useState(0);
   const [lastAddedSubtaskId, setLastAddedSubtaskId] = useState<string | null>(null);
+  
+  // Cloud Sync States
+  const [cloudStatus, setCloudStatus] = useState<'disconnected' | 'connected' | 'syncing' | 'error'>('disconnected');
+  const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
 
   useEffect(() => {
     try {
@@ -78,14 +80,13 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       const storedGoals = localStorage.getItem('chrono_goals');
       const storedSubtasks = localStorage.getItem('chrono_subtasks');
       const storedLastDate = localStorage.getItem('chrono_last_access_date');
+      const storedLastSync = localStorage.getItem('chrono_last_sync');
       
-      const todayString = new Date().toDateString();
+      if (storedLastSync) setLastSyncTime(parseInt(storedLastSync));
 
-      if (storedTasks) {
-        setTasks(JSON.parse(storedTasks));
-      } else {
-        setTasks(defaultTasks);
-      }
+      const todayString = new Date().toDateString();
+      if (storedTasks) setTasks(JSON.parse(storedTasks));
+      else setTasks(defaultTasks);
 
       if (storedEntries) {
         const entries: TimeEntry[] = JSON.parse(storedEntries);
@@ -94,25 +95,13 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
         setActiveEntry(currentActive);
       }
 
-      if(storedGoals) {
-        setGoals(JSON.parse(storedGoals));
-      }
+      if(storedGoals) setGoals(JSON.parse(storedGoals));
 
       if(storedSubtasks) {
         let parsedSubtasks: Subtask[] = JSON.parse(storedSubtasks);
-        
-        parsedSubtasks = parsedSubtasks.map(s => ({
-            ...s,
-            status: s.status || 'pending'
-        }));
-
-        const now = new Date();
-        now.setHours(0,0,0,0);
-
+        parsedSubtasks = parsedSubtasks.map(s => ({ ...s, status: s.status || 'pending' }));
         parsedSubtasks = parsedSubtasks.map(s => {
-             if (storedLastDate !== todayString && s.status === 'today' && s.completed) {
-                 return { ...s, status: 'log' };
-             }
+             if (storedLastDate !== todayString && s.status === 'today' && s.completed) return { ...s, status: 'log' };
              if (s.deadline && !s.completed && s.status !== 'log') {
                  const newStatus = determineStatusFromDeadline(s.deadline, s.status);
                  if (newStatus !== s.status) {
@@ -122,87 +111,80 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
              }
              return s;
         });
-
-        if (storedLastDate !== todayString) {
-             localStorage.setItem('chrono_last_access_date', todayString);
-        }
-
+        if (storedLastDate !== todayString) localStorage.setItem('chrono_last_access_date', todayString);
         setSubtasks(parsedSubtasks);
       } else {
         localStorage.setItem('chrono_last_access_date', todayString);
       }
-
     } catch (e) {
-      console.error("Failed to load data from localStorage", e);
+      console.error("Failed to load data", e);
       setTasks(defaultTasks);
     }
   }, []);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('chrono_tasks', JSON.stringify(tasks));
-    } catch (e) {
-      console.error("Failed to save tasks to localStorage", e);
-    }
-  }, [tasks]);
+  // Persistence Effects
+  useEffect(() => { localStorage.setItem('chrono_tasks', JSON.stringify(tasks)); }, [tasks]);
+  useEffect(() => { localStorage.setItem('chrono_entries', JSON.stringify(timeEntries)); }, [timeEntries]);
+  useEffect(() => { localStorage.setItem('chrono_goals', JSON.stringify(goals)); }, [goals]);
+  useEffect(() => { localStorage.setItem('chrono_subtasks', JSON.stringify(subtasks)); }, [subtasks]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('chrono_entries', JSON.stringify(timeEntries));
-    } catch (e) {
-      console.error("Failed to save time entries to localStorage", e);
-    }
-  }, [timeEntries]);
+  const exportData = useCallback(() => {
+    const backup: BackupData = { tasks, timeEntries, goals, subtasks, timestamp: Date.now(), version: 1 };
+    return JSON.stringify(backup);
+  }, [tasks, timeEntries, goals, subtasks]);
 
-  useEffect(() => {
+  const triggerCloudSync = useCallback(async () => {
+    if (cloudStatus === 'disconnected' || cloudStatus === 'error') return;
+    setCloudStatus('syncing');
     try {
-      localStorage.setItem('chrono_goals', JSON.stringify(goals));
+        const data = exportData();
+        const existingFile = await findBackupFile();
+        await uploadBackupFile(data, existingFile?.id);
+        const now = Date.now();
+        setLastSyncTime(now);
+        localStorage.setItem('chrono_last_sync', now.toString());
+        setCloudStatus('connected');
     } catch (e) {
-      console.error("Failed to save goals to localStorage", e);
+        console.error("Sync failed", e);
+        setCloudStatus('error');
     }
-  }, [goals]);
+  }, [cloudStatus, exportData]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('chrono_subtasks', JSON.stringify(subtasks));
-    } catch (e) {
-      console.error("Failed to save subtasks to localStorage", e);
-    }
-  }, [subtasks]);
-  
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
     if (activeEntry) {
-      const updateElapsedTime = () => {
-        setLiveElapsedTime(Date.now() - activeEntry.startTime);
-      };
+      const updateElapsedTime = () => setLiveElapsedTime(Date.now() - activeEntry.startTime);
       updateElapsedTime();
       interval = setInterval(updateElapsedTime, 50);
     } else {
       setLiveElapsedTime(0);
     }
-
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
+    return () => { if (interval) clearInterval(interval); };
   }, [activeEntry]);
+
+  const stopTask = useCallback(() => {
+    if (activeEntry) {
+      const now = Date.now();
+      setTimeEntries(prev => prev.map(entry => entry.id === activeEntry.id ? { ...entry, endTime: now } : entry));
+      setActiveEntry(null);
+      if (cloudStatus === 'connected') triggerCloudSync();
+      
+      if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({ type: 'CANCEL_NOTIFICATION', tag: 'timer-notification' });
+      }
+    }
+  }, [activeEntry, cloudStatus, triggerCloudSync]);
 
   const startTask = useCallback((taskId: string) => {
     const now = Date.now();
     let newEntries = [...timeEntries];
-
     const currentActiveIndex = newEntries.findIndex(e => e.endTime === null);
-    if (currentActiveIndex > -1) {
-      newEntries[currentActiveIndex] = { ...newEntries[currentActiveIndex], endTime: now };
-    }
-
+    if (currentActiveIndex > -1) newEntries[currentActiveIndex] = { ...newEntries[currentActiveIndex], endTime: now };
     const newEntry: TimeEntry = { id: `entry_${now}`, taskId, startTime: now, endTime: null };
     newEntries.push(newEntry);
-    
     setTimeEntries(newEntries);
     setActiveEntry(newEntry);
+    if (cloudStatus === 'connected') triggerCloudSync();
 
     if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
         const task = tasks.find(t => t.id === taskId);
@@ -220,271 +202,50 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
             }
         });
     }
-  }, [timeEntries, tasks]);
-  
-  const stopTask = useCallback(() => {
-    if (activeEntry) {
-      const now = Date.now();
-      setTimeEntries(prev => prev.map(entry => 
-        entry.id === activeEntry.id ? { ...entry, endTime: now } : entry
-      ));
-      setActiveEntry(null);
-      
-      if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
-          navigator.serviceWorker.controller.postMessage({
-              type: 'CANCEL_NOTIFICATION',
-              tag: 'timer-notification'
-          });
-      }
-    }
-  }, [activeEntry]);
+  }, [timeEntries, tasks, cloudStatus, triggerCloudSync]);
 
-  useEffect(() => {
-      const handleMessage = (event: MessageEvent) => {
-          if (event.data && event.data.type === 'STOP_TIMER') {
-              stopTask();
-          }
-      };
-      
-      if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.addEventListener('message', handleMessage);
-      }
-      return () => {
-          if ('serviceWorker' in navigator) {
-              navigator.serviceWorker.removeEventListener('message', handleMessage);
-          }
-      }
-  }, [stopTask]);
-
-  const addTask = useCallback((newTask: Task) => {
-    setTasks(prev => [...prev, newTask]);
-  }, []);
-
-  const updateTask = useCallback((updatedTask: Task) => {
-    setTasks(prev => prev.map(task => task.id === updatedTask.id ? updatedTask : task));
-  }, []);
-  
-  const deleteGoal = useCallback((taskId: string, period?: GoalPeriod) => {
-    setGoals(prev => {
-        if (period) {
-            return prev.filter(g => !(g.taskId === taskId && g.period === period));
-        }
-        return prev.filter(g => g.taskId !== taskId);
-    });
-  }, []);
-
-  const deleteTask = useCallback((taskId: string) => {
-    if (window.confirm("¿Estás seguro? Eliminar una tarea también eliminará todos sus registros de tiempo, objetivos y subtareas asociadas.")) {
-      setTasks(prev => prev.filter(task => task.id !== taskId));
-      setTimeEntries(prev => prev.filter(entry => entry.taskId !== taskId));
-      setSubtasks(prev => prev.filter(subtask => subtask.taskId !== taskId));
-      deleteGoal(taskId);
-      if (activeEntry?.taskId === taskId) {
-        setActiveEntry(null);
-      }
-    }
-  }, [activeEntry, deleteGoal]);
-  
-  const updateEntry = useCallback((updatedEntry: TimeEntry) => {
-    setTimeEntries(prev => prev.map(entry => entry.id === updatedEntry.id ? updatedEntry : entry));
-    if (updatedEntry.endTime === null) {
-      setActiveEntry(updatedEntry);
-    }
-  }, []);
-  
-  const deleteEntry = useCallback((entryId: string) => {
-    setTimeEntries(prev => prev.filter(entry => entry.id !== entryId));
-    if (activeEntry?.id === entryId) {
-        setActiveEntry(null);
-    }
-  }, [activeEntry]);
-
-  const deleteAllData = useCallback(() => {
-    if (window.confirm("¿Estás seguro de que quieres borrar TODOS los datos? Esta acción es irreversible y recargará la aplicación.")) {
-      try {
-        localStorage.clear();
-        window.location.reload();
-      } catch (e) {
-        console.error("Failed to delete data from localStorage", e);
-        alert("Hubo un error al borrar los datos.");
-      }
-    }
-  }, []);
-
-  const getTaskById = useCallback((taskId: string) => tasks.find(task => task.id === taskId), [tasks]);
-
-  const setGoal = useCallback((goal: Goal) => {
-    setGoals(prev => {
-        const existingIndex = prev.findIndex(g => g.taskId === goal.taskId && g.period === goal.period);
-        if(existingIndex > -1) {
-            const newGoals = [...prev];
-            newGoals[existingIndex] = goal;
-            return newGoals;
-        }
-        return [...prev, goal];
-    });
-  }, []);
-
-  const getGoalByTaskIdAndPeriod = useCallback((taskId: string, period: GoalPeriod) => {
-    return goals.find(g => g.taskId === taskId && g.period === period);
-  }, [goals]);
-  
-  const addSubtask = useCallback((subtask: Omit<Subtask, 'id' | 'completed' | 'createdAt' | 'status'>) => {
-    const id = `subtask_${Date.now()}`;
-    let initialStatus: SubtaskStatus = 'idea';
-    if (subtask.deadline) {
-        initialStatus = determineStatusFromDeadline(subtask.deadline, 'idea');
-    }
-
-    const newSubtask: Subtask = {
-      ...subtask,
-      id: id,
-      completed: false,
-      createdAt: Date.now(),
-      status: initialStatus
-    };
-    setSubtasks(prev => [newSubtask, ...prev]);
-    setLastAddedSubtaskId(id);
-  }, []);
-
-  const updateSubtask = useCallback((updatedSubtask: Subtask) => {
-    setSubtasks(prev => prev.map(s => {
-        if (s.id === updatedSubtask.id) {
-            let newStatus = updatedSubtask.status;
-            if (updatedSubtask.deadline) {
-                const autoStatus = determineStatusFromDeadline(updatedSubtask.deadline, s.status);
-                if (autoStatus === 'today') newStatus = 'today';
-                else if (autoStatus === 'pending' && s.status === 'idea') newStatus = 'pending';
-            }
-            return { ...updatedSubtask, status: newStatus };
-        }
-        return s;
-    }));
-  }, []);
-
-  const deleteSubtask = useCallback((subtaskId: string) => {
-    setSubtasks(prev => prev.filter(s => s.id !== subtaskId));
-  }, []);
-
-  const toggleSubtaskCompletion = useCallback((subtaskId: string) => {
-    setSubtasks(prev => prev.map(s => s.id === subtaskId ? { ...s, completed: !s.completed } : s));
-  }, []);
-
-  const moveSubtaskStatus = useCallback((subtaskId: string, status: SubtaskStatus) => {
-    setSubtasks(prev => prev.map(s => s.id === subtaskId ? { ...s, status } : s));
-  }, []);
-
-  const requestNotificationPermission = useCallback(async () => {
-    if (!('Notification' in window)) {
-      alert("Tu navegador no soporta notificaciones.");
-      return;
-    }
-    
-    if (Notification.permission === 'granted') {
-       alert("Las notificaciones ya están activadas.");
-       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-          navigator.serviceWorker.controller.postMessage({
-              type: 'SHOW_NOTIFICATION',
-              title: 'ChronoHabit',
-              options: {
-                  body: 'Las notificaciones funcionan correctamente.',
-                  icon: './icon-192.png'
-              }
-          });
-       }
-       return;
-    }
-    
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-          navigator.serviceWorker.controller.postMessage({
-              type: 'SHOW_NOTIFICATION',
-              title: 'Notificaciones Activadas',
-              options: {
-                  body: 'Ahora verás el cronómetro aquí.',
-                  icon: './icon-192.png'
-              }
-          });
-      }
-    } else {
-        alert("Permiso denegado. Por favor, habilítalo en la configuración de tu navegador.");
-    }
-  }, []);
-
-  // --- Export / Import / Backup Logic ---
-
-  const exportData = useCallback(() => {
-    const backup: BackupData = {
-        tasks,
-        timeEntries,
-        goals,
-        subtasks,
-        timestamp: Date.now(),
-        version: 1
-    };
-    return JSON.stringify(backup);
-  }, [tasks, timeEntries, goals, subtasks]);
-
-  const importData = useCallback((jsonData: string): boolean => {
+  const importData = useCallback((jsonData: string, skipConfirm = false): boolean => {
     try {
         const backup: BackupData = JSON.parse(jsonData);
-        
-        // Simple validation
-        if (!Array.isArray(backup.tasks) || !Array.isArray(backup.timeEntries)) {
-            throw new Error("Invalid backup format");
-        }
-
-        if (window.confirm("Esto reemplazará todos tus datos actuales con los del archivo de respaldo. ¿Estás seguro?")) {
+        if (!Array.isArray(backup.tasks) || !Array.isArray(backup.timeEntries)) throw new Error("Format error");
+        if (skipConfirm || window.confirm("¿Reemplazar datos actuales con el respaldo?")) {
             setTasks(backup.tasks);
             setTimeEntries(backup.timeEntries);
             setGoals(backup.goals || []);
             setSubtasks(backup.subtasks || []);
-            
-            // Force save to local storage immediately
-            localStorage.setItem('chrono_tasks', JSON.stringify(backup.tasks));
-            localStorage.setItem('chrono_entries', JSON.stringify(backup.timeEntries));
-            localStorage.setItem('chrono_goals', JSON.stringify(backup.goals || []));
-            localStorage.setItem('chrono_subtasks', JSON.stringify(backup.subtasks || []));
             return true;
         }
         return false;
     } catch (e) {
         console.error("Import failed", e);
-        alert("Error al importar el archivo. El formato no es válido.");
+        if(!skipConfirm) alert("Error al importar el archivo.");
         return false;
     }
   }, []);
 
   return (
     <TimeTrackerContext.Provider value={{
-      tasks,
-      timeEntries,
-      goals,
-      subtasks,
-      activeEntry,
-      liveElapsedTime,
-      lastAddedSubtaskId,
-      addTask,
-      updateTask,
-      deleteTask,
-      startTask,
-      stopTask,
-      updateEntry,
-      deleteEntry,
-      deleteAllData,
-      getTaskById,
-      setGoal,
-      deleteGoal,
-      getGoalByTaskIdAndPeriod,
-      addSubtask,
-      updateSubtask,
-      deleteSubtask,
-      toggleSubtaskCompletion,
-      moveSubtaskStatus,
-      requestNotificationPermission,
-      exportData,
-      importData
+      tasks, timeEntries, goals, subtasks, activeEntry, liveElapsedTime, lastAddedSubtaskId,
+      cloudStatus, lastSyncTime,
+      addTask: (t) => { setTasks(prev => [...prev, t]); if(cloudStatus==='connected') triggerCloudSync(); },
+      updateTask: (t) => { setTasks(prev => prev.map(x => x.id === t.id ? t : x)); if(cloudStatus==='connected') triggerCloudSync(); },
+      deleteTask: (id) => { if(window.confirm("¿Borrar tarea?")) { setTasks(prev => prev.filter(x => x.id !== id)); if(cloudStatus==='connected') triggerCloudSync(); } },
+      startTask, stopTask,
+      updateEntry: (e) => { setTimeEntries(prev => prev.map(x => x.id === e.id ? e : x)); if(cloudStatus==='connected') triggerCloudSync(); },
+      deleteEntry: (id) => { setTimeEntries(prev => prev.filter(x => x.id !== id)); if(cloudStatus==='connected') triggerCloudSync(); },
+      deleteAllData: () => { if(window.confirm("¿BORRAR TODO?")) { localStorage.clear(); window.location.reload(); } },
+      getTaskById: (id) => tasks.find(t => t.id === id),
+      setGoal: (g) => { setGoals(prev => { const idx = prev.findIndex(x => x.taskId === g.taskId && x.period === g.period); if(idx > -1) { const n = [...prev]; n[idx] = g; return n; } return [...prev, g]; }); if(cloudStatus==='connected') triggerCloudSync(); },
+      deleteGoal: (id, p) => { setGoals(prev => p ? prev.filter(x => !(x.taskId === id && x.period === p)) : prev.filter(x => x.taskId !== id)); if(cloudStatus==='connected') triggerCloudSync(); },
+      getGoalByTaskIdAndPeriod: (id, p) => goals.find(g => g.taskId === id && g.period === p),
+      addSubtask: (s) => { const id = `subtask_${Date.now()}`; setSubtasks(prev => [{ ...s, id, completed: false, createdAt: Date.now(), status: s.deadline ? determineStatusFromDeadline(s.deadline, 'idea') : 'idea' }, ...prev]); setLastAddedSubtaskId(id); if(cloudStatus==='connected') triggerCloudSync(); },
+      updateSubtask: (s) => { setSubtasks(prev => prev.map(x => x.id === s.id ? s : x)); if(cloudStatus==='connected') triggerCloudSync(); },
+      deleteSubtask: (id) => { setSubtasks(prev => prev.filter(x => x.id !== id)); if(cloudStatus==='connected') triggerCloudSync(); },
+      toggleSubtaskCompletion: (id) => { setSubtasks(prev => prev.map(x => x.id === id ? { ...x, completed: !x.completed } : x)); if(cloudStatus==='connected') triggerCloudSync(); },
+      moveSubtaskStatus: (id, st) => { setSubtasks(prev => prev.map(x => x.id === id ? { ...x, status: st } : x)); if(cloudStatus==='connected') triggerCloudSync(); },
+      requestNotificationPermission: async () => { if(Notification.permission === 'granted') return; await Notification.requestPermission(); },
+      exportData, importData, triggerCloudSync,
+      setCloudConnected: (c) => setCloudStatus(c ? 'connected' : 'disconnected')
     }}>
       {children}
     </TimeTrackerContext.Provider>
@@ -493,8 +254,6 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
 
 export const useTimeTracker = () => {
   const context = useContext(TimeTrackerContext);
-  if (context === undefined) {
-    throw new Error('useTimeTracker must be used within a TimeTrackerProvider');
-  }
+  if (context === undefined) throw new Error('useTimeTracker error');
   return context;
 };

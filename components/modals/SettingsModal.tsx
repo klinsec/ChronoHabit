@@ -1,18 +1,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext';
-import { initGoogleDrive, signInToGoogle, findBackupFile, uploadBackupFile, downloadBackupFile } from '../../utils/googleDrive';
+import { initGoogleDrive, signInToGoogle, findBackupFile, downloadBackupFile } from '../../utils/googleDrive';
 
 interface SettingsModalProps {
   onClose: () => void;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
-  const { requestNotificationPermission, exportData, importData } = useTimeTracker();
+  const { requestNotificationPermission, exportData, importData, setCloudConnected, triggerCloudSync, cloudStatus, lastSyncTime } = useTimeTracker();
   
-  // Google Drive State
   const [clientId, setClientId] = useState('');
-  const [isDriveConnected, setIsDriveConnected] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showDriveConfig, setShowDriveConfig] = useState(false);
@@ -39,103 +37,42 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
       document.body.removeChild(link);
   };
 
-  const handleImportClick = () => {
-      document.getElementById('import-file')?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = (event) => {
-          const content = event.target?.result as string;
-          if (content) {
-              const success = importData(content);
-              if (success) onClose();
-          }
-      };
-      reader.readAsText(file);
-  };
-
-  // Google Drive Logic
   const handleConnectDrive = async () => {
       if (!clientId) {
-          alert("Por favor, introduce un Client ID de Google Cloud.");
+          alert("Por favor, introduce un Client ID.");
           return;
       }
       localStorage.setItem('google_client_id', clientId);
       setIsLoading(true);
-      setStatusMsg('Iniciando sesión en Google...');
-      
+      setStatusMsg('Conectando con Google...');
       try {
           await initGoogleDrive(clientId); 
-          setStatusMsg('Solicitando permiso...');
           await signInToGoogle();
-          setIsDriveConnected(true);
-          setStatusMsg('Conectado a Google Drive.');
+          setCloudConnected(true);
+          setStatusMsg('¡Nube conectada! Sincronizando...');
+          await triggerCloudSync();
       } catch (err: any) {
           console.error(err);
-          let errMsg = err.message || JSON.stringify(err);
-          if (errMsg.includes("origin_mismatch")) {
-              errMsg = "Error de Origen: La URL actual no está autorizada en tu Google Cloud Console.";
-          }
-          setStatusMsg('Error: ' + errMsg);
+          setStatusMsg('Error: ' + (err.message || 'Fallo de conexión'));
       } finally {
           setIsLoading(false);
       }
   };
 
-  const handleDriveBackup = async () => {
-      if (!isDriveConnected) {
-          await handleConnectDrive();
-          if (!isDriveConnected) return; // If failed, stop
-      }
-      
+  const handleCloudRestore = async () => {
       setIsLoading(true);
-      setStatusMsg('Buscando copia anterior...');
-      try {
-          const data = exportData();
-          const existingFile = await findBackupFile();
-          setStatusMsg('Subiendo datos...');
-          // @ts-ignore
-          await uploadBackupFile(data, existingFile?.id);
-          setStatusMsg('¡Copia de seguridad en la nube completada!');
-      } catch (err: any) {
-          console.error(err);
-          setStatusMsg('Error al subir: ' + err.message);
-      } finally {
-          setIsLoading(false);
-      }
-  };
-
-  const handleDriveRestore = async () => {
-      if (!isDriveConnected) {
-          await handleConnectDrive();
-          if (!isDriveConnected) return;
-      }
-
-      setIsLoading(true);
-      setStatusMsg('Buscando copia...');
+      setStatusMsg('Buscando copia en tu Drive...');
       try {
           const existingFile = await findBackupFile();
           if (!existingFile) {
-              setStatusMsg('No se encontró ninguna copia de seguridad.');
+              setStatusMsg('No hay copias en la nube.');
               return;
           }
-          setStatusMsg('Descargando...');
-          // @ts-ignore
           const data = await downloadBackupFile(existingFile.id);
-          const success = importData(JSON.stringify(data));
-          if (success) {
-              setStatusMsg('Restauración completada.');
-              setTimeout(onClose, 1000);
-          } else {
-              setStatusMsg('Restauración cancelada o fallida.');
-          }
+          const success = importData(JSON.stringify(data), true);
+          if (success) setStatusMsg('¡Restauración completada!');
       } catch (err: any) {
-          console.error(err);
-          setStatusMsg('Error al restaurar: ' + err.message);
+          setStatusMsg('Error al bajar: ' + err.message);
       } finally {
           setIsLoading(false);
       }
@@ -144,120 +81,111 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-surface rounded-2xl p-6 w-full max-w-md border border-gray-700 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold mb-6 text-on-surface border-b border-gray-700 pb-2">Configuración y Copias</h2>
+        <h2 className="text-xl font-bold mb-6 text-on-surface border-b border-gray-700 pb-2">Panel de Control Nube</h2>
         
         <div className="space-y-6">
             
-            {/* Local Backup - Highlighted as primary */}
-            <div className="space-y-3 bg-gray-800/50 p-4 rounded-xl border border-gray-700">
-                <h3 className="text-base font-bold text-green-400 uppercase tracking-wider flex items-center gap-2">
-                    <span>🛡️ Copia de Seguridad Fácil</span>
-                </h3>
-                <p className="text-xs text-gray-400">
-                    La forma más rápida y segura. Descarga tus datos a un archivo y guárdalo donde quieras. Si borras la caché, solo tienes que volver a cargarlo.
-                </p>
-                <div className="grid grid-cols-2 gap-3">
+            {/* Status Section */}
+            <div className="bg-gray-800/80 p-4 rounded-xl border border-gray-700">
+                <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold">Estado de la Nube</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold uppercase ${cloudStatus === 'connected' ? 'bg-green-900 text-green-400' : 'bg-gray-700 text-gray-400'}`}>
+                        {cloudStatus === 'connected' ? 'Sincronizado' : cloudStatus}
+                    </span>
+                </div>
+                {lastSyncTime && (
+                    <p className="text-[10px] text-gray-500">Última sincronización: {new Date(lastSyncTime).toLocaleString()}</p>
+                )}
+                {cloudStatus === 'connected' && (
+                    <button 
+                        onClick={() => triggerCloudSync()}
+                        className="mt-3 w-full bg-primary/20 hover:bg-primary/30 text-primary font-bold py-2 rounded-lg text-xs transition-colors"
+                    >
+                        🔄 Sincronizar Ahora
+                    </button>
+                )}
+            </div>
+
+            {/* Main Cloud Setup */}
+            <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Configuración Nube</h3>
+                    <button onClick={() => setShowDriveConfig(!showDriveConfig)} className="text-xs text-blue-400 hover:underline">
+                        {showDriveConfig ? 'Ocultar Tutorial' : '¿Cómo se hace?'}
+                    </button>
+                </div>
+
+                {showDriveConfig && (
+                    <div className="p-4 bg-blue-900/20 border border-blue-900/50 rounded-xl space-y-3 text-xs text-blue-100">
+                        <p className="font-bold">Pasos para activar la Nube:</p>
+                        <ol className="list-decimal list-inside space-y-2 opacity-90">
+                            <li>Entra en <a href="https://console.cloud.google.com/" target="_blank" className="underline font-bold">Google Cloud Console</a>.</li>
+                            <li>Crea un proyecto y activa la "Google Drive API".</li>
+                            <li>En "Pantalla de consentimiento OAuth", elige "Externo" y añade tu email.</li>
+                            <li>En "Credenciales", crea un "ID de cliente de OAuth".</li>
+                            <li><b>IMPORTANTE:</b> En "Orígenes de JavaScript", pega exactamente esto: <code className="bg-black p-1 rounded font-mono text-green-400 select-all block mt-1">{currentOrigin}</code></li>
+                            <li>Copia el "Client ID" que te den y pégalo abajo.</li>
+                        </ol>
+                    </div>
+                )}
+
+                <div className="space-y-2">
+                    <input 
+                        type="text" 
+                        placeholder="Pega aquí tu Client ID de Google" 
+                        value={clientId}
+                        onChange={(e) => setClientId(e.target.value)}
+                        className="w-full bg-black border border-gray-700 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-primary outline-none"
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                        <button 
+                            onClick={handleConnectDrive}
+                            disabled={isLoading}
+                            className={`bg-primary text-bkg font-bold py-3 rounded-xl text-sm transition-transform active:scale-95 ${isLoading ? 'opacity-50' : ''}`}
+                        >
+                            Conectar Nube
+                        </button>
+                        <button 
+                            onClick={handleCloudRestore}
+                            disabled={isLoading || cloudStatus !== 'connected'}
+                            className={`bg-gray-700 text-white font-bold py-3 rounded-xl text-sm transition-transform active:scale-95 disabled:opacity-30`}
+                        >
+                            Bajar de Nube
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Local Section */}
+            <div className="pt-4 border-t border-gray-800">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Copia Manual (Sin Nube)</h3>
+                <div className="flex gap-3">
                     <button 
                         onClick={handleDownloadBackup}
-                        className="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-2 rounded-xl text-sm flex flex-col items-center justify-center gap-1 shadow-lg"
+                        className="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-on-surface font-semibold py-2 rounded-xl text-xs"
                     >
-                        <span className="text-xl">⬇️</span>
-                        <span>Descargar Archivo</span>
+                        💾 Exportar JSON
                     </button>
                     <button 
-                        onClick={handleImportClick}
-                        className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-2 rounded-xl text-sm flex flex-col items-center justify-center gap-1 border border-gray-600"
+                        onClick={requestNotificationPermission}
+                        className="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-on-surface font-semibold py-2 rounded-xl text-xs"
                     >
-                        <span className="text-xl">⬆️</span>
-                        <span>Cargar Archivo</span>
-                    </button>
-                    <input 
-                        type="file" 
-                        id="import-file" 
-                        accept=".json" 
-                        className="hidden" 
-                        onChange={handleFileChange}
-                    />
-                </div>
-            </div>
-
-            {/* Notifications */}
-            <div className="flex items-center justify-between p-3 bg-gray-800 rounded-xl">
-                <div>
-                    <p className="font-semibold text-sm">Notificaciones</p>
-                    <p className="text-xs text-gray-400">Avisos del cronómetro</p>
-                </div>
-                <button 
-                    onClick={requestNotificationPermission}
-                    className="bg-primary text-bkg font-bold px-3 py-1.5 rounded-lg text-xs hover:bg-purple-400 transition-colors"
-                >
-                    Activar
-                </button>
-            </div>
-
-            {/* Google Drive Backup */}
-            <div className="space-y-2 border-t border-gray-700 pt-4">
-                <div className="flex justify-between items-center">
-                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Google Drive (Avanzado)</h3>
-                    <button onClick={() => setShowDriveConfig(!showDriveConfig)} className="text-xs text-blue-400 underline">
-                        {showDriveConfig ? 'Ocultar' : 'Configurar'}
+                        🔔 Activar Avisos
                     </button>
                 </div>
-                
-                {showDriveConfig && (
-                    <div className="mb-3 p-3 bg-gray-900 rounded-lg text-xs text-gray-400 space-y-2">
-                        <p className="font-semibold text-gray-300">¿Por qué es difícil?</p>
-                        <p>Google exige un <span className="text-white">Client ID</span> único para permitir el acceso. Si quieres usar la nube, debes crear un proyecto en <b>Google Cloud Console</b>.</p>
-                        
-                        <div className="bg-black p-2 rounded border border-gray-700 mt-2">
-                            <p className="text-gray-500 mb-1">Tu URL (Origen Autorizado):</p>
-                            <code className="block text-green-400 break-all select-all">{currentOrigin}</code>
-                            <p className="text-[10px] text-gray-500 mt-1">Copia esto en "Authorized Javascript Origins" en Google.</p>
-                        </div>
-
-                        <input 
-                            type="text" 
-                            placeholder="Pega aquí tu Client ID" 
-                            value={clientId}
-                            onChange={(e) => setClientId(e.target.value)}
-                            className="w-full bg-black border border-gray-700 rounded p-2 text-white mt-2"
-                        />
-                    </div>
-                )}
-
-                {clientId ? (
-                    <div className="grid grid-cols-2 gap-3 mt-2">
-                        <button 
-                            onClick={handleDriveBackup}
-                            disabled={isLoading}
-                            className={`bg-blue-900/40 hover:bg-blue-900/60 text-blue-200 border border-blue-900 font-bold py-2 px-2 rounded-xl text-xs flex flex-col items-center justify-center gap-1 ${isLoading ? 'opacity-50' : ''}`}
-                        >
-                            <span>☁️ Guardar en Nube</span>
-                        </button>
-                        <button 
-                            onClick={handleDriveRestore}
-                            disabled={isLoading}
-                            className={`bg-blue-900/40 hover:bg-blue-900/60 text-blue-200 border border-blue-900 font-bold py-2 px-2 rounded-xl text-xs flex flex-col items-center justify-center gap-1 ${isLoading ? 'opacity-50' : ''}`}
-                        >
-                            <span>☁️ Restaurar de Nube</span>
-                        </button>
-                    </div>
-                ) : (
-                    showDriveConfig && <p className="text-xs text-red-400 text-center">Falta el Client ID para usar Drive.</p>
-                )}
-                
-                {statusMsg && <p className="text-xs text-center text-primary mt-2 animate-pulse">{statusMsg}</p>}
             </div>
+            
+            {statusMsg && (
+                <p className="text-center text-xs font-bold text-primary animate-pulse">{statusMsg}</p>
+            )}
         </div>
 
-        <div className="mt-6 flex justify-end">
-            <button 
-                onClick={onClose}
-                className="text-gray-400 hover:text-white font-bold py-2 px-4 rounded-lg"
-            >
-                Cerrar
-            </button>
-        </div>
+        <button 
+            onClick={onClose}
+            className="mt-8 w-full py-3 text-gray-400 font-bold hover:text-white transition-colors"
+        >
+            Cerrar
+        </button>
       </div>
     </div>
   );
