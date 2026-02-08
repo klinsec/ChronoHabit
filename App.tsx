@@ -5,8 +5,9 @@ import TimerView from './components/views/TimerView';
 import HistoryView from './components/views/HistoryView';
 import StatsView from './components/views/StatsView';
 import TasksView from './components/views/TasksView';
+import RoutinesView from './components/views/RoutinesView';
 import BottomNav from './components/BottomNav';
-import { ClockIcon, ListIcon, ChartIcon, ChecklistIcon } from './components/Icons';
+import { ClockIcon, ListIcon, ChartIcon, ChecklistIcon, RoutineIcon } from './components/Icons';
 import { View } from './types';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -67,18 +68,20 @@ const AppContent: React.FC = () => {
   const renderView = () => {
     switch (currentView) {
       case 'timer': return <TimerView />;
-      case 'history': return <HistoryView />;
-      case 'stats': return <StatsView />;
+      case 'routines': return <RoutinesView />;
       case 'tasks': return <TasksView />;
+      case 'stats': return <StatsView />;
+      // Fallback for history if stuck in old state, though hidden from nav
+      case 'history': return <HistoryView />;
       default: return <TimerView />;
     }
   };
 
   const navItems = [
     { id: 'timer' as View, label: 'Cronómetro', icon: <ClockIcon /> },
-    { id: 'history' as View, label: 'Historial', icon: <ListIcon /> },
-    { id: 'stats' as View, label: 'Estadísticas', icon: <ChartIcon /> },
+    { id: 'routines' as View, label: 'Rutinas', icon: <RoutineIcon /> },
     { id: 'tasks' as View, label: 'Tareas', icon: <ChecklistIcon /> },
+    { id: 'stats' as View, label: 'Estadísticas', icon: <ChartIcon /> },
   ];
 
   return (

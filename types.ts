@@ -26,7 +26,29 @@ export interface Subtask {
   deadline?: number; // Timestamp for the deadline
 }
 
-export type View = 'timer' | 'history' | 'stats' | 'tasks';
+// --- Discipline Contract Types ---
+
+export type ContractPhase = number; // Changed from union to number for custom duration
+
+export interface Commitment {
+  id: string;
+  title: string;
+  time?: string; // HH:mm format
+  completedToday: boolean;
+}
+
+export interface DisciplineContract {
+  active: boolean;
+  currentPhase: ContractPhase; // This is the total duration goal (e.g., 7 days)
+  dayInPhase: number; // 1-based index
+  startDate: number;
+  lastCheckDate: string; // To handle daily resets (YYYY-MM-DD)
+  commitments: Commitment[];
+  history: boolean[]; // Array of true/false for previous days in current phase
+  failed: boolean;
+}
+
+export type View = 'timer' | 'history' | 'stats' | 'tasks' | 'routines' | 'discipline';
 
 export type GoalType = 'min' | 'max';
 export type GoalPeriod = 'day' | 'week' | 'month' | 'all';
@@ -43,6 +65,7 @@ export interface BackupData {
   timeEntries: TimeEntry[];
   goals: Goal[];
   subtasks: Subtask[];
+  contract?: DisciplineContract;
   timestamp: number;
   version: number;
 }

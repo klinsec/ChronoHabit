@@ -1,13 +1,16 @@
+
 import React, { useState } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext.js';
 import { formatDuration } from '../../utils/helpers.js';
 import TaskModal from '../modals/TaskModal.js';
-import { PlusIcon, EditIcon } from '../Icons.js';
+import HistoryView from './HistoryView.js';
+import { PlusIcon, EditIcon, HistoryIcon } from '../Icons.js';
 
 const TimerView = () => {
   const { tasks, activeEntry, startTask, stopTask, getTaskById, liveElapsedTime } = useTimeTracker();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   const activeTask = activeEntry ? getTaskById(activeEntry.taskId) : null;
 
@@ -27,8 +30,20 @@ const TimerView = () => {
   };
 
   return (
-    React.createElement('div', { className: "flex flex-col h-full" },
-      React.createElement('div', { className: "bg-surface p-6 rounded-2xl shadow-lg mb-6 text-center" },
+    React.createElement('div', { className: "flex flex-col h-full relative" },
+      // History Button
+      React.createElement('div', { className: "absolute top-0 right-0 z-10" },
+          React.createElement('button', 
+            {
+                onClick: () => setShowHistoryModal(true),
+                className: "p-2 bg-surface text-gray-400 hover:text-white rounded-full shadow-md border border-gray-800 transition-colors",
+                title: "Ver Historial"
+            },
+            React.createElement(HistoryIcon, null)
+          )
+      ),
+
+      React.createElement('div', { className: "bg-surface p-6 rounded-2xl shadow-lg mb-6 text-center mt-8" },
         React.createElement('div', { className: "text-gray-400 text-sm mb-2" },
           activeTask ? `Registrando: ${activeTask.name}` : 'Ninguna tarea activa'
         ),
@@ -91,7 +106,24 @@ const TimerView = () => {
         )
       ),
       
-      isModalOpen && React.createElement(TaskModal, { task: editingTask, onClose: handleCloseModal })
+      isModalOpen && React.createElement(TaskModal, { task: editingTask, onClose: handleCloseModal }),
+      
+      showHistoryModal && React.createElement('div', { className: "fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex flex-col p-4 animate-in fade-in duration-200" },
+          React.createElement('div', { className: "bg-surface rounded-2xl shadow-2xl border border-gray-700 flex flex-col max-h-full overflow-hidden flex-grow" },
+              React.createElement('div', { className: "p-4 border-b border-gray-700 flex justify-end" },
+                  React.createElement('button',
+                    {
+                        onClick: () => setShowHistoryModal(false),
+                        className: "bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+                    },
+                    "Cerrar"
+                  )
+              ),
+              React.createElement('div', { className: "flex-grow overflow-y-auto p-4" },
+                  React.createElement(HistoryView, null)
+              )
+          )
+      )
     )
   );
 };

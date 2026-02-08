@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'chronohabit-v10'; // Incremented version
+const CACHE_NAME = 'chronohabit-v11'; // Incremented version
 const urlsToCache = [
   './',
   './index.html',
@@ -14,6 +14,7 @@ const urlsToCache = [
   './components/views/HistoryView.js',
   './components/views/StatsView.js',
   './components/views/TasksView.js',
+  './components/views/RoutinesView.js',
   './components/modals/TaskModal.js',
   './components/modals/EntryModal.js',
   './components/modals/GoalModal.js',

@@ -1,14 +1,17 @@
+
 import React, { useState } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext';
 import { formatDuration } from '../../utils/helpers';
 import { Task } from '../../types';
 import TaskModal from '../modals/TaskModal';
-import { PlusIcon, EditIcon } from '../Icons';
+import HistoryView from './HistoryView';
+import { PlusIcon, EditIcon, HistoryIcon } from '../Icons';
 
 const TimerView: React.FC = () => {
   const { tasks, activeEntry, startTask, stopTask, getTaskById, liveElapsedTime } = useTimeTracker();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   const activeTask = activeEntry ? getTaskById(activeEntry.taskId) : null;
 
@@ -28,8 +31,19 @@ const TimerView: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="bg-surface p-6 rounded-2xl shadow-lg mb-6 text-center">
+    <div className="flex flex-col h-full relative">
+      {/* Top Bar for Timer View */}
+      <div className="absolute top-0 right-0 z-10">
+        <button 
+            onClick={() => setShowHistoryModal(true)}
+            className="p-2 bg-surface text-gray-400 hover:text-white rounded-full shadow-md border border-gray-800 transition-colors"
+            title="Ver Historial"
+        >
+            <HistoryIcon />
+        </button>
+      </div>
+
+      <div className="bg-surface p-6 rounded-2xl shadow-lg mb-6 text-center mt-8">
         <div className="text-gray-400 text-sm mb-2">
           {activeTask ? `Registrando: ${activeTask.name}` : 'Ninguna tarea activa'}
         </div>
@@ -89,6 +103,25 @@ const TimerView: React.FC = () => {
       </div>
       
       {isModalOpen && <TaskModal task={editingTask} onClose={handleCloseModal} />}
+
+      {/* History Modal Overlay */}
+      {showHistoryModal && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex flex-col p-4 animate-in fade-in duration-200">
+              <div className="bg-surface rounded-2xl shadow-2xl border border-gray-700 flex flex-col max-h-full overflow-hidden flex-grow">
+                  <div className="p-4 border-b border-gray-700 flex justify-end">
+                      <button 
+                        onClick={() => setShowHistoryModal(false)}
+                        className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+                      >
+                          Cerrar
+                      </button>
+                  </div>
+                  <div className="flex-grow overflow-y-auto p-4">
+                      <HistoryView />
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 };

@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { Task, TimeEntry, Goal, GoalPeriod, Subtask, SubtaskStatus, BackupData } from '../types';
+import { Task, TimeEntry, Goal, GoalPeriod, Subtask, SubtaskStatus, BackupData, DisciplineContract, ContractPhase, Commitment } from '../types';
 import { findBackupFile, uploadBackupFile, initGoogleDrive, setGapiToken } from '../utils/googleDrive';
 
 interface TimeTrackerContextType {
@@ -13,6 +13,8 @@ interface TimeTrackerContextType {
   lastAddedSubtaskId: string | null;
   cloudStatus: 'disconnected' | 'connected' | 'syncing' | 'error';
   lastSyncTime: number | null;
+  dailyNotificationEnabled: boolean;
+  contract: DisciplineContract | null; // New Contract State
   addTask: (task: Task) => void;
   updateTask: (task: Task) => void;
   deleteTask: (taskId: string) => void;
@@ -31,10 +33,15 @@ interface TimeTrackerContextType {
   toggleSubtaskCompletion: (subtaskId: string) => void;
   moveSubtaskStatus: (subtaskId: string, status: SubtaskStatus) => void;
   requestNotificationPermission: () => Promise<void>;
+  toggleDailyNotification: () => void;
   exportData: () => string;
   importData: (jsonData: string, skipConfirm?: boolean) => boolean;
   triggerCloudSync: () => Promise<void>;
   setCloudConnected: (connected: boolean) => void;
+  // Contract Actions
+  startContract: (commitments: Omit<Commitment, 'id' | 'completedToday'>[], duration: number) => void;
+  toggleCommitment: (id: string) => void;
+  resetContract: () => void;
 }
 
 const TimeTrackerContext = createContext<TimeTrackerContextType | undefined>(undefined);
@@ -68,6 +75,8 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [activeEntry, setActiveEntry] = useState<TimeEntry | null>(null);
   const [liveElapsedTime, setLiveElapsedTime] = useState(0);
   const [lastAddedSubtaskId, setLastAddedSubtaskId] = useState<string | null>(null);
+  const [dailyNotificationEnabled, setDailyNotificationEnabled] = useState(true);
+  const [contract, setContract] = useState<DisciplineContract | null>(null);
   
   // Cloud Sync States
   const [cloudStatus, setCloudStatus] = useState<'disconnected' | 'connected' | 'syncing' | 'error'>('disconnected');
@@ -79,12 +88,15 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       const storedEntries = localStorage.getItem('chrono_entries');
       const storedGoals = localStorage.getItem('chrono_goals');
       const storedSubtasks = localStorage.getItem('chrono_subtasks');
+      const storedContract = localStorage.getItem('chrono_contract');
       const storedLastDate = localStorage.getItem('chrono_last_access_date');
       const storedLastSync = localStorage.getItem('chrono_last_sync');
+      const storedDailyNotif = localStorage.getItem('chrono_daily_notif');
       
       if (storedLastSync) setLastSyncTime(parseInt(storedLastSync));
+      if (storedDailyNotif !== null) setDailyNotificationEnabled(storedDailyNotif === 'true');
 
-      const todayString = new Date().toDateString();
+      const todayString = new Date().toISOString().split('T')[0];
       if (storedTasks) setTasks(JSON.parse(storedTasks));
       else setTasks(defaultTasks);
 
@@ -96,6 +108,23 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       }
 
       if(storedGoals) setGoals(JSON.parse(storedGoals));
+
+      if (storedContract) {
+          const parsedContract: DisciplineContract = JSON.parse(storedContract);
+          
+          // Contract Daily Reset Logic
+          if (parsedContract.active && parsedContract.lastCheckDate !== todayString) {
+              // It's a new day!
+              // Increment day if not just starting
+              if (parsedContract.lastCheckDate) {
+                  parsedContract.dayInPhase += 1;
+              }
+              
+              parsedContract.lastCheckDate = todayString;
+              parsedContract.commitments = parsedContract.commitments.map(c => ({...c, completedToday: false}));
+          }
+          setContract(parsedContract);
+      }
 
       if(storedSubtasks) {
         let parsedSubtasks: Subtask[] = JSON.parse(storedSubtasks);
@@ -127,11 +156,80 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   useEffect(() => { localStorage.setItem('chrono_entries', JSON.stringify(timeEntries)); }, [timeEntries]);
   useEffect(() => { localStorage.setItem('chrono_goals', JSON.stringify(goals)); }, [goals]);
   useEffect(() => { localStorage.setItem('chrono_subtasks', JSON.stringify(subtasks)); }, [subtasks]);
+  useEffect(() => { 
+      if (contract) localStorage.setItem('chrono_contract', JSON.stringify(contract)); 
+      else localStorage.removeItem('chrono_contract');
+  }, [contract]);
+
+  const toggleDailyNotification = useCallback(() => {
+    setDailyNotificationEnabled(prev => {
+        const newVal = !prev;
+        localStorage.setItem('chrono_daily_notif', String(newVal));
+        return newVal;
+    });
+  }, []);
+
+  // Contract Notification & Daily Notification Logic
+  useEffect(() => {
+    const interval = setInterval(() => {
+        const now = new Date();
+        const currentTimeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false });
+        const todayStr = now.toDateString();
+
+        // 1. Contract Specific Notifications
+        if (contract && contract.active && !contract.failed) {
+            contract.commitments.forEach(comm => {
+                if (comm.time === currentTimeStr && !comm.completedToday) {
+                    const lastNotifKey = `notif_${comm.id}_${todayStr}`;
+                    if (!localStorage.getItem(lastNotifKey)) {
+                         if ('Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker.controller) {
+                             navigator.serviceWorker.controller.postMessage({
+                                type: 'SHOW_NOTIFICATION',
+                                title: '¡Es hora de cumplir!',
+                                options: {
+                                    body: `Contrato de Disciplina: ${comm.title}`,
+                                    icon: './icon-192.png',
+                                    tag: `contract-${comm.id}`,
+                                    requireInteraction: true
+                                }
+                             });
+                             localStorage.setItem(lastNotifKey, 'true');
+                         }
+                    }
+                }
+            });
+        }
+
+        // 2. Standard Daily Briefing (8:00 AM)
+        if (dailyNotificationEnabled) {
+            const lastNotifDate = localStorage.getItem('chrono_last_daily_notif_date');
+            if (lastNotifDate !== todayStr && now.getHours() >= 8) {
+                const todayTasks = subtasks.filter(s => s.status === 'today' && !s.completed);
+                if (todayTasks.length > 0) {
+                     if ('Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker.controller) {
+                         navigator.serviceWorker.controller.postMessage({
+                            type: 'SHOW_NOTIFICATION',
+                            title: '🌅 Tu plan para hoy',
+                            options: {
+                                body: `Tienes ${todayTasks.length} tareas pendientes.`,
+                                icon: './icon-192.png',
+                                tag: 'daily-briefing'
+                            }
+                         });
+                     }
+                }
+                localStorage.setItem('chrono_last_daily_notif_date', todayStr);
+            }
+        }
+    }, 30000); 
+
+    return () => clearInterval(interval);
+  }, [dailyNotificationEnabled, subtasks, contract]);
 
   const exportData = useCallback(() => {
-    const backup: BackupData = { tasks, timeEntries, goals, subtasks, timestamp: Date.now(), version: 1 };
+    const backup: BackupData = { tasks, timeEntries, goals, subtasks, contract: contract || undefined, timestamp: Date.now(), version: 1 };
     return JSON.stringify(backup);
-  }, [tasks, timeEntries, goals, subtasks]);
+  }, [tasks, timeEntries, goals, subtasks, contract]);
 
   const triggerCloudSync = useCallback(async () => {
     if (cloudStatus === 'disconnected' || cloudStatus === 'error') return;
@@ -213,6 +311,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
             setTimeEntries(backup.timeEntries);
             setGoals(backup.goals || []);
             setSubtasks(backup.subtasks || []);
+            if (backup.contract) setContract(backup.contract);
             return true;
         }
         return false;
@@ -223,10 +322,47 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, []);
 
+  // --- Contract Functions ---
+
+  const startContract = useCallback((commitmentsData: Omit<Commitment, 'id' | 'completedToday'>[], duration: number) => {
+      const newContract: DisciplineContract = {
+          active: true,
+          currentPhase: duration, 
+          dayInPhase: 1,
+          startDate: Date.now(),
+          lastCheckDate: new Date().toISOString().split('T')[0],
+          failed: false,
+          history: [],
+          commitments: commitmentsData.map((c, i) => ({
+              ...c,
+              id: `comm_${Date.now()}_${i}`,
+              completedToday: false
+          }))
+      };
+      setContract(newContract);
+      if(cloudStatus==='connected') triggerCloudSync();
+  }, [cloudStatus, triggerCloudSync]);
+
+  const toggleCommitment = useCallback((id: string) => {
+      setContract(prev => {
+          if (!prev) return null;
+          return {
+              ...prev,
+              commitments: prev.commitments.map(c => c.id === id ? { ...c, completedToday: !c.completedToday } : c)
+          };
+      });
+      if(cloudStatus==='connected') triggerCloudSync();
+  }, [cloudStatus, triggerCloudSync]);
+
+  const resetContract = useCallback(() => {
+      setContract(null); // Full reset to menu
+      if(cloudStatus==='connected') triggerCloudSync();
+  }, [cloudStatus, triggerCloudSync]);
+
   return (
     <TimeTrackerContext.Provider value={{
       tasks, timeEntries, goals, subtasks, activeEntry, liveElapsedTime, lastAddedSubtaskId,
-      cloudStatus, lastSyncTime,
+      cloudStatus, lastSyncTime, dailyNotificationEnabled, contract,
       addTask: (t) => { setTasks(prev => [...prev, t]); if(cloudStatus==='connected') triggerCloudSync(); },
       updateTask: (t) => { setTasks(prev => prev.map(x => x.id === t.id ? t : x)); if(cloudStatus==='connected') triggerCloudSync(); },
       deleteTask: (id) => { if(window.confirm("¿Borrar tarea?")) { setTasks(prev => prev.filter(x => x.id !== id)); if(cloudStatus==='connected') triggerCloudSync(); } },
@@ -243,9 +379,11 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       deleteSubtask: (id) => { setSubtasks(prev => prev.filter(x => x.id !== id)); if(cloudStatus==='connected') triggerCloudSync(); },
       toggleSubtaskCompletion: (id) => { setSubtasks(prev => prev.map(x => x.id === id ? { ...x, completed: !x.completed } : x)); if(cloudStatus==='connected') triggerCloudSync(); },
       moveSubtaskStatus: (id, st) => { setSubtasks(prev => prev.map(x => x.id === id ? { ...x, status: st } : x)); if(cloudStatus==='connected') triggerCloudSync(); },
-      requestNotificationPermission: async () => { if(Notification.permission === 'granted') return; await Notification.requestPermission(); },
+      requestNotificationPermission: async () => { if(Notification.permission !== 'granted') await Notification.requestPermission(); },
+      toggleDailyNotification,
       exportData, importData, triggerCloudSync,
-      setCloudConnected: (c) => setCloudStatus(c ? 'connected' : 'disconnected')
+      setCloudConnected: (c) => setCloudStatus(c ? 'connected' : 'disconnected'),
+      startContract, toggleCommitment, resetContract
     }}>
       {children}
     </TimeTrackerContext.Provider>

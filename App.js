@@ -5,8 +5,9 @@ import TimerView from './components/views/TimerView.js';
 import HistoryView from './components/views/HistoryView.js';
 import StatsView from './components/views/StatsView.js';
 import TasksView from './components/views/TasksView.js';
+import RoutinesView from './components/views/RoutinesView.js';
 import BottomNav from './components/BottomNav.js';
-import { ClockIcon, ListIcon, ChartIcon, ChecklistIcon } from './components/Icons.js';
+import { ClockIcon, ListIcon, ChartIcon, ChecklistIcon, RoutineIcon } from './components/Icons.js';
 import ErrorBoundary from './components/ErrorBoundary.js';
 
 const CloudIconIndicator = () => {
@@ -82,7 +83,6 @@ const AppContent = () => {
     if (!installPrompt) return;
     installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
-    console.log(`User response to the install prompt: ${outcome}`);
     setInstallPrompt(null);
     setShowInstallBanner(false);
   };
@@ -97,18 +97,19 @@ const AppContent = () => {
   const renderView = () => {
     switch (currentView) {
       case 'timer': return React.createElement(TimerView, null);
-      case 'history': return React.createElement(HistoryView, null);
-      case 'stats': return React.createElement(StatsView, null);
+      case 'routines': return React.createElement(RoutinesView, null);
       case 'tasks': return React.createElement(TasksView, null);
+      case 'stats': return React.createElement(StatsView, null);
+      case 'history': return React.createElement(HistoryView, null);
       default: return React.createElement(TimerView, null);
     }
   };
 
   const navItems = [
     { id: 'timer', label: 'Cronómetro', icon: React.createElement(ClockIcon, null) },
-    { id: 'history', label: 'Historial', icon: React.createElement(ListIcon, null) },
-    { id: 'stats', label: 'Estadísticas', icon: React.createElement(ChartIcon, null) },
+    { id: 'routines', label: 'Rutinas', icon: React.createElement(RoutineIcon, null) },
     { id: 'tasks', label: 'Tareas', icon: React.createElement(ChecklistIcon, null) },
+    { id: 'stats', label: 'Estadísticas', icon: React.createElement(ChartIcon, null) },
   ];
 
   const installBanner = showInstallBanner && React.createElement('div', { className: "bg-surface p-3 flex items-center justify-between gap-4 border-b border-gray-700 flex-shrink-0 z-20" },

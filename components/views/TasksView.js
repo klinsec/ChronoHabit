@@ -6,22 +6,22 @@ import SettingsModal from '../modals/SettingsModal.js';
 import { EditIcon, TrashIcon, PlusIcon, EyeIcon, EyeOffIcon, CogIcon, ArrowUpIcon, ArrowDownIcon, ArchiveIcon } from '../Icons.js';
 
 const TasksView = () => {
-  const { tasks, subtasks, deleteSubtask, moveSubtaskStatus, getTaskById, lastAddedSubtaskId } = useTimeTracker();
+  const { tasks, subtasks, addSubtask, deleteSubtask, moveSubtaskStatus, getTaskById, lastAddedSubtaskId } = useTimeTracker();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSubtask, setEditingSubtask] = useState(null);
   const [showIdeas, setShowIdeas] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [highlightedTaskId, setHighlightedTaskId] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
-  // Deep Link Handling (Assistant Integration) - Mejorado para mayor estabilidad
+  
+  // Deep Link Handling (Manual Only)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('add') === 'task') {
+    const manualAdd = params.get('add');
+
+    if (manualAdd === 'task') {
         const title = params.get('title') || '';
         const desc = params.get('desc') || '';
-        
-        // Pequeño retardo para asegurar que el contexto de tareas esté listo
         const timer = setTimeout(() => {
             setEditingSubtask({
                 title: title,
@@ -30,13 +30,11 @@ const TasksView = () => {
                 status: 'idea'
             });
             setIsModalOpen(true);
-            // Limpiamos la URL sin recargar para que el botón "Atrás" funcione bien
             window.history.replaceState({}, document.title, window.location.pathname);
         }, 300);
-
         return () => clearTimeout(timer);
     }
-  }, [tasks.length]); // Solo re-ejecutar si cambia el número de categorías base
+  }, [tasks, addSubtask]); 
 
   // Overflow State
   const [overflowState, setOverflowState] = useState({

@@ -8,20 +8,19 @@ interface SettingsModalProps {
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
-  const { requestNotificationPermission, exportData, importData, setCloudConnected, triggerCloudSync, cloudStatus, lastSyncTime } = useTimeTracker();
+  const { requestNotificationPermission, exportData, importData, setCloudConnected, triggerCloudSync, cloudStatus, lastSyncTime, dailyNotificationEnabled, toggleDailyNotification } = useTimeTracker();
   
   const [clientId, setClientId] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showDriveConfig, setShowDriveConfig] = useState(false);
-  const [showVoiceHelp, setShowVoiceHelp] = useState(false);
   const [currentOrigin, setCurrentOrigin] = useState('');
 
   useEffect(() => {
       const storedClientId = localStorage.getItem('google_client_id');
       if (storedClientId) {
           setClientId(storedClientId);
-          setShowDriveConfig(true); // Keep hidden by default unless previously set, or user clicks help
+          setShowDriveConfig(true); 
       }
       setCurrentOrigin(window.location.origin);
   }, []);
@@ -79,8 +78,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
       }
   };
 
-  const voiceUrl = `${currentOrigin}/?add=task`;
-
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-surface rounded-2xl p-6 w-full max-w-md border border-gray-700 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -109,29 +106,27 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                 )}
             </div>
 
-            {/* Voice Assistant Integration */}
-            <div className="space-y-3 pt-4 border-t border-gray-800">
-                <div className="flex justify-between items-center">
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Asistente de Voz (Ok Google)</h3>
-                    <button onClick={() => setShowVoiceHelp(!showVoiceHelp)} className="text-xs text-blue-400 hover:underline">
-                        {showVoiceHelp ? 'Ocultar' : 'Configurar'}
+            {/* Notifications Section */}
+            <div className="pt-4 border-t border-gray-800">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Notificaciones</h3>
+                <div className="space-y-3">
+                    <button 
+                        onClick={requestNotificationPermission}
+                        className="w-full bg-gray-800 hover:bg-gray-700 text-on-surface font-semibold py-3 rounded-xl text-sm border border-gray-700 flex items-center justify-between px-4"
+                    >
+                        <span>🔔 Permitir Notificaciones</span>
                     </button>
+                    
+                    <div className="flex items-center justify-between bg-gray-800 p-3 rounded-xl border border-gray-700">
+                        <span className="text-sm font-semibold">Resumen Diario (8:00 AM)</span>
+                         <button 
+                            onClick={toggleDailyNotification}
+                            className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 ease-in-out ${dailyNotificationEnabled ? 'bg-primary' : 'bg-gray-600'}`}
+                        >
+                            <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${dailyNotificationEnabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                        </button>
+                    </div>
                 </div>
-                
-                {showVoiceHelp && (
-                     <div className="p-4 bg-gray-800 border border-gray-700 rounded-xl space-y-3 text-xs text-gray-300">
-                        <p>Para usar "Ok Google":</p>
-                        <ol className="list-decimal list-inside space-y-2 opacity-90">
-                            <li>Ve a la app <b>Google</b> {'>'} Ajustes {'>'} Rutinas.</li>
-                            <li>Crea una nueva Rutina (ej: "Añadir tarea").</li>
-                            <li>En <b>Acción</b>, elige "Navegar a sitio web" o escribe:</li>
-                        </ol>
-                        <div className="bg-black p-2 rounded border border-gray-600 font-mono text-green-400 break-all select-all">
-                            Abrir {voiceUrl}
-                        </div>
-                        <p className="italic text-[10px] text-gray-500">Copia la URL de arriba para tu rutina.</p>
-                     </div>
-                )}
             </div>
 
             {/* Main Cloud Setup */}
@@ -187,19 +182,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
             {/* Local Section */}
             <div className="pt-4 border-t border-gray-800">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Opciones Locales</h3>
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Datos</h3>
                 <div className="flex gap-3">
                     <button 
                         onClick={handleDownloadBackup}
                         className="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-on-surface font-semibold py-2 rounded-xl text-xs"
                     >
                         💾 Exportar JSON
-                    </button>
-                    <button 
-                        onClick={requestNotificationPermission}
-                        className="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-on-surface font-semibold py-2 rounded-xl text-xs"
-                    >
-                        🔔 Activar Avisos
                     </button>
                 </div>
             </div>
