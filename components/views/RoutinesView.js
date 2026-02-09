@@ -560,6 +560,43 @@ const ContractSetup = ({ commitments, setCommitments, duration, setDuration, all
 
 const ActiveContractView = ({ contract, onStatusChange, onNext, onReset, onComplete }) => {
     
+    // Day 0 Handling
+    if (contract.dayInPhase === 0) {
+        return (
+            React.createElement('div', { className: "flex flex-col h-full mt-8 items-center justify-center text-center p-6 space-y-6" },
+                React.createElement('div', { className: "bg-gray-800 p-6 rounded-full border border-green-500/30 shadow-lg shadow-green-900/20" },
+                    React.createElement('span', { className: "text-4xl" }, "✨")
+                ),
+                React.createElement('div', null,
+                    React.createElement('h2', { className: "text-2xl font-bold text-white mb-2" }, "¡Rutina Completada!"),
+                    React.createElement('p', { className: "text-gray-400" },
+                        `Has terminado tus innegociables de hoy. La Fase ${contract.currentPhase} comenzará oficialmente mañana.`
+                    )
+                ),
+                React.createElement('div', { className: "w-full max-w-xs bg-surface p-4 rounded-xl border border-gray-700" },
+                    React.createElement('p', { className: "text-xs text-gray-500 uppercase tracking-widest mb-1" }, "Próximo"),
+                    React.createElement('div', { className: "flex justify-between items-center mb-2" },
+                        React.createElement('span', { className: "font-bold text-xl text-white" }, "Día 1", 
+                            React.createElement('span', { className: "text-sm text-gray-500" }, ` / ${contract.currentPhase}`)
+                        ),
+                        React.createElement('span', { className: "text-xs text-primary font-bold bg-primary/10 px-2 py-1 rounded" }, "MAÑANA")
+                    )
+                ),
+                React.createElement('button', 
+                    {
+                        onClick: () => {
+                            if(confirm("¿Cancelar la espera y empezar ya? Esto contará como Día 1 HOY.")) {
+                                onReset(); 
+                            }
+                        },
+                        className: "text-xs text-gray-500 hover:text-white underline"
+                    },
+                    "Cancelar y reconfigurar"
+                )
+            )
+        );
+    }
+
     const allCompleted = contract.commitments.every(c => c.status === 'completed');
     const phaseProgress = (contract.dayInPhase / contract.currentPhase) * 100;
     const isPhaseDone = contract.dayInPhase >= contract.currentPhase;

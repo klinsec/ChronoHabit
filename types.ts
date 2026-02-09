@@ -4,6 +4,7 @@ export interface Task {
   name: string;
   color: string;
   icon: string;
+  difficulty?: number; // 0 to 10 (0 = 0 stars, 10 = 5 stars)
 }
 
 export interface TimeEntry {
@@ -22,13 +23,15 @@ export interface Subtask {
   description: string;
   completed: boolean;
   createdAt: number;
+  completedAt?: number; // Timestamp when completed
   status: SubtaskStatus;
   deadline?: number; // Timestamp for the deadline
+  difficulty?: number; // 0-10 points
 }
 
 // --- Discipline Contract Types ---
 
-export type ContractPhase = number; // Changed from union to number for custom duration
+export type ContractPhase = number; 
 
 export type CommitmentStatus = 'pending' | 'completed' | 'failed';
 
@@ -36,19 +39,29 @@ export interface Commitment {
   id: string;
   title: string;
   time?: string; // HH:mm format
-  status: CommitmentStatus; // Replaces completedToday boolean
+  status: CommitmentStatus; 
+}
+
+export interface DailyRoutineHistory {
+    date: string; // YYYY-MM-DD
+    points: number; // Points earned that day
+    streakLevel: number; // The potential level for that day (1-10)
+    totalCommitments: number;
+    completedCommitments: number;
 }
 
 export interface DisciplineContract {
   active: boolean;
-  currentPhase: ContractPhase; // This is the total duration goal (e.g., 7 days)
-  dayInPhase: number; // 1-based index
+  currentPhase: ContractPhase; 
+  dayInPhase: number; 
   startDate: number;
-  lastCheckDate: string; // To handle daily resets (YYYY-MM-DD)
+  lastCheckDate: string; // YYYY-MM-DD
   commitments: Commitment[];
-  history: boolean[]; // Array of true/false for previous days in current phase
+  history: boolean[]; // Legacy
+  dailyHistory: DailyRoutineHistory[]; // New detailed history
+  currentStreakLevel: number; // 1 to 10, determines potential points for today
   failed: boolean;
-  allowedDays?: number[]; // Array of days (0=Sun, 1=Mon...) allowed for this contract
+  allowedDays?: number[]; 
 }
 
 export interface ContractHistoryItem {
@@ -57,7 +70,8 @@ export interface ContractHistoryItem {
     endDate: number;
     phaseDuration: number;
     status: 'completed' | 'failed';
-    commitmentsSnapshot: string[]; // List of titles
+    commitmentsSnapshot: string[];
+    dailyHistory: DailyRoutineHistory[];
 }
 
 export interface SavedRoutine {

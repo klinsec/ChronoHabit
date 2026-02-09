@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext.js';
+import { StarIcon } from '../Icons.js';
 
 const SubtaskModal = ({ subtask, onClose }) => {
   const { tasks, addSubtask, updateSubtask } = useTimeTracker();
@@ -14,6 +15,7 @@ const SubtaskModal = ({ subtask, onClose }) => {
   const [description, setDescription] = useState(subtask?.description || '');
   const [taskId, setTaskId] = useState(subtask?.taskId || (tasks.length > 0 ? tasks[0].id : ''));
   const [deadline, setDeadline] = useState(formatDateForInput(subtask?.deadline));
+  const [difficulty, setDifficulty] = useState(subtask?.difficulty !== undefined ? subtask.difficulty : 3);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -29,7 +31,7 @@ const SubtaskModal = ({ subtask, onClose }) => {
         deadlineTimestamp = dateObj.getTime();
     }
 
-    const subtaskData = { title, description, taskId, deadline: deadlineTimestamp };
+    const subtaskData = { title, description, taskId, deadline: deadlineTimestamp, difficulty };
 
     if (subtask) {
       updateSubtask({ ...subtask, ...subtaskData });
@@ -38,6 +40,41 @@ const SubtaskModal = ({ subtask, onClose }) => {
     }
 
     onClose();
+  };
+
+  const renderStars = () => {
+      return (
+          React.createElement('div', { className: "flex gap-1" },
+              [1, 2, 3, 4, 5].map((starIndex) => {
+                  const filledValue = starIndex * 2;
+                  const halfValue = filledValue - 1;
+                  
+                  let fillPercentage = '0%';
+                  if (difficulty >= filledValue) fillPercentage = '100%';
+                  else if (difficulty >= halfValue) fillPercentage = '50%';
+
+                  return (
+                      React.createElement('div', 
+                        {
+                            key: starIndex,
+                            className: "relative w-8 h-8 cursor-pointer group",
+                            onClick: (e) => {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const x = e.clientX - rect.left;
+                                if (x < rect.width / 2) {
+                                    setDifficulty(halfValue);
+                                } else {
+                                    setDifficulty(filledValue);
+                                }
+                            }
+                        },
+                          React.createElement('div', { className: "absolute inset-0 text-gray-700" }, React.createElement(StarIcon, null)),
+                          React.createElement('div', { className: "absolute inset-0 text-yellow-400 overflow-hidden transition-all duration-200", style: { width: fillPercentage } }, React.createElement(StarIcon, null))
+                      )
+                  );
+              })
+          )
+      );
   };
   
   return (
@@ -87,6 +124,16 @@ const SubtaskModal = ({ subtask, onClose }) => {
                 React.createElement('option', { key: task.id, value: task.id }, `${task.icon} ${task.name}`)
               ))
             )
+          ),
+
+          React.createElement('div', null,
+             React.createElement('label', { className: "block text-sm font-medium text-gray-300 mb-1" }, "Dificultad (Puntos)"),
+             React.createElement('div', { className: "bg-gray-800 p-3 rounded-lg flex flex-col items-center" },
+                 renderStars(),
+                 React.createElement('p', { className: "text-xs text-gray-400 mt-2 font-mono" }, 
+                     `${difficulty} Puntos (${difficulty > 0 ? difficulty / 2 : 0} Estrellas)`
+                 )
+             )
           ),
 
           React.createElement('div', null,

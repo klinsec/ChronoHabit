@@ -623,6 +623,42 @@ const ActiveContractView: React.FC<{
     onComplete: () => void;
 }> = ({ contract, onStatusChange, onNext, onReset, onComplete }) => {
     
+    // Day 0 Handling (Waiting for tomorrow)
+    if (contract.dayInPhase === 0) {
+        return (
+            <div className="flex flex-col h-full mt-8 items-center justify-center text-center p-6 space-y-6">
+                <div className="bg-gray-800 p-6 rounded-full border border-green-500/30 shadow-lg shadow-green-900/20">
+                    <span className="text-4xl">✨</span>
+                </div>
+                <div>
+                    <h2 className="text-2xl font-bold text-white mb-2">¡Rutina Completada!</h2>
+                    <p className="text-gray-400">
+                        Has terminado tus innegociables de hoy. 
+                        La Fase {contract.currentPhase} comenzará oficialmente mañana.
+                    </p>
+                </div>
+                <div className="w-full max-w-xs bg-surface p-4 rounded-xl border border-gray-700">
+                    <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Próximo</p>
+                    <div className="flex justify-between items-center mb-2">
+                        <span className="font-bold text-xl text-white">Día 1 <span className="text-sm text-gray-500">/ {contract.currentPhase}</span></span>
+                        <span className="text-xs text-primary font-bold bg-primary/10 px-2 py-1 rounded">MAÑANA</span>
+                    </div>
+                </div>
+                <button 
+                    onClick={() => {
+                        if(confirm("¿Cancelar la espera y empezar ya? Esto contará como Día 1 HOY.")) {
+                            // Manual override logic could go here, but for now we just let them reset entirely
+                            onReset(); 
+                        }
+                    }}
+                    className="text-xs text-gray-500 hover:text-white underline"
+                >
+                    Cancelar y reconfigurar
+                </button>
+            </div>
+        );
+    }
+
     const allCompleted = contract.commitments.every((c: any) => c.status === 'completed');
     const phaseProgress = (contract.dayInPhase / contract.currentPhase) * 100;
     const isPhaseDone = contract.dayInPhase >= contract.currentPhase;

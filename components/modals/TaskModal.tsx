@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext';
 import { Task } from '../../types';
+import { StarIcon } from '../Icons';
 
 interface TaskModalProps {
   task: Task | null;
@@ -16,12 +17,13 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
   const [name, setName] = useState(task?.name || '');
   const [color, setColor] = useState(task?.color || colors[0]);
   const [icon, setIcon] = useState(task?.icon || icons[0]);
+  const [difficulty, setDifficulty] = useState(task?.difficulty || 0); // 0-10 scale
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim() === '') return;
 
-    const taskData = { name, color, icon };
+    const taskData = { name, color, icon, difficulty };
 
     if (task) {
       updateTask({ ...task, ...taskData });
@@ -38,6 +40,52 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
         onClose();
     }
   }
+
+  // Helper for Star Rating (0-10 scale mapped to 5 stars with halves)
+  const renderStars = () => {
+      return (
+          <div className="flex gap-1">
+              {[1, 2, 3, 4, 5].map((starIndex) => {
+                  const filledValue = starIndex * 2; // 2, 4, 6, 8, 10
+                  const halfValue = filledValue - 1; // 1, 3, 5, 7, 9
+                  
+                  let fillPercentage = '0%';
+                  if (difficulty >= filledValue) fillPercentage = '100%';
+                  else if (difficulty >= halfValue) fillPercentage = '50%';
+
+                  return (
+                      <div 
+                        key={starIndex} 
+                        className="relative w-8 h-8 cursor-pointer group"
+                        onClick={(e) => {
+                            // Simple logic: Left click = half, Right click = full? 
+                            // Easier: Just toggle. If clicking a star that is already full, make it half. If half, make it empty?
+                            // Let's implement smart click detection or simple steps.
+                            
+                            // Smart click: Get bounding rect to see if click was on left or right half
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const x = e.clientX - rect.left;
+                            if (x < rect.width / 2) {
+                                setDifficulty(halfValue);
+                            } else {
+                                setDifficulty(filledValue);
+                            }
+                        }}
+                      >
+                          {/* Background Star (Empty) */}
+                          <div className="absolute inset-0 text-gray-700">
+                              <StarIcon />
+                          </div>
+                          {/* Foreground Star (Filled, clipped) */}
+                          <div className="absolute inset-0 text-yellow-400 overflow-hidden transition-all duration-200" style={{ width: fillPercentage }}>
+                              <StarIcon />
+                          </div>
+                      </div>
+                  );
+              })}
+          </div>
+      );
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
@@ -64,6 +112,16 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
                          {i}
                      </button>
                  ))}
+             </div>
+          </div>
+          
+          <div>
+             <label className="block text-sm font-medium text-gray-300 mb-1">Dificultad (Satisfacción)</label>
+             <div className="bg-gray-800 p-3 rounded-lg flex flex-col items-center">
+                 {renderStars()}
+                 <p className="text-xs text-gray-400 mt-2 font-mono">
+                     {difficulty > 0 ? `${difficulty / 2} Estrellas (${difficulty} pts)` : 'Sin dificultad'}
+                 </p>
              </div>
           </div>
           

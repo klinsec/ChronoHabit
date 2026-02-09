@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext';
 import { Subtask } from '../../types';
+import { StarIcon } from '../Icons';
 
 interface SubtaskModalProps {
   subtask: Subtask | null;
@@ -14,6 +15,7 @@ const SubtaskModal: React.FC<SubtaskModalProps> = ({ subtask, onClose }) => {
   const [title, setTitle] = useState(subtask?.title || '');
   const [description, setDescription] = useState(subtask?.description || '');
   const [taskId, setTaskId] = useState(subtask?.taskId || (tasks.length > 0 ? tasks[0].id : ''));
+  const [difficulty, setDifficulty] = useState(subtask?.difficulty !== undefined ? subtask.difficulty : 3); // Default 3 points
   
   // Format existing date to YYYY-MM-DD for input or empty string
   const formatDateForInput = (timestamp?: number) => {
@@ -39,7 +41,7 @@ const SubtaskModal: React.FC<SubtaskModalProps> = ({ subtask, onClose }) => {
         deadlineTimestamp = dateObj.getTime();
     }
 
-    const subtaskData = { title, description, taskId, deadline: deadlineTimestamp };
+    const subtaskData = { title, description, taskId, deadline: deadlineTimestamp, difficulty };
 
     if (subtask) {
       updateSubtask({ ...subtask, ...subtaskData });
@@ -48,6 +50,47 @@ const SubtaskModal: React.FC<SubtaskModalProps> = ({ subtask, onClose }) => {
     }
 
     onClose();
+  };
+
+  // Helper for Star Rating (0-10 scale mapped to 5 stars with halves)
+  const renderStars = () => {
+      return (
+          <div className="flex gap-1">
+              {[1, 2, 3, 4, 5].map((starIndex) => {
+                  const filledValue = starIndex * 2; // 2, 4, 6, 8, 10
+                  const halfValue = filledValue - 1; // 1, 3, 5, 7, 9
+                  
+                  let fillPercentage = '0%';
+                  if (difficulty >= filledValue) fillPercentage = '100%';
+                  else if (difficulty >= halfValue) fillPercentage = '50%';
+
+                  return (
+                      <div 
+                        key={starIndex} 
+                        className="relative w-8 h-8 cursor-pointer group"
+                        onClick={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const x = e.clientX - rect.left;
+                            if (x < rect.width / 2) {
+                                setDifficulty(halfValue);
+                            } else {
+                                setDifficulty(filledValue);
+                            }
+                        }}
+                      >
+                          {/* Background Star (Empty) */}
+                          <div className="absolute inset-0 text-gray-700">
+                              <StarIcon />
+                          </div>
+                          {/* Foreground Star (Filled, clipped) */}
+                          <div className="absolute inset-0 text-yellow-400 overflow-hidden transition-all duration-200" style={{ width: fillPercentage }}>
+                              <StarIcon />
+                          </div>
+                      </div>
+                  );
+              })}
+          </div>
+      );
   };
   
   return (
@@ -92,6 +135,16 @@ const SubtaskModal: React.FC<SubtaskModalProps> = ({ subtask, onClose }) => {
                 <option key={task.id} value={task.id}>{task.icon} {task.name}</option>
               ))}
             </select>
+          </div>
+
+          <div>
+             <label className="block text-sm font-medium text-gray-300 mb-1">Dificultad (Puntos)</label>
+             <div className="bg-gray-800 p-3 rounded-lg flex flex-col items-center">
+                 {renderStars()}
+                 <p className="text-xs text-gray-400 mt-2 font-mono">
+                     {difficulty} Puntos ({difficulty > 0 ? difficulty / 2 : 0} Estrellas)
+                 </p>
+             </div>
           </div>
           
           <div>

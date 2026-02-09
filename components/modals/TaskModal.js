@@ -1,5 +1,7 @@
+
 import React, { useState } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext.js';
+import { StarIcon } from '../Icons.js';
 
 const colors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#ec4899'];
 const icons = ['💼', '😴', '💪', '🎮', '📚', '🍳', '🧹', '🧘', '🎨', '🎵', '💬', '🛍️'];
@@ -9,12 +11,13 @@ const TaskModal = ({ task, onClose }) => {
   const [name, setName] = useState(task?.name || '');
   const [color, setColor] = useState(task?.color || colors[0]);
   const [icon, setIcon] = useState(task?.icon || icons[0]);
+  const [difficulty, setDifficulty] = useState(task?.difficulty || 0);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (name.trim() === '') return;
 
-    const taskData = { name, color, icon };
+    const taskData = { name, color, icon, difficulty };
 
     if (task) {
       updateTask({ ...task, ...taskData });
@@ -31,6 +34,41 @@ const TaskModal = ({ task, onClose }) => {
         onClose();
     }
   }
+
+  const renderStars = () => {
+      return (
+          React.createElement('div', { className: "flex gap-1" },
+              [1, 2, 3, 4, 5].map((starIndex) => {
+                  const filledValue = starIndex * 2;
+                  const halfValue = filledValue - 1;
+                  
+                  let fillPercentage = '0%';
+                  if (difficulty >= filledValue) fillPercentage = '100%';
+                  else if (difficulty >= halfValue) fillPercentage = '50%';
+
+                  return (
+                      React.createElement('div', 
+                        {
+                            key: starIndex,
+                            className: "relative w-8 h-8 cursor-pointer group",
+                            onClick: (e) => {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const x = e.clientX - rect.left;
+                                if (x < rect.width / 2) {
+                                    setDifficulty(halfValue);
+                                } else {
+                                    setDifficulty(filledValue);
+                                }
+                            }
+                        },
+                          React.createElement('div', { className: "absolute inset-0 text-gray-700" }, React.createElement(StarIcon, null)),
+                          React.createElement('div', { className: "absolute inset-0 text-yellow-400 overflow-hidden transition-all duration-200", style: { width: fillPercentage } }, React.createElement(StarIcon, null))
+                      )
+                  );
+              })
+          )
+      );
+  };
 
   return (
     React.createElement('div', { className: "fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4" },
@@ -59,6 +97,16 @@ const TaskModal = ({ task, onClose }) => {
                          i
                      )
                  ))
+             )
+          ),
+          
+          React.createElement('div', null,
+             React.createElement('label', { className: "block text-sm font-medium text-gray-300 mb-1" }, "Dificultad (Satisfacción)"),
+             React.createElement('div', { className: "bg-gray-800 p-3 rounded-lg flex flex-col items-center" },
+                 renderStars(),
+                 React.createElement('p', { className: "text-xs text-gray-400 mt-2 font-mono" }, 
+                     difficulty > 0 ? `${difficulty / 2} Estrellas (${difficulty} pts)` : 'Sin dificultad'
+                 )
              )
           ),
           

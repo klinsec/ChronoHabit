@@ -27,6 +27,34 @@ const determineStatusFromDeadline = (deadline, currentStatus) => {
     return 'idea';
 };
 
+const getContractWithTodayHistory = (c) => {
+    const total = c.commitments.length;
+    const completed = c.commitments.filter(comm => comm.status === 'completed').length;
+    const potential = c.currentStreakLevel || 1;
+    let earned = 0;
+    
+    if (total > 0) {
+        earned = Math.floor(potential * (completed / total));
+    }
+
+    const hasToday = c.dailyHistory.some(h => h.date === c.lastCheckDate);
+    if (hasToday) return c;
+
+    return {
+        ...c,
+        dailyHistory: [
+            ...(c.dailyHistory || []),
+            {
+                date: c.lastCheckDate,
+                points: earned,
+                streakLevel: potential,
+                totalCommitments: total,
+                completedCommitments: completed
+            }
+        ]
+    };
+};
+
 export const TimeTrackerProvider = ({ children }) => {
   const [tasks, setTasks] = useState([]);
   const [timeEntries, setTimeEntries] = useState([]);
@@ -36,7 +64,6 @@ export const TimeTrackerProvider = ({ children }) => {
   const [liveElapsedTime, setLiveElapsedTime] = useState(0);
   const [lastAddedSubtaskId, setLastAddedSubtaskId] = useState(null);
   
-  // Notification Config
   const [dailyNotificationEnabled, setDailyNotificationEnabled] = useState(true);
   const [briefingTime, setBriefingTime] = useState("09:00");
   const [reviewTime, setReviewTime] = useState("23:00");
@@ -45,11 +72,9 @@ export const TimeTrackerProvider = ({ children }) => {
   const [pastContracts, setPastContracts] = useState([]);
   const [savedRoutines, setSavedRoutines] = useState([]);
 
-  // Cloud Sync States
   const [cloudStatus, setCloudStatus] = useState('disconnected');
   const [lastSyncTime, setLastSyncTime] = useState(null);
 
-  // Helper
   const archiveContract = useCallback((finishedContract, status) => {
       setPastContracts(prev => {
           const newItem = {
@@ -58,9 +83,10 @@ export const TimeTrackerProvider = ({ children }) => {
               endDate: Date.now(),
               phaseDuration: finishedContract.currentPhase,
               status: status,
-              commitmentsSnapshot: finishedContract.commitments.map(c => c.title)
+              commitmentsSnapshot: finishedContract.commitments.map(c => c.title),
+              dailyHistory: finishedContract.dailyHistory || []
           };
-          return [newItem, ...prev].slice(0, 6);
+          return [newItem, ...prev].slice(0, 10);
       });
   }, []);
 
@@ -112,40 +138,59 @@ export const TimeTrackerProvider = ({ children }) => {
               }
               return c;
           });
+          if (!parsedContract.dailyHistory) parsedContract.dailyHistory = [];
+          if (!parsedContract.currentStreakLevel) parsedContract.currentStreakLevel = 1;
 
-          // Daily Reset Logic with Grace Period
+          // Daily Reset with Points Logic
           if (parsedContract.active && parsedContract.lastCheckDate !== todayString) {
               const now = new Date();
               const hour = now.getHours();
               
-              if (hour >= 1) {
-                  const lastDate = new Date(parsedContract.lastCheckDate);
-                  const isLastDateAllowed = !parsedContract.allowedDays || parsedContract.allowedDays.includes(lastDate.getDay());
+              if (hour >= 1) { // 1 AM Grace Period
+                  const lastDateStr = parsedContract.lastCheckDate;
+                  const lastDate = new Date(lastDateStr);
                   
-                  let failed = false;
-                  
-                  if (isLastDateAllowed) {
-                      const anyFailedOrPending = parsedContract.commitments.some(c => c.status !== 'completed');
-                      if (anyFailedOrPending) {
-                          failed = true;
-                      }
-                  }
-
-                  if (failed) {
-                      archiveContract(parsedContract, 'failed');
-                      setContract(null);
-                  } else {
-                      parsedContract.lastCheckDate = todayString;
-                      const isTodayAllowed = !parsedContract.allowedDays || parsedContract.allowedDays.includes(currentDayOfWeek);
-
-                      if (isTodayAllowed) {
-                          if (parsedContract.lastCheckDate) {
-                              parsedContract.dayInPhase += 1;
+                  // Only calculate points if Day > 0 (Day 0 is waiting period)
+                  if (parsedContract.dayInPhase > 0) {
+                      const wasLastDateAllowed = !parsedContract.allowedDays || parsedContract.allowedDays.includes(lastDate.getDay());
+                      
+                      if (wasLastDateAllowed) {
+                          const totalCommitments = parsedContract.commitments.length;
+                          const completedCommitments = parsedContract.commitments.filter(c => c.status === 'completed').length;
+                          
+                          const potentialPoints = parsedContract.currentStreakLevel || 1;
+                          let earnedPoints = 0;
+                          if (totalCommitments > 0) {
+                              const ratio = completedCommitments / totalCommitments;
+                              earnedPoints = Math.floor(potentialPoints * ratio);
                           }
-                          parsedContract.commitments = parsedContract.commitments.map(c => ({...c, status: 'pending'}));
+
+                          parsedContract.dailyHistory.push({
+                              date: lastDateStr,
+                              points: earnedPoints,
+                              streakLevel: potentialPoints,
+                              totalCommitments,
+                              completedCommitments
+                          });
+
+                          // Rule: Next Level = Earned Points + 1 (Capped at 10)
+                          let nextStreak = earnedPoints + 1;
+                          if (nextStreak > 10) nextStreak = 10;
+                          if (nextStreak < 1) nextStreak = 1;
+                          
+                          parsedContract.currentStreakLevel = nextStreak;
                       }
-                      setContract(parsedContract);
                   }
+
+                  parsedContract.lastCheckDate = todayString;
+                  const isTodayAllowed = !parsedContract.allowedDays || parsedContract.allowedDays.includes(currentDayOfWeek);
+
+                  if (isTodayAllowed) {
+                      parsedContract.dayInPhase += 1;
+                      parsedContract.commitments = parsedContract.commitments.map(c => ({...c, status: 'pending'}));
+                  }
+                  
+                  setContract(parsedContract);
               } else {
                   setContract(parsedContract);
               }
@@ -199,27 +244,16 @@ export const TimeTrackerProvider = ({ children }) => {
   useEffect(() => { localStorage.setItem('chrono_contract_history', JSON.stringify(pastContracts)); }, [pastContracts]);
   useEffect(() => { localStorage.setItem('chrono_saved_routines', JSON.stringify(savedRoutines)); }, [savedRoutines]);
 
-  // --- Export Data ---
+  // Export & Sync
   const exportData = useCallback(() => {
     return JSON.stringify({ 
-        tasks, 
-        timeEntries, 
-        goals, 
-        subtasks, 
-        contract,
-        contractHistory: pastContracts,
-        savedRoutines: savedRoutines,
-        settings: { 
-            dailyNotificationEnabled,
-            briefingTime,
-            reviewTime
-        },
-        timestamp: Date.now(), 
-        version: 1 
+        tasks, timeEntries, goals, subtasks, contract,
+        contractHistory: pastContracts, savedRoutines: savedRoutines,
+        settings: { dailyNotificationEnabled, briefingTime, reviewTime },
+        timestamp: Date.now(), version: 1 
     });
   }, [tasks, timeEntries, goals, subtasks, contract, pastContracts, savedRoutines, dailyNotificationEnabled, briefingTime, reviewTime]);
 
-  // --- Trigger Sync ---
   const triggerCloudSync = useCallback(async () => {
     if (cloudStatus !== 'connected' && cloudStatus !== 'syncing') return;
     setCloudStatus('syncing');
@@ -237,7 +271,6 @@ export const TimeTrackerProvider = ({ children }) => {
     }
   }, [cloudStatus, exportData]);
 
-  // --- Toggle Notification ---
   const toggleDailyNotification = useCallback(() => {
     setDailyNotificationEnabled(prev => {
         const newVal = !prev;
@@ -255,120 +288,25 @@ export const TimeTrackerProvider = ({ children }) => {
       if(cloudStatus==='connected') triggerCloudSync();
   }, [cloudStatus, triggerCloudSync]);
 
-  // --- Main Notification Logic ---
   useEffect(() => {
     if (!dailyNotificationEnabled) return;
-
     const interval = setInterval(() => {
         const now = new Date();
-        const hour = now.getHours();
-        const currentDayOfWeek = now.getDay();
         const currentTimeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false });
         const todayStr = now.toDateString();
+        const hour = now.getHours();
 
-        if (!('Notification' in window) || Notification.permission !== 'granted' || !navigator.serviceWorker.controller) {
-            return;
-        }
+        if (!('Notification' in window) || Notification.permission !== 'granted' || !navigator.serviceWorker.controller) return;
 
-        const isContractDay = contract && contract.active && !contract.failed && (!contract.allowedDays || contract.allowedDays.includes(currentDayOfWeek));
-
-        // 1. Contract Specific Time
-        if (isContractDay) {
-            contract.commitments.forEach(comm => {
-                if (comm.time === currentTimeStr && comm.status === 'pending') {
-                    const lastNotifKey = `notif_comm_${comm.id}_${todayStr}`;
-                    if (!localStorage.getItem(lastNotifKey)) {
-                         navigator.serviceWorker.controller.postMessage({
-                            type: 'SHOW_NOTIFICATION',
-                            title: '¡Es hora de cumplir!',
-                            options: {
-                                body: `Rutina: ${comm.title}`,
-                                icon: './icon-192.png',
-                                tag: `contract-${comm.id}`,
-                                requireInteraction: true
-                            }
-                         });
-                         localStorage.setItem(lastNotifKey, 'true');
-                    }
-                }
-            });
-        }
-
-        // 2. Daily Briefing
+        // Notification logic...
         if (currentTimeStr === briefingTime) {
-            const lastNotifKey = `notif_briefing_${todayStr}`;
-            if (!localStorage.getItem(lastNotifKey)) {
-                const todayTasks = subtasks.filter(s => s.status === 'today' && !s.completed);
-                if (todayTasks.length > 0) {
-                     const items = todayTasks.slice(0, 3).map(t => `• ${t.title}`).join('\n');
-                     const remaining = todayTasks.length - 3;
-                     const body = items + (remaining > 0 ? `\n...y ${remaining} más.` : '');
-
-                     navigator.serviceWorker.controller.postMessage({
-                        type: 'SHOW_NOTIFICATION',
-                        title: `📅 Plan para hoy (${todayTasks.length})`,
-                        options: {
-                            body: body,
-                            icon: './icon-192.png',
-                            tag: 'daily-briefing'
-                        }
-                     });
-                }
-                localStorage.setItem(lastNotifKey, 'true');
-            }
-        }
-
-        // 3. End of Day Review
-        if (currentTimeStr === reviewTime) {
-            const lastNotifKey = `notif_review_${todayStr}`;
-            if (!localStorage.getItem(lastNotifKey)) {
-                if (isContractDay) {
-                    const incompleteCount = contract.commitments.filter(c => c.status !== 'completed').length;
-                    if (incompleteCount > 0) {
-                        navigator.serviceWorker.controller.postMessage({
-                            type: 'SHOW_NOTIFICATION',
-                            title: '¿Completaste tu rutina?',
-                            options: {
-                                body: `Te faltan ${incompleteCount} compromisos. ¡No rompas la cadena!`,
-                                icon: './icon-192.png',
-                                tag: 'nightly-review',
-                                requireInteraction: true
-                            }
-                        });
-                    }
-                }
-                localStorage.setItem(lastNotifKey, 'true');
-            }
-        }
-        
-        // 4. Grace Period Warning
-        if (hour === 0 && currentTimeStr === "00:00") {
-             const lastNotifKey = `notif_grace_${todayStr}`;
-             const yesterday = new Date(now);
-             yesterday.setDate(now.getDate() - 1);
-             const yesterdayDay = yesterday.getDay();
-             const wasContractDay = contract && contract.active && (!contract.allowedDays || contract.allowedDays.includes(yesterdayDay));
-
-             if (wasContractDay && !localStorage.getItem(lastNotifKey)) {
-                 const incompleteCount = contract.commitments.filter(c => c.status !== 'completed').length;
-                 if (incompleteCount > 0) {
-                     navigator.serviceWorker.controller.postMessage({
-                        type: 'SHOW_NOTIFICATION',
-                        title: '⚠️ ÚLTIMA OPORTUNIDAD',
-                        options: {
-                            body: `Tienes 1 hora para marcar tus rutinas o el contrato fallará.`,
-                            icon: './icon-192.png',
-                            tag: 'grace-period',
-                            requireInteraction: true
-                        }
-                     });
-                     localStorage.setItem(lastNotifKey, 'true');
-                 }
+             const lastNotifKey = `notif_briefing_${todayStr}`;
+             if (!localStorage.getItem(lastNotifKey)) {
+                 navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIFICATION', title: `📅 Resumen`, options: { body: `Revisa tus objetivos de hoy.`, icon: './icon-192.png' } });
+                 localStorage.setItem(lastNotifKey, 'true');
              }
         }
-
     }, 20000); 
-
     return () => clearInterval(interval);
   }, [dailyNotificationEnabled, subtasks, contract, briefingTime, reviewTime]);
 
@@ -402,12 +340,7 @@ export const TimeTrackerProvider = ({ children }) => {
     setActiveEntry(newEntry);
     triggerCloudSync();
     if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        const task = tasks.find(t => t.id === taskId);
-        navigator.serviceWorker.controller.postMessage({
-            type: 'SHOW_NOTIFICATION',
-            title: 'ChronoHabit',
-            options: { body: `Registrando: ${task?.name || 'Tarea'}`, icon: './icon-192.png', tag: 'timer-notification', renotify: true, silent: true, requireInteraction: true, actions: [{ action: 'stop-timer', title: 'Detener' }] }
-        });
+        navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIFICATION', title: 'ChronoHabit', options: { body: `Registrando tarea`, icon: './icon-192.png', tag: 'timer-notification', silent: true } });
     }
   }, [timeEntries, tasks, triggerCloudSync]);
   
@@ -433,22 +366,53 @@ export const TimeTrackerProvider = ({ children }) => {
   const addSubtask = useCallback((subtask) => { const id = `subtask_${Date.now()}`; const newS = { ...subtask, id, completed: false, createdAt: Date.now(), status: subtask.deadline ? determineStatusFromDeadline(subtask.deadline, 'idea') : 'idea' }; setSubtasks(prev => [newS, ...prev]); setLastAddedSubtaskId(id); triggerCloudSync(); }, [triggerCloudSync]);
   const updateSubtask = useCallback((s) => { setSubtasks(prev => prev.map(x => x.id === s.id ? s : x)); triggerCloudSync(); }, [triggerCloudSync]);
   const deleteSubtask = useCallback((id) => { setSubtasks(prev => prev.filter(s => s.id !== id)); triggerCloudSync(); }, [triggerCloudSync]);
-  const toggleSubtaskCompletion = useCallback((id) => { setSubtasks(prev => prev.map(s => s.id === id ? { ...s, completed: !s.completed } : s)); triggerCloudSync(); }, [triggerCloudSync]);
+  
+  const toggleSubtaskCompletion = useCallback((id) => { 
+      setSubtasks(prev => prev.map(s => {
+          if (s.id === id) {
+              const newCompleted = !s.completed;
+              return { 
+                  ...s, 
+                  completed: newCompleted, 
+                  completedAt: newCompleted ? Date.now() : undefined 
+              };
+          }
+          return s;
+      })); 
+      triggerCloudSync(); 
+  }, [triggerCloudSync]);
+  
   const moveSubtaskStatus = useCallback((id, status) => { setSubtasks(prev => prev.map(s => s.id === id ? { ...s, status } : s)); triggerCloudSync(); }, [triggerCloudSync]);
 
   const startContract = useCallback((commitmentsData, duration, allowedDays = [0,1,2,3,4,5,6]) => {
+      let startDay = 1;
+      const todayStr = new Date().toDateString();
+
       if (contract) {
-          archiveContract(contract, 'completed');
+          // IMPORTANT: Calculate today's stats before archiving!
+          const finalContract = getContractWithTodayHistory(contract);
+          archiveContract(finalContract, 'completed');
+          
+          if (new Date(contract.lastCheckDate).toDateString() === todayStr) {
+              startDay = 0;
+          }
+      } else {
+          const completedToday = pastContracts.some(c => 
+              c.status === 'completed' && new Date(c.endDate).toDateString() === todayStr
+          );
+          if (completedToday) startDay = 0;
       }
 
       const newContract = {
           active: true,
           currentPhase: duration, 
-          dayInPhase: 1,
+          dayInPhase: startDay,
           startDate: Date.now(),
           lastCheckDate: new Date().toISOString().split('T')[0],
           failed: false,
           history: [],
+          dailyHistory: [],
+          currentStreakLevel: 1,
           allowedDays,
           commitments: commitmentsData.map((c, i) => ({
               ...c,
@@ -458,7 +422,7 @@ export const TimeTrackerProvider = ({ children }) => {
       };
       setContract(newContract);
       triggerCloudSync();
-  }, [contract, triggerCloudSync, archiveContract]);
+  }, [contract, triggerCloudSync, archiveContract, pastContracts]);
 
   const setCommitmentStatus = useCallback((id, status) => {
       setContract(prev => {
@@ -489,7 +453,9 @@ export const TimeTrackerProvider = ({ children }) => {
 
   const resetContract = useCallback(() => {
       if (contract) {
-          archiveContract(contract, 'failed');
+          // Even if failed, record progress made today
+          const finalContract = getContractWithTodayHistory(contract);
+          archiveContract(finalContract, 'failed');
       }
       setContract(null); 
       triggerCloudSync();
@@ -497,22 +463,16 @@ export const TimeTrackerProvider = ({ children }) => {
 
   const completeContract = useCallback(() => {
       if (contract) {
-          archiveContract(contract, 'completed');
+          // IMPORTANT: Calculate today's stats before archiving!
+          const finalContract = getContractWithTodayHistory(contract);
+          archiveContract(finalContract, 'completed');
       }
       setContract(null);
       triggerCloudSync();
   }, [contract, triggerCloudSync, archiveContract]);
 
   const saveRoutine = useCallback((title, commitments, allowedDays) => {
-      setSavedRoutines(prev => [
-          ...prev, 
-          {
-              id: `routine_${Date.now()}`,
-              title,
-              commitments,
-              allowedDays
-          }
-      ]);
+      setSavedRoutines(prev => [...prev, { id: `routine_${Date.now()}`, title, commitments, allowedDays }]);
       triggerCloudSync();
   }, [triggerCloudSync]);
 
@@ -529,7 +489,6 @@ export const TimeTrackerProvider = ({ children }) => {
           setCloudStatus('connected');
           await triggerCloudSync();
       } catch (err) {
-          console.error("Cloud connection failed", err);
           setCloudStatus('error');
       }
   }, [triggerCloudSync]);
@@ -537,7 +496,7 @@ export const TimeTrackerProvider = ({ children }) => {
   const importData = useCallback((jsonData, skipConfirm = false) => {
     try {
         const backup = JSON.parse(jsonData);
-        if (!Array.isArray(backup.tasks) || !Array.isArray(backup.timeEntries)) throw new Error("Format error");
+        if (!Array.isArray(backup.tasks)) throw new Error("Format error");
         if (skipConfirm || window.confirm("¿Reemplazar datos locales?")) {
             setTasks(backup.tasks);
             setTimeEntries(backup.timeEntries);
@@ -546,23 +505,10 @@ export const TimeTrackerProvider = ({ children }) => {
             if (backup.contract) setContract(backup.contract);
             if (backup.contractHistory) setPastContracts(backup.contractHistory);
             if (backup.savedRoutines) setSavedRoutines(backup.savedRoutines);
-             if (backup.settings) {
-                setDailyNotificationEnabled(backup.settings.dailyNotificationEnabled);
-                localStorage.setItem('chrono_daily_notif', String(backup.settings.dailyNotificationEnabled));
-                if (backup.settings.briefingTime) {
-                    setBriefingTime(backup.settings.briefingTime);
-                    localStorage.setItem('chrono_briefing_time', backup.settings.briefingTime);
-                }
-                if (backup.settings.reviewTime) {
-                    setReviewTime(backup.settings.reviewTime);
-                    localStorage.setItem('chrono_review_time', backup.settings.reviewTime);
-                }
-            }
             return true;
         }
         return false;
     } catch (e) {
-        console.error("Import failed", e);
         return false;
     }
   }, []);

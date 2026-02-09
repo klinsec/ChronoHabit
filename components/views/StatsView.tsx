@@ -1,6 +1,7 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, LabelList } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, LabelList, CartesianGrid } from 'recharts';
 import { formatDuration } from '../../utils/helpers';
 import { Goal, GoalPeriod } from '../../types';
 import { CogIcon } from '../Icons';
@@ -65,12 +66,11 @@ interface ChartData {
     fill: string;
     icon: string;
     goal: Goal | undefined;
-    // FIX: Added index signature to make the type compatible with recharts.
     [key: string]: any;
 }
 
 const StatsView: React.FC = () => {
-  const { timeEntries, getTaskById, activeEntry, liveElapsedTime, getGoalByTaskIdAndPeriod } = useTimeTracker();
+  const { timeEntries, getTaskById, activeEntry, liveElapsedTime, getGoalByTaskIdAndPeriod, subtasks, contract, pastContracts } = useTimeTracker();
   const [period, setPeriod] = useState<Period>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
@@ -125,9 +125,9 @@ const StatsView: React.FC = () => {
         break;
       case 'all':
       default:
-        start = new Date(0);
-        end = new Date();
-        display = 'Todo';
+        start = new Date(targetDate.getFullYear(), 0, 1);
+        end = new Date(targetDate.getFullYear(), 11, 31, 23, 59, 59, 999);
+        display = `${targetDate.getFullYear()}`;
         break;
     }
     return { start: start.getTime(), end: end.getTime(), display };
@@ -173,8 +173,142 @@ const StatsView: React.FC = () => {
       .sort((a, b) => Number(b.value) - Number(a.value));
   }, [taskDurations, getTaskById, getGoalByTaskIdAndPeriod, period]);
   
-  // FIX: Explicitly cast `item` to a number to avoid potential type inference issues with `Object.values`.
   const totalDuration = useMemo(() => Object.values(taskDurations).reduce((sum: number, item) => sum + Number(item), 0), [taskDurations]);
+
+  // --- UNIFIED POINTS LOGIC ---
+  const unifiedPointsData = useMemo(() => {
+      const bucketType = (period === 'week' || period === 'month') ? 'day' : 'month';
+      const dataMap = new Map<string, { timer: number; tasks: number; routine: number }>();
+      
+      const startDate = new Date(dateRange.start);
+      const endDate = new Date(dateRange.end);
+      
+      let cursor = new Date(startDate);
+      while (cursor <= endDate) {
+          let key = '';
+          if (bucketType === 'day') {
+              key = cursor.toISOString().split('T')[0]; // YYYY-MM-DD
+              cursor.setDate(cursor.getDate() + 1);
+          } else {
+              key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`; // YYYY-MM
+              cursor.setMonth(cursor.getMonth() + 1);
+          }
+          dataMap.set(key, { timer: 0, tasks: 0, routine: 0 });
+      }
+
+      // 1. Timer Points (Satisfaction)
+      filteredEntries.forEach(entry => {
+          if (!entry.endTime) return;
+          const task = getTaskById(entry.taskId);
+          if (!task || !task.difficulty) return;
+
+          const entryDate = new Date(entry.startTime);
+          let key = '';
+          if (bucketType === 'day') key = entryDate.toISOString().split('T')[0];
+          else key = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}`;
+
+          if (dataMap.has(key)) {
+              const durationHours = (entry.endTime - entry.startTime) / (1000 * 60 * 60);
+              const score = durationHours * task.difficulty;
+              const current = dataMap.get(key)!;
+              current.timer += score;
+          }
+      });
+
+      // 2. Task Points (Subtasks)
+      subtasks.forEach(subtask => {
+          if (subtask.completed && subtask.completedAt) {
+              if (subtask.completedAt >= dateRange.start && subtask.completedAt <= dateRange.end) {
+                  const points = subtask.difficulty || 0;
+                  const completedDate = new Date(subtask.completedAt);
+                  let key = '';
+                  if (bucketType === 'day') key = completedDate.toISOString().split('T')[0];
+                  else key = `${completedDate.getFullYear()}-${String(completedDate.getMonth() + 1).padStart(2, '0')}`;
+
+                  if (dataMap.has(key)) {
+                      const current = dataMap.get(key)!;
+                      current.tasks += points;
+                  }
+              }
+          }
+      });
+
+      // 3. Routine Points (History)
+      const allDailyHistory = [
+          ...(contract?.dailyHistory || []),
+          ...pastContracts.flatMap(c => c.dailyHistory || [])
+      ];
+
+      allDailyHistory.forEach(dayHistory => {
+          const historyDate = new Date(dayHistory.date);
+          if (historyDate.getTime() >= dateRange.start && historyDate.getTime() <= dateRange.end) {
+              let key = dayHistory.date;
+              if (bucketType === 'month') {
+                  key = `${historyDate.getFullYear()}-${String(historyDate.getMonth() + 1).padStart(2, '0')}`;
+              }
+              
+              if (dataMap.has(key)) {
+                  const current = dataMap.get(key)!;
+                  current.routine += dayHistory.points;
+              }
+          }
+      });
+
+      // 4. Routine Points (TODAY - ACTIVE CONTRACT)
+      // This is the critical part to show real-time progress for the current day
+      if (contract && contract.active) {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const todayDate = new Date();
+          
+          // Only if today is within the selected range
+          if (todayDate.getTime() >= dateRange.start && todayDate.getTime() <= dateRange.end) {
+              let key = todayStr;
+              if (bucketType === 'month') {
+                  key = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}`;
+              }
+
+              if (dataMap.has(key)) {
+                  const potentialPoints = contract.currentStreakLevel || 1;
+                  const totalCommitments = contract.commitments.length;
+                  const completedCommitments = contract.commitments.filter(c => c.status === 'completed').length;
+                  
+                  let earnedPoints = 0;
+                  if (totalCommitments > 0) {
+                      const ratio = completedCommitments / totalCommitments;
+                      // Formula: floor(potential * ratio)
+                      earnedPoints = Math.floor(potentialPoints * ratio);
+                  }
+                  
+                  const current = dataMap.get(key)!;
+                  // If we are in monthly view, we add to existing history of the month.
+                  // If daily/weekly, key is unique to today, so usually starts at 0 routine points (unless history had bug).
+                  // But to be safe, we just add it. Note: 'dailyHistory' does NOT contain today usually.
+                  current.routine += earnedPoints;
+              }
+          }
+      }
+
+      return Array.from(dataMap.entries()).map(([dateKey, values]) => {
+          let label = '';
+          const [year, month, day] = dateKey.split('-').map(Number);
+          
+          if (bucketType === 'day') {
+              const dateObj = new Date(year, month - 1, day);
+              label = dateObj.toLocaleDateString('es-ES', { weekday: 'narrow', day: 'numeric' });
+          } else {
+              const dateObj = new Date(year, month - 1, 1);
+              label = dateObj.toLocaleDateString('es-ES', { month: 'short' });
+          }
+
+          return {
+              date: label,
+              ...values,
+              total: values.timer + values.tasks + values.routine
+          };
+      });
+
+  }, [filteredEntries, subtasks, contract, pastContracts, period, dateRange, getTaskById]);
+
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -191,6 +325,29 @@ const StatsView: React.FC = () => {
       );
     }
     return null;
+  };
+  
+  const UnifiedTooltip = ({ active, payload, label }: any) => {
+      if (active && payload && payload.length) {
+          const total = payload.reduce((sum: number, entry: any) => sum + entry.value, 0);
+          return (
+            <div className="bg-surface p-3 border border-gray-700 rounded-xl shadow-lg text-sm">
+                <p className="font-bold text-base text-white mb-2 border-b border-gray-700 pb-1">{label}</p>
+                {payload.map((entry: any) => (
+                    <div key={entry.name} className="flex items-center gap-2 mb-1">
+                        <div className="w-2 h-2 rounded-full" style={{backgroundColor: entry.color}}></div>
+                        <span className="text-gray-300 capitalize">{entry.name}:</span>
+                        <span className="font-bold text-white">{parseFloat(entry.value.toFixed(1))} pts</span>
+                    </div>
+                ))}
+                <div className="mt-2 pt-2 border-t border-gray-700 flex justify-between">
+                    <span className="font-bold text-gray-400">Total:</span>
+                    <span className="font-bold text-white text-lg">{parseFloat(total.toFixed(1))}</span>
+                </div>
+            </div>
+          );
+      }
+      return null;
   };
   
   const renderProgressLabel = (props: any) => {
@@ -215,7 +372,7 @@ const StatsView: React.FC = () => {
       );
   };
 
-  const periodLabels: {[key in Period]: string} = { day: 'Día', week: 'Semana', month: 'Mes', all: 'Todo' };
+  const periodLabels: {[key in Period]: string} = { day: 'Día', week: 'Semana', month: 'Mes', all: 'Año' };
 
   return (
     <div className="space-y-8">
@@ -231,8 +388,10 @@ const StatsView: React.FC = () => {
         
         <DateNavigator period={period} currentDate={currentDate} setCurrentDate={setCurrentDate} dateRangeDisplay={dateRange.display} />
 
-        {chartData.length > 0 ? (
+        {chartData.length > 0 || unifiedPointsData.some(d => d.total > 0) ? (
             <div className="space-y-10">
+                
+                {/* 1. Pie Chart - Distribution */}
                 <div>
                     <h3 className="text-xl font-semibold mb-2 text-center">Distribución del Tiempo</h3>
                     <div style={{ width: '100%', height: 300 }}>
@@ -258,6 +417,37 @@ const StatsView: React.FC = () => {
                         </ResponsiveContainer>
                     </div>
                 </div>
+
+                {/* 2. Unified Points Stacked Bar Chart */}
+                {period !== 'day' && (
+                    <div className="bg-surface/30 p-4 rounded-xl border border-gray-800">
+                        <div className="flex items-center justify-center gap-2 mb-4">
+                            <h3 className="text-lg font-semibold text-center text-white">Puntos Totales (Diario)</h3>
+                        </div>
+                        <div style={{ width: '100%', height: 300 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={unifiedPointsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#333" />
+                                    <XAxis 
+                                        dataKey="date" 
+                                        tick={{ fill: '#888', fontSize: 10 }} 
+                                        axisLine={false}
+                                        tickLine={false}
+                                        interval={period === 'month' ? 2 : 0} 
+                                    />
+                                    <YAxis tick={{ fill: '#888', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                    <Tooltip content={<UnifiedTooltip />} cursor={{ fill: 'rgba(255, 255, 255, 0.1)' }} />
+                                    <Legend iconType="circle" wrapperStyle={{ paddingTop: '10px' }} />
+                                    <Bar dataKey="timer" name="Cronómetro" stackId="a" fill="#bb86fc" radius={[0,0,4,4]} barSize={20} />
+                                    <Bar dataKey="tasks" name="Tareas" stackId="a" fill="#eab308" barSize={20} />
+                                    <Bar dataKey="routine" name="Rutina" stackId="a" fill="#3b82f6" radius={[4,4,0,0]} barSize={20} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                )}
+
+                {/* 3. Bar Chart - Tasks Breakdown */}
                 <div>
                   <div className="flex items-center justify-center gap-2">
                     <h3 className="text-xl font-semibold text-center">Desglose por Tarea</h3>
@@ -265,7 +455,7 @@ const StatsView: React.FC = () => {
                         <CogIcon />
                     </button>
                   </div>
-                  <div style={{ width: '100%', height: chartData.length * 60 + 20, marginTop: '1rem' }}>
+                  <div style={{ width: '100%', height: Math.max(chartData.length * 60 + 20, 100), marginTop: '1rem' }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         layout="vertical"
@@ -313,7 +503,7 @@ const StatsView: React.FC = () => {
         ) : (
             <div className="text-center py-10">
             <p className="text-gray-400">No hay datos para este período.</p>
-            <p className="text-sm text-gray-500">Registra algunas actividades para ver tus estadísticas.</p>
+            <p className="text-sm text-gray-500">Registra algunas actividades o completa tareas para ver tus estadísticas.</p>
             </div>
         )}
       </div>

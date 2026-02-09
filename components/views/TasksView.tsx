@@ -4,7 +4,7 @@ import { useTimeTracker } from '../../context/TimeTrackerContext';
 import { Subtask, SubtaskStatus } from '../../types';
 import SubtaskModal from '../modals/SubtaskModal';
 import SettingsModal from '../modals/SettingsModal';
-import { EditIcon, TrashIcon, PlusIcon, EyeIcon, EyeOffIcon, CogIcon, ArrowUpIcon, ArrowDownIcon, ArchiveIcon } from '../Icons';
+import { EditIcon, TrashIcon, PlusIcon, EyeIcon, EyeOffIcon, CogIcon, ArrowUpIcon, ArrowDownIcon, ArchiveIcon, StarIcon } from '../Icons';
 
 const TasksView: React.FC = () => {
   const { tasks, subtasks, deleteSubtask, moveSubtaskStatus, getTaskById, lastAddedSubtaskId } = useTimeTracker();
@@ -15,7 +15,7 @@ const TasksView: React.FC = () => {
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // Deep Link Handling (Manual Add only, removed AI)
+  // Deep Link Handling (Manual Add only)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const manualAdd = params.get('add');
@@ -414,6 +414,14 @@ const SubtaskItem: React.FC<SubtaskItemProps> = ({
                         {parentTask && <span className="text-lg flex-shrink-0" title={parentTask.name}>{parentTask.icon}</span>}
                         <p className={`font-medium text-on-surface truncate ${subtask.completed ? 'line-through text-gray-500' : ''}`}>{subtask.title}</p>
                         {getDeadlineBadge(subtask.deadline)}
+                        
+                        {/* Difficulty Badge */}
+                        {subtask.difficulty !== undefined && subtask.difficulty > 0 && (
+                            <div className="flex items-center gap-0.5 bg-yellow-900/30 text-yellow-500 px-1.5 py-0.5 rounded text-[10px]">
+                                <div className="w-3 h-3"><StarIcon /></div>
+                                <span className="font-bold">{subtask.difficulty}</span>
+                            </div>
+                        )}
                     </div>
                     {subtask.description && <p className={`text-xs text-gray-400 truncate ${subtask.completed ? 'line-through' : ''}`}>{subtask.description}</p>}
                 </div>

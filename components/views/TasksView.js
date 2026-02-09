@@ -3,10 +3,10 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext.js';
 import SubtaskModal from '../modals/SubtaskModal.js';
 import SettingsModal from '../modals/SettingsModal.js';
-import { EditIcon, TrashIcon, PlusIcon, EyeIcon, EyeOffIcon, CogIcon, ArrowUpIcon, ArrowDownIcon, ArchiveIcon } from '../Icons.js';
+import { EditIcon, TrashIcon, PlusIcon, EyeIcon, EyeOffIcon, CogIcon, ArrowUpIcon, ArrowDownIcon, ArchiveIcon, StarIcon } from '../Icons.js';
 
 const TasksView = () => {
-  const { tasks, subtasks, addSubtask, deleteSubtask, moveSubtaskStatus, getTaskById, lastAddedSubtaskId } = useTimeTracker();
+  const { tasks, subtasks, deleteSubtask, moveSubtaskStatus, getTaskById, lastAddedSubtaskId } = useTimeTracker();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSubtask, setEditingSubtask] = useState(null);
   const [showIdeas, setShowIdeas] = useState(false);
@@ -27,14 +27,16 @@ const TasksView = () => {
                 title: title,
                 description: desc,
                 taskId: tasks.length > 0 ? tasks[0].id : '',
-                status: 'idea'
+                status: 'idea',
+                completed: false,
+                createdAt: Date.now()
             });
             setIsModalOpen(true);
             window.history.replaceState({}, document.title, window.location.pathname);
         }, 300);
         return () => clearTimeout(timer);
     }
-  }, [tasks, addSubtask]); 
+  }, [tasks]); 
 
   // Overflow State
   const [overflowState, setOverflowState] = useState({
@@ -404,7 +406,14 @@ const SubtaskItem = ({ subtask, onEdit, getTaskById, isHighlighted, onSwipeLeft,
                     React.createElement('div', { className: "flex items-center flex-wrap gap-x-2" },
                         parentTask && React.createElement('span', { className: "text-lg flex-shrink-0", title: parentTask.name }, parentTask.icon),
                         React.createElement('p', { className: `font-medium text-on-surface truncate ${subtask.completed ? 'line-through text-gray-500' : ''}` }, subtask.title),
-                        getDeadlineBadge(subtask.deadline)
+                        getDeadlineBadge(subtask.deadline),
+                        /* Difficulty Badge */
+                        subtask.difficulty !== undefined && subtask.difficulty > 0 && (
+                            React.createElement('div', { className: "flex items-center gap-0.5 bg-yellow-900/30 text-yellow-500 px-1.5 py-0.5 rounded text-[10px]" },
+                                React.createElement('div', { className: "w-3 h-3" }, React.createElement(StarIcon, null)),
+                                React.createElement('span', { className: "font-bold" }, subtask.difficulty)
+                            )
+                        )
                     ),
                     subtask.description && React.createElement('p', { className: `text-xs text-gray-400 truncate ${subtask.completed ? 'line-through' : ''}` }, subtask.description)
                 ),
