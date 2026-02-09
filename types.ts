@@ -69,7 +69,7 @@ export interface ContractHistoryItem {
     startDate: number;
     endDate: number;
     phaseDuration: number;
-    status: 'completed' | 'failed';
+    status: 'completed' | 'failed' | 'finished';
     commitmentsSnapshot: string[];
     dailyHistory: DailyRoutineHistory[];
 }

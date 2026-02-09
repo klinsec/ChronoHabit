@@ -309,6 +309,24 @@ const HistoryModal = ({ pastContracts, onClose, onReuse, onSaveTemplate }) => {
         }
     };
 
+    const getStatusBadge = (status) => {
+        switch(status) {
+            case 'completed': return 'bg-green-900/30 text-green-400';
+            case 'finished': return 'bg-yellow-900/30 text-yellow-400';
+            case 'failed': return 'bg-red-900/30 text-red-400';
+            default: return 'bg-gray-700 text-gray-400';
+        }
+    }
+
+    const getStatusText = (status) => {
+        switch(status) {
+            case 'completed': return 'Completado';
+            case 'finished': return 'Finalizado';
+            case 'failed': return 'Fallido';
+            default: return status;
+        }
+    }
+
     return (
         React.createElement('div', { className: "fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" },
             savingItem ? (
@@ -344,10 +362,8 @@ const HistoryModal = ({ pastContracts, onClose, onReuse, onSaveTemplate }) => {
                                                     new Date(item.endDate).toLocaleDateString('es-ES', {day: 'numeric', month: 'short'})
                                                 )
                                             ),
-                                            React.createElement('div', { className: `px-2 py-0.5 rounded text-[10px] font-bold uppercase inline-block ${
-                                                item.status === 'completed' ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'
-                                            }` },
-                                                item.status === 'completed' ? 'Completado' : 'Fallido'
+                                            React.createElement('div', { className: `px-2 py-0.5 rounded text-[10px] font-bold uppercase inline-block ${getStatusBadge(item.status)}` },
+                                                getStatusText(item.status)
                                             )
                                         ),
                                         React.createElement('p', { className: "text-xs text-gray-400 text-right" },
@@ -609,6 +625,7 @@ const ActiveContractView = ({ contract, onStatusChange, onNext, onReset, onCompl
         );
     }
 
+    const allResolved = contract.commitments.every(c => c.status !== 'pending');
     const allCompleted = contract.commitments.every(c => c.status === 'completed');
     const phaseProgress = (contract.dayInPhase / contract.currentPhase) * 100;
     const isPhaseDone = contract.dayInPhase >= contract.currentPhase;
@@ -684,14 +701,23 @@ const ActiveContractView = ({ contract, onStatusChange, onNext, onReset, onCompl
 
             /* Actions Footer */
             React.createElement('div', { className: "fixed bottom-24 left-4 right-4 max-w-md mx-auto" },
-                isPhaseDone && allCompleted ? (
-                    React.createElement('div', { className: "bg-surface p-4 rounded-xl border border-green-500 shadow-2xl animate-in slide-in-from-bottom-20 fade-in duration-700 space-y-3" },
-                        React.createElement('p', { className: "text-center font-bold text-green-400" }, "¡Contrato Completado!"),
-                        React.createElement('button', { onClick: onNext, className: "w-full bg-green-500 text-black font-bold py-3 rounded-lg shadow-lg" },
-                            "Siguiente Contrato (Refinar)"
-                        ),
-                        React.createElement('button', { onClick: onComplete, className: "w-full bg-gray-700 text-white font-bold py-2 rounded-lg text-sm" },
-                            "Finalizar y Volver al Menú"
+                allResolved ? (
+                    isPhaseDone ? (
+                        React.createElement('div', { className: `bg-surface p-4 rounded-xl border shadow-2xl animate-in slide-in-from-bottom-20 fade-in duration-700 space-y-3 ${allCompleted ? 'border-green-500' : 'border-yellow-600'}` },
+                            React.createElement('p', { className: `text-center font-bold ${allCompleted ? 'text-green-400' : 'text-yellow-500'}` }, 
+                                allCompleted ? "¡Contrato Perfecto!" : "Contrato Finalizado"
+                            ),
+                            React.createElement('button', { onClick: onNext, className: "w-full bg-primary text-bkg font-bold py-3 rounded-lg shadow-lg" },
+                                "Siguiente Contrato (Refinar)"
+                            ),
+                            React.createElement('button', { onClick: onComplete, className: "w-full bg-gray-700 text-white font-bold py-2 rounded-lg text-sm" },
+                                "Finalizar y Volver al Menú"
+                            )
+                        )
+                    ) : (
+                        React.createElement('div', { className: "bg-surface/90 backdrop-blur p-4 rounded-xl border border-gray-600 shadow-lg text-center animate-in slide-in-from-bottom-10 fade-in" },
+                            React.createElement('p', { className: "font-bold text-gray-200" }, "¡Día Completado!"),
+                            React.createElement('p', { className: "text-xs text-gray-500 mt-1" }, "Has resuelto todos tus compromisos por hoy.")
                         )
                     )
                 ) : (

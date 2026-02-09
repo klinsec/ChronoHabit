@@ -82,9 +82,9 @@ const getContractWithTodayHistory = (c: DisciplineContract): DisciplineContract 
     const potential = c.currentStreakLevel || 1;
     let earned = 0;
     
-    // Rule: Points = floor(potential * ratio)
+    // Rule: Points = potential * ratio (with 1 decimal)
     if (total > 0) {
-        earned = Math.floor(potential * (completed / total));
+        earned = parseFloat((potential * (completed / total)).toFixed(1));
     }
 
     // Check if today is already in history to avoid duplicates
@@ -126,7 +126,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [cloudStatus, setCloudStatus] = useState<'disconnected' | 'connected' | 'syncing' | 'error'>('disconnected');
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
 
-  const archiveContract = useCallback((finishedContract: DisciplineContract, status: 'completed' | 'failed') => {
+  const archiveContract = useCallback((finishedContract: DisciplineContract, status: 'completed' | 'failed' | 'finished') => {
       setPastContracts(prev => {
           const newItem: ContractHistoryItem = {
               id: `hist_${Date.now()}`,
@@ -215,7 +215,8 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
                           let earnedPoints = 0;
                           if (totalCommitments > 0) {
                               const ratio = completedCommitments / totalCommitments;
-                              earnedPoints = Math.floor(potentialPoints * ratio);
+                              // New Decimal Calculation
+                              earnedPoints = parseFloat((potentialPoints * ratio).toFixed(1));
                           }
 
                           // Save History
@@ -228,7 +229,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
                           });
 
                           // 2. Calculate Next Day's Streak Level
-                          let nextStreak = earnedPoints + 1;
+                          let nextStreak = Math.floor(earnedPoints) + 1; // Base next level on floor of points
                           if (nextStreak > 10) nextStreak = 10;
                           if (nextStreak < 1) nextStreak = 1; 
                           
@@ -444,7 +445,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       } else {
           // Check history if starting from scratch
           const completedToday = pastContracts.some(c => 
-              c.status === 'completed' && new Date(c.endDate).toDateString() === todayStr
+              (c.status === 'completed' || c.status === 'finished') && new Date(c.endDate).toDateString() === todayStr
           );
           if (completedToday) startDay = 0;
       }
@@ -488,9 +489,11 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const completeContract = useCallback(() => {
       if (contract) {
-          // IMPORTANT: Calculate today's stats before archiving!
           const finalContract = getContractWithTodayHistory(contract);
-          archiveContract(finalContract, 'completed');
+          // Check for perfection on the final state
+          const allPerfect = finalContract.commitments.every(c => c.status === 'completed');
+          const status = allPerfect ? 'completed' : 'finished';
+          archiveContract(finalContract, status);
       }
       setContract(null);
       if(cloudStatus==='connected') triggerCloudSync();

@@ -34,7 +34,8 @@ const getContractWithTodayHistory = (c) => {
     let earned = 0;
     
     if (total > 0) {
-        earned = Math.floor(potential * (completed / total));
+        // Decimal Calculation
+        earned = parseFloat((potential * (completed / total)).toFixed(1));
     }
 
     const hasToday = c.dailyHistory.some(h => h.date === c.lastCheckDate);
@@ -162,7 +163,7 @@ export const TimeTrackerProvider = ({ children }) => {
                           let earnedPoints = 0;
                           if (totalCommitments > 0) {
                               const ratio = completedCommitments / totalCommitments;
-                              earnedPoints = Math.floor(potentialPoints * ratio);
+                              earnedPoints = parseFloat((potentialPoints * ratio).toFixed(1));
                           }
 
                           parsedContract.dailyHistory.push({
@@ -174,7 +175,7 @@ export const TimeTrackerProvider = ({ children }) => {
                           });
 
                           // Rule: Next Level = Earned Points + 1 (Capped at 10)
-                          let nextStreak = earnedPoints + 1;
+                          let nextStreak = Math.floor(earnedPoints) + 1;
                           if (nextStreak > 10) nextStreak = 10;
                           if (nextStreak < 1) nextStreak = 1;
                           
@@ -398,7 +399,7 @@ export const TimeTrackerProvider = ({ children }) => {
           }
       } else {
           const completedToday = pastContracts.some(c => 
-              c.status === 'completed' && new Date(c.endDate).toDateString() === todayStr
+              (c.status === 'completed' || c.status === 'finished') && new Date(c.endDate).toDateString() === todayStr
           );
           if (completedToday) startDay = 0;
       }
@@ -463,9 +464,10 @@ export const TimeTrackerProvider = ({ children }) => {
 
   const completeContract = useCallback(() => {
       if (contract) {
-          // IMPORTANT: Calculate today's stats before archiving!
           const finalContract = getContractWithTodayHistory(contract);
-          archiveContract(finalContract, 'completed');
+          const allPerfect = finalContract.commitments.every(c => c.status === 'completed');
+          const status = allPerfect ? 'completed' : 'finished';
+          archiveContract(finalContract, status);
       }
       setContract(null);
       triggerCloudSync();
