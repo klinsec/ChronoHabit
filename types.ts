@@ -62,6 +62,7 @@ export interface DisciplineContract {
   currentStreakLevel: number; // 1 to 10, determines potential points for today
   failed: boolean;
   allowedDays?: number[]; 
+  dailyCompleted?: boolean; // New flag to manually mark day as finished in UI
 }
 
 export interface ContractHistoryItem {

@@ -32,15 +32,11 @@ const getContractWithTodayHistory = (c) => {
     const completed = c.commitments.filter(comm => comm.status === 'completed').length;
     const potential = c.currentStreakLevel || 1;
     let earned = 0;
-    
     if (total > 0) {
-        // Decimal Calculation
         earned = parseFloat((potential * (completed / total)).toFixed(1));
     }
-
     const hasToday = c.dailyHistory.some(h => h.date === c.lastCheckDate);
     if (hasToday) return c;
-
     return {
         ...c,
         dailyHistory: [
@@ -102,13 +98,19 @@ export const TimeTrackerProvider = ({ children }) => {
       const storedRoutines = localStorage.getItem('chrono_saved_routines');
       const storedLastDate = localStorage.getItem('chrono_last_access_date');
       const storedLastSync = localStorage.getItem('chrono_last_sync');
-      const wasCloudConnected = localStorage.getItem('chrono_cloud_connected') === 'true';
       const storedDailyNotif = localStorage.getItem('chrono_daily_notif');
       const storedBriefing = localStorage.getItem('chrono_briefing_time');
       const storedReview = localStorage.getItem('chrono_review_time');
       
+      const wasCloudConnected = localStorage.getItem('chrono_cloud_connected') === 'true';
+      if (wasCloudConnected) {
+          setCloudStatus('connected');
+          initGoogleDrive(CLIENT_ID).catch(err => {
+              console.warn("Auto-connect init failed:", err);
+          });
+      }
+
       if (storedLastSync) setLastSyncTime(parseInt(storedLastSync));
-      if (wasCloudConnected) setCloudStatus('connected');
       if (storedDailyNotif !== null) setDailyNotificationEnabled(storedDailyNotif === 'true');
       if (storedBriefing) setBriefingTime(storedBriefing);
       if (storedReview) setReviewTime(storedReview);
@@ -132,7 +134,6 @@ export const TimeTrackerProvider = ({ children }) => {
       if (storedContract) {
           const parsedContract = JSON.parse(storedContract);
           
-          // Data Migration
           parsedContract.commitments = parsedContract.commitments.map(c => {
               if (c.completedToday !== undefined) {
                   return { ...c, status: c.completedToday ? 'completed' : 'pending' };
@@ -142,50 +143,42 @@ export const TimeTrackerProvider = ({ children }) => {
           if (!parsedContract.dailyHistory) parsedContract.dailyHistory = [];
           if (!parsedContract.currentStreakLevel) parsedContract.currentStreakLevel = 1;
 
-          // Daily Reset with Points Logic
           if (parsedContract.active && parsedContract.lastCheckDate !== todayString) {
               const now = new Date();
               const hour = now.getHours();
               
-              if (hour >= 1) { // 1 AM Grace Period
+              if (hour >= 1) { 
                   const lastDateStr = parsedContract.lastCheckDate;
                   const lastDate = new Date(lastDateStr);
                   
-                  // Only calculate points if Day > 0 (Day 0 is waiting period)
                   if (parsedContract.dayInPhase > 0) {
                       const wasLastDateAllowed = !parsedContract.allowedDays || parsedContract.allowedDays.includes(lastDate.getDay());
-                      
                       if (wasLastDateAllowed) {
-                          const totalCommitments = parsedContract.commitments.length;
-                          const completedCommitments = parsedContract.commitments.filter(c => c.status === 'completed').length;
-                          
-                          const potentialPoints = parsedContract.currentStreakLevel || 1;
-                          let earnedPoints = 0;
-                          if (totalCommitments > 0) {
-                              const ratio = completedCommitments / totalCommitments;
-                              earnedPoints = parseFloat((potentialPoints * ratio).toFixed(1));
+                          const total = parsedContract.commitments.length;
+                          const completed = parsedContract.commitments.filter(c => c.status === 'completed').length;
+                          const potential = parsedContract.currentStreakLevel || 1;
+                          let earned = 0;
+                          if (total > 0) {
+                              earned = parseFloat((potential * (completed / total)).toFixed(1));
                           }
-
                           parsedContract.dailyHistory.push({
                               date: lastDateStr,
-                              points: earnedPoints,
-                              streakLevel: potentialPoints,
-                              totalCommitments,
-                              completedCommitments
+                              points: earned,
+                              streakLevel: potential,
+                              totalCommitments: total,
+                              completedCommitments: completed
                           });
-
-                          // Rule: Next Level = Earned Points + 1 (Capped at 10)
-                          let nextStreak = Math.floor(earnedPoints) + 1;
+                          let nextStreak = Math.floor(earned) + 1;
                           if (nextStreak > 10) nextStreak = 10;
                           if (nextStreak < 1) nextStreak = 1;
-                          
                           parsedContract.currentStreakLevel = nextStreak;
                       }
                   }
 
                   parsedContract.lastCheckDate = todayString;
-                  const isTodayAllowed = !parsedContract.allowedDays || parsedContract.allowedDays.includes(currentDayOfWeek);
+                  parsedContract.dailyCompleted = false;
 
+                  const isTodayAllowed = !parsedContract.allowedDays || parsedContract.allowedDays.includes(currentDayOfWeek);
                   if (isTodayAllowed) {
                       parsedContract.dayInPhase += 1;
                       parsedContract.commitments = parsedContract.commitments.map(c => ({...c, status: 'pending'}));
@@ -200,13 +193,8 @@ export const TimeTrackerProvider = ({ children }) => {
           }
       }
       
-      if (storedHistory) {
-          setPastContracts(JSON.parse(storedHistory));
-      }
-
-      if (storedRoutines) {
-          setSavedRoutines(JSON.parse(storedRoutines));
-      }
+      if (storedHistory) setPastContracts(JSON.parse(storedHistory));
+      if (storedRoutines) setSavedRoutines(JSON.parse(storedRoutines));
 
       if(storedSubtasks) {
         let parsedSubtasks = JSON.parse(storedSubtasks);
@@ -233,7 +221,6 @@ export const TimeTrackerProvider = ({ children }) => {
     }
   }, []);
 
-  // Save to LocalStorage
   useEffect(() => { localStorage.setItem('chrono_tasks', JSON.stringify(tasks)); }, [tasks]);
   useEffect(() => { localStorage.setItem('chrono_entries', JSON.stringify(timeEntries)); }, [timeEntries]);
   useEffect(() => { localStorage.setItem('chrono_goals', JSON.stringify(goals)); }, [goals]);
@@ -245,7 +232,6 @@ export const TimeTrackerProvider = ({ children }) => {
   useEffect(() => { localStorage.setItem('chrono_contract_history', JSON.stringify(pastContracts)); }, [pastContracts]);
   useEffect(() => { localStorage.setItem('chrono_saved_routines', JSON.stringify(savedRoutines)); }, [savedRoutines]);
 
-  // Export & Sync
   const exportData = useCallback(() => {
     return JSON.stringify({ 
         tasks, timeEntries, goals, subtasks, contract,
@@ -256,7 +242,13 @@ export const TimeTrackerProvider = ({ children }) => {
   }, [tasks, timeEntries, goals, subtasks, contract, pastContracts, savedRoutines, dailyNotificationEnabled, briefingTime, reviewTime]);
 
   const triggerCloudSync = useCallback(async () => {
-    if (cloudStatus !== 'connected' && cloudStatus !== 'syncing') return;
+    if (cloudStatus === 'disconnected' || cloudStatus === 'error') {
+        if (localStorage.getItem('chrono_cloud_connected') === 'true') {
+             await initGoogleDrive(CLIENT_ID);
+        } else {
+            return;
+        }
+    }
     setCloudStatus('syncing');
     try {
         const data = exportData();
@@ -295,11 +287,7 @@ export const TimeTrackerProvider = ({ children }) => {
         const now = new Date();
         const currentTimeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false });
         const todayStr = now.toDateString();
-        const hour = now.getHours();
-
         if (!('Notification' in window) || Notification.permission !== 'granted' || !navigator.serviceWorker.controller) return;
-
-        // Notification logic...
         if (currentTimeStr === briefingTime) {
              const lastNotifKey = `notif_briefing_${todayStr}`;
              if (!localStorage.getItem(lastNotifKey)) {
@@ -340,7 +328,7 @@ export const TimeTrackerProvider = ({ children }) => {
     setTimeEntries(newEntries);
     setActiveEntry(newEntry);
     triggerCloudSync();
-    if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    if ('Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIFICATION', title: 'ChronoHabit', options: { body: `Registrando tarea`, icon: './icon-192.png', tag: 'timer-notification', silent: true } });
     }
   }, [timeEntries, tasks, triggerCloudSync]);
@@ -351,7 +339,7 @@ export const TimeTrackerProvider = ({ children }) => {
       setTimeEntries(prev => prev.map(entry => entry.id === activeEntry.id ? { ...entry, endTime: now } : entry));
       setActiveEntry(null);
       triggerCloudSync();
-      if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      if ('Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker.controller) {
           navigator.serviceWorker.controller.postMessage({ type: 'CANCEL_NOTIFICATION', tag: 'timer-notification' });
       }
     }
@@ -388,12 +376,9 @@ export const TimeTrackerProvider = ({ children }) => {
   const startContract = useCallback((commitmentsData, duration, allowedDays = [0,1,2,3,4,5,6]) => {
       let startDay = 1;
       const todayStr = new Date().toDateString();
-
       if (contract) {
-          // IMPORTANT: Calculate today's stats before archiving!
           const finalContract = getContractWithTodayHistory(contract);
           archiveContract(finalContract, 'completed');
-          
           if (new Date(contract.lastCheckDate).toDateString() === todayStr) {
               startDay = 0;
           }
@@ -403,7 +388,6 @@ export const TimeTrackerProvider = ({ children }) => {
           );
           if (completedToday) startDay = 0;
       }
-
       const newContract = {
           active: true,
           currentPhase: duration, 
@@ -454,7 +438,6 @@ export const TimeTrackerProvider = ({ children }) => {
 
   const resetContract = useCallback(() => {
       if (contract) {
-          // Even if failed, record progress made today
           const finalContract = getContractWithTodayHistory(contract);
           archiveContract(finalContract, 'failed');
       }
@@ -472,6 +455,13 @@ export const TimeTrackerProvider = ({ children }) => {
       setContract(null);
       triggerCloudSync();
   }, [contract, triggerCloudSync, archiveContract]);
+
+  const completeDay = useCallback(() => {
+      if (contract) {
+          setContract(prev => prev ? { ...prev, dailyCompleted: true } : null);
+          triggerCloudSync();
+      }
+  }, [contract, triggerCloudSync]);
 
   const saveRoutine = useCallback((title, commitments, allowedDays) => {
       setSavedRoutines(prev => [...prev, { id: `routine_${Date.now()}`, title, commitments, allowedDays }]);
@@ -527,7 +517,12 @@ export const TimeTrackerProvider = ({ children }) => {
       requestNotificationPermission: async () => { if(Notification.permission !== 'granted') await Notification.requestPermission(); },
       toggleDailyNotification, setNotificationTimes,
       exportData, importData, connectToCloud, triggerCloudSync,
-      startContract, setCommitmentStatus, toggleCommitment, resetContract, completeContract, saveRoutine, deleteRoutine, setCloudConnected: (c) => setCloudStatus(c ? 'connected' : 'disconnected')
+      startContract, setCommitmentStatus, toggleCommitment, resetContract, completeContract, completeDay, saveRoutine, deleteRoutine,
+      setCloudConnected: (c) => {
+          setCloudStatus(c ? 'connected' : 'disconnected');
+          if(c) localStorage.setItem('chrono_cloud_connected', 'true');
+          else localStorage.removeItem('chrono_cloud_connected');
+      }
     }},
     children
   );

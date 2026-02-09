@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'chronohabit-v11'; // Incremented version
+const CACHE_NAME = 'chronohabit-v12'; // Incremented version for update detection
 const urlsToCache = [
   './',
   './index.html',
@@ -19,6 +19,8 @@ const urlsToCache = [
   './components/modals/EntryModal.js',
   './components/modals/GoalModal.js',
   './components/modals/SubtaskModal.js',
+  './components/modals/SettingsModal.js',
+  './components/ErrorBoundary.js',
   './icon-192.png',
   './icon-512.png',
   'https://cdn.tailwindcss.com',
@@ -48,22 +50,19 @@ self.addEventListener('install', event => {
         return Promise.all(cachePromises);
       })
   );
+  self.skipWaiting(); // Optional: Force waiting worker to activate immediately if appropriate
 });
 
 self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
       .then(response => {
-        // Cache hit - return response
         if (response) {
           return response;
         }
-
-        // Not in cache, go to network
         return fetch(event.request).then(
           networkResponse => {
-            // Check if we received a valid response before caching
-            if (networkResponse && networkResponse.ok) {
+            if (networkResponse && networkResponse.ok && event.request.method === 'GET') {
               const responseToCache = networkResponse.clone();
               caches.open(CACHE_NAME)
                 .then(cache => {
@@ -74,7 +73,6 @@ self.addEventListener('fetch', event => {
           }
         ).catch(error => {
             console.log('Fetch failed:', error);
-            // The browser will show its default offline error page.
             throw error;
         });
       })
@@ -95,6 +93,7 @@ self.addEventListener('activate', event => {
       );
     })
   );
+  return self.clients.claim();
 });
 
 self.addEventListener('message', (event) => {
@@ -117,28 +116,17 @@ self.addEventListener('message', (event) => {
 
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
-
-  if (event.action === 'stop-timer') {
-      // Send a message to the client to stop the timer
-      self.clients.matchAll().then(clients => {
-          clients.forEach(client => client.postMessage({ type: 'STOP_TIMER' }));
-      });
-  } else {
-      // Open the app window
-      event.waitUntil(
-          self.clients.matchAll({ type: 'window' }).then(windowClients => {
-              for (let i = 0; i < windowClients.length; i++) {
-                  const client = windowClients[i];
-                  // Strict equality check against '/' fails for absolute URLs in preview environments
-                  // Relaxed check: if it's a focusable client, focus it.
-                  if ('focus' in client) {
-                      return client.focus();
-                  }
+  event.waitUntil(
+      self.clients.matchAll({ type: 'window' }).then(windowClients => {
+          for (let i = 0; i < windowClients.length; i++) {
+              const client = windowClients[i];
+              if ('focus' in client) {
+                  return client.focus();
               }
-              if (self.clients.openWindow) {
-                  return self.clients.openWindow('./');
-              }
-          })
-      );
-  }
+          }
+          if (self.clients.openWindow) {
+              return self.clients.openWindow('./');
+          }
+      })
+  );
 });

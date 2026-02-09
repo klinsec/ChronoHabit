@@ -5,7 +5,7 @@ import { CheckCircleIcon, PlusIcon, TrashIcon, RoutineIcon, HistoryIcon, FloppyD
 import { Commitment, ContractHistoryItem, SavedRoutine, CommitmentStatus } from '../../types';
 
 const RoutinesView: React.FC = () => {
-  const { contract, startContract, toggleCommitment, setCommitmentStatus, resetContract, completeContract, pastContracts, saveRoutine, savedRoutines, deleteRoutine } = useTimeTracker();
+  const { contract, startContract, toggleCommitment, setCommitmentStatus, resetContract, completeContract, completeDay, pastContracts, saveRoutine, savedRoutines, deleteRoutine } = useTimeTracker();
   const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState<number>(1);
   const [showHistory, setShowHistory] = useState(false);
@@ -20,7 +20,6 @@ const RoutinesView: React.FC = () => {
 
   const handleStartSetup = (duration: number) => {
       setSelectedDuration(duration);
-      // Reset commitments if starting fresh, or keep if we are chaining (handled below)
       if (!contract) {
           setNewCommitments([{ title: '', time: '' }]);
           setAllowedDays([0, 1, 2, 3, 4, 5, 6]);
@@ -29,20 +28,17 @@ const RoutinesView: React.FC = () => {
   };
 
   const handleNextContract = () => {
-      // Prepare for next contract
       if (contract) {
-          // Carry over existing commitments
           const existing = contract.commitments.map(c => ({ title: c.title, time: c.time || '' }));
           setNewCommitments(existing);
           setAllowedDays(contract.allowedDays || [0, 1, 2, 3, 4, 5, 6]);
           
-          // Calculate next logical duration based on 1 -> 3 -> 7 -> 10 logic
           let nextDuration = contract.currentPhase;
           if (contract.currentPhase === 1) nextDuration = 3;
           else if (contract.currentPhase === 3) nextDuration = 7;
           else if (contract.currentPhase === 7) nextDuration = 10;
           else if (contract.currentPhase === 10) nextDuration = 14;
-          else nextDuration = contract.currentPhase + 7; // Fallback: add a week
+          else nextDuration = contract.currentPhase + 7;
           
           setSelectedDuration(nextDuration);
           setIsSetupOpen(true);
@@ -53,7 +49,7 @@ const RoutinesView: React.FC = () => {
       const reconstructed = item.commitmentsSnapshot.map(title => ({ title, time: '' }));
       setNewCommitments(reconstructed);
       setSelectedDuration(item.phaseDuration);
-      setAllowedDays([0, 1, 2, 3, 4, 5, 6]); // Default to all days if reusing from old history without allowedDays
+      setAllowedDays([0, 1, 2, 3, 4, 5, 6]);
       setShowHistory(false);
       setIsSetupOpen(true);
   };
@@ -69,7 +65,6 @@ const RoutinesView: React.FC = () => {
       <div className="relative h-full flex flex-col">
            {/* Top Actions */}
            <div className="absolute top-0 right-0 z-10 flex gap-1">
-                {/* Save Button: Only when contract is active */}
                 {contract && !isSetupOpen && (
                     <button 
                         onClick={() => setShowSaveModal(true)}
@@ -79,8 +74,6 @@ const RoutinesView: React.FC = () => {
                         <FloppyDiskIcon />
                     </button>
                 )}
-                
-                {/* Load & History Buttons: Only when NO contract is active */}
                 {!contract && !isSetupOpen && (
                     <>
                         <button 
@@ -127,6 +120,7 @@ const RoutinesView: React.FC = () => {
                   onNext={handleNextContract}
                   onReset={resetContract}
                   onComplete={completeContract}
+                  onCompleteDay={completeDay}
               />
           )}
 
@@ -180,7 +174,6 @@ const SwipeableCommitment: React.FC<{
     const onTouchMove = (e: React.TouchEvent) => {
         if (touchStart !== null) {
             const diff = e.targetTouches[0].clientX - touchStart;
-            // Limit direction based on current status? No, free flow
             setTranslateX(diff);
         }
     }
@@ -188,11 +181,9 @@ const SwipeableCommitment: React.FC<{
     const onTouchEnd = () => {
         if (!touchStart) return;
         
-        // Right Swipe (->) : Fail (if not already failed)
         if (translateX > minSwipeDistance) {
             if (commitment.status !== 'failed') onChangeStatus(commitment.id, 'failed');
         } 
-        // Left Swipe (<-) : Reset to Pending (if failed or completed)
         else if (translateX < -minSwipeDistance) {
              onChangeStatus(commitment.id, 'pending');
         }
@@ -202,7 +193,6 @@ const SwipeableCommitment: React.FC<{
     }
 
     const handleClick = () => {
-        // Toggle Completed/Pending on click
         if (commitment.status === 'completed') onChangeStatus(commitment.id, 'pending');
         else onChangeStatus(commitment.id, 'completed');
     }
@@ -220,13 +210,11 @@ const SwipeableCommitment: React.FC<{
         textClass = 'text-red-400';
         icon = <div className="text-red-500"><XMarkIcon /></div>;
     } else {
-        // Pending
         icon = <div className="w-6 h-6 rounded-full border-2 border-gray-600"></div>;
     }
 
     return (
         <div className="relative overflow-hidden rounded-xl select-none">
-            {/* Background Actions */}
             <div className="absolute inset-0 flex items-center justify-between px-4 rounded-xl bg-gray-900 border border-gray-800">
                 <div className={`font-bold text-red-500 flex items-center transition-opacity duration-200 ${translateX > 30 ? 'opacity-100' : 'opacity-0'}`}>
                     <XMarkIcon /> <span className="text-xs ml-1 font-bold">FALLADO</span>
@@ -514,7 +502,6 @@ const ContractSetup: React.FC<{
     const toggleDay = (dayIndex: number) => {
         setAllowedDays(prev => {
             if (prev.includes(dayIndex)) {
-                // Prevent removing all days
                 if (prev.length === 1) return prev;
                 return prev.filter(d => d !== dayIndex);
             }
@@ -637,12 +624,13 @@ const ActiveContractView: React.FC<{
     onNext: () => void;
     onReset: () => void;
     onComplete: () => void;
-}> = ({ contract, onStatusChange, onNext, onReset, onComplete }) => {
+    onCompleteDay: () => void;
+}> = ({ contract, onStatusChange, onNext, onReset, onComplete, onCompleteDay }) => {
     
-    // Day 0 Handling (Waiting for tomorrow)
-    if (contract.dayInPhase === 0) {
+    // Day 0 Handling OR Manually Completed Day
+    if (contract.dayInPhase === 0 || contract.dailyCompleted) {
         return (
-            <div className="flex flex-col h-full mt-8 items-center p-6 space-y-6 overflow-y-auto">
+            <div className="flex flex-col h-full mt-8 items-center p-6 space-y-6 overflow-y-auto animate-in fade-in duration-500">
                 <div className="text-center">
                     <div className="bg-gray-800 p-6 rounded-full border border-green-500/30 shadow-lg shadow-green-900/20 inline-block mb-4">
                         <span className="text-4xl">✨</span>
@@ -650,25 +638,31 @@ const ActiveContractView: React.FC<{
                     <h2 className="text-2xl font-bold text-white mb-2">¡Rutina Completada!</h2>
                     <p className="text-gray-400">
                         Has terminado tus innegociables de hoy. 
-                        La Fase {contract.currentPhase} comenzará oficialmente mañana.
+                        ¡Nos vemos mañana!
                     </p>
                 </div>
 
                 <div className="w-full max-w-xs bg-surface p-4 rounded-xl border border-gray-700">
                     <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Próximo</p>
                     <div className="flex justify-between items-center mb-2">
-                        <span className="font-bold text-xl text-white">Día 1 <span className="text-sm text-gray-500">/ {contract.currentPhase}</span></span>
+                        <span className="font-bold text-xl text-white">
+                            {contract.dayInPhase === 0 ? "Día 1" : `Día ${contract.dayInPhase + 1}`} 
+                            <span className="text-sm text-gray-500"> / {contract.currentPhase}</span>
+                        </span>
                         <span className="text-xs text-primary font-bold bg-primary/10 px-2 py-1 rounded">MAÑANA</span>
                     </div>
                 </div>
 
-                {/* List of Commitments Preview */}
-                <div className="w-full max-w-sm text-left space-y-2 bg-surface/30 p-4 rounded-xl border border-gray-800">
-                    <p className="text-xs text-gray-500 uppercase tracking-widest text-center mb-2">Tus innegociables</p>
+                {/* List of Commitments Preview (Read Only) */}
+                <div className="w-full max-w-sm text-left space-y-2 bg-surface/30 p-4 rounded-xl border border-gray-800 opacity-60">
+                    <p className="text-xs text-gray-500 uppercase tracking-widest text-center mb-2">Resumen de hoy</p>
                     {contract.commitments.map((c: any) => (
                         <div key={c.id} className="bg-gray-800/50 p-3 rounded-lg flex justify-between items-center border border-gray-700">
                             <span className="text-gray-300 font-medium text-sm">{c.title}</span>
-                            {c.time && <span className="text-xs text-gray-500 font-mono">{c.time}</span>}
+                            <div className="text-xs">
+                                {c.status === 'completed' && <span className="text-green-500">✔</span>}
+                                {c.status === 'failed' && <span className="text-red-500">✘</span>}
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -687,13 +681,12 @@ const ActiveContractView: React.FC<{
         );
     }
 
-    // Logic: All resolved if no 'pending' items exist.
     const allResolved = contract.commitments.every((c: any) => c.status !== 'pending');
     const allCompleted = contract.commitments.every((c: any) => c.status === 'completed');
     const phaseProgress = (contract.dayInPhase / contract.currentPhase) * 100;
     const isPhaseDone = contract.dayInPhase >= contract.currentPhase;
-    
-    // Check if today is an allowed day
+
+    // Check Rest Day
     const todayDay = new Date().getDay();
     const isRestDay = contract.allowedDays && !contract.allowedDays.includes(todayDay);
 
@@ -770,10 +763,15 @@ const ActiveContractView: React.FC<{
                             </button>
                         </div>
                     ) : (
-                        // Case B: Intermediate Day Completed (Show simple feedback)
-                        <div className="bg-surface/90 backdrop-blur p-4 rounded-xl border border-gray-600 shadow-lg text-center animate-in slide-in-from-bottom-10 fade-in">
-                            <p className="font-bold text-gray-200">¡Día Completado!</p>
-                            <p className="text-xs text-gray-500 mt-1">Has resuelto todos tus compromisos por hoy.</p>
+                        // Case B: Intermediate Day Completed (Show Button to Finish Day)
+                        <div className="animate-in slide-in-from-bottom-10 fade-in flex justify-center">
+                            <button 
+                                onClick={onCompleteDay}
+                                className="w-full max-w-xs bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl shadow-lg border border-green-400/50 flex items-center justify-center gap-2"
+                            >
+                                <CheckCircleIcon />
+                                <span>Finalizar Día</span>
+                            </button>
                         </div>
                     )
                 ) : (

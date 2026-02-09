@@ -4,7 +4,7 @@ import { useTimeTracker } from '../../context/TimeTrackerContext.js';
 import { CheckCircleIcon, PlusIcon, TrashIcon, RoutineIcon, HistoryIcon, FloppyDiskIcon, FolderIcon, XMarkIcon, ArrowUpIcon, ArrowDownIcon } from '../Icons.js';
 
 const RoutinesView = () => {
-  const { contract, startContract, toggleCommitment, setCommitmentStatus, resetContract, completeContract, pastContracts, saveRoutine, savedRoutines, deleteRoutine } = useTimeTracker();
+  const { contract, startContract, toggleCommitment, setCommitmentStatus, resetContract, completeContract, completeDay, pastContracts, saveRoutine, savedRoutines, deleteRoutine } = useTimeTracker();
   const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState(1);
   const [showHistory, setShowHistory] = useState(false);
@@ -122,7 +122,8 @@ const RoutinesView = () => {
             onStatusChange: setCommitmentStatus,
             onNext: handleNextContract,
             onReset: resetContract,
-            onComplete: completeContract
+            onComplete: completeContract,
+            onCompleteDay: completeDay
         })
       ),
 
@@ -574,38 +575,42 @@ const ContractSetup = ({ commitments, setCommitments, duration, setDuration, all
     );
 };
 
-const ActiveContractView = ({ contract, onStatusChange, onNext, onReset, onComplete }) => {
+const ActiveContractView = ({ contract, onStatusChange, onNext, onReset, onComplete, onCompleteDay }) => {
     
-    // Day 0 Handling
-    if (contract.dayInPhase === 0) {
+    // Day 0 Handling OR Manually Completed Day
+    if (contract.dayInPhase === 0 || contract.dailyCompleted) {
         return (
-            React.createElement('div', { className: "flex flex-col h-full mt-8 items-center p-6 space-y-6 overflow-y-auto" },
+            React.createElement('div', { className: "flex flex-col h-full mt-8 items-center p-6 space-y-6 overflow-y-auto animate-in fade-in duration-500" },
                 React.createElement('div', { className: "text-center" },
                     React.createElement('div', { className: "bg-gray-800 p-6 rounded-full border border-green-500/30 shadow-lg shadow-green-900/20 inline-block mb-4" },
                         React.createElement('span', { className: "text-4xl" }, "✨")
                     ),
                     React.createElement('h2', { className: "text-2xl font-bold text-white mb-2" }, "¡Rutina Completada!"),
                     React.createElement('p', { className: "text-gray-400" },
-                        `Has terminado tus innegociables de hoy. La Fase ${contract.currentPhase} comenzará oficialmente mañana.`
+                        "Has terminado tus innegociables de hoy. ¡Nos vemos mañana!"
                     )
                 ),
                 React.createElement('div', { className: "w-full max-w-xs bg-surface p-4 rounded-xl border border-gray-700" },
                     React.createElement('p', { className: "text-xs text-gray-500 uppercase tracking-widest mb-1" }, "Próximo"),
                     React.createElement('div', { className: "flex justify-between items-center mb-2" },
-                        React.createElement('span', { className: "font-bold text-xl text-white" }, "Día 1", 
+                        React.createElement('span', { className: "font-bold text-xl text-white" }, 
+                            contract.dayInPhase === 0 ? "Día 1" : `Día ${contract.dayInPhase + 1}`,
                             React.createElement('span', { className: "text-sm text-gray-500" }, ` / ${contract.currentPhase}`)
                         ),
                         React.createElement('span', { className: "text-xs text-primary font-bold bg-primary/10 px-2 py-1 rounded" }, "MAÑANA")
                     )
                 ),
                 
-                /* List of Commitments Preview */
-                React.createElement('div', { className: "w-full max-w-sm text-left space-y-2 bg-surface/30 p-4 rounded-xl border border-gray-800" },
-                    React.createElement('p', { className: "text-xs text-gray-500 uppercase tracking-widest text-center mb-2" }, "Tus innegociables"),
+                /* List of Commitments Preview (Read Only) */
+                React.createElement('div', { className: "w-full max-w-sm text-left space-y-2 bg-surface/30 p-4 rounded-xl border border-gray-800 opacity-60" },
+                    React.createElement('p', { className: "text-xs text-gray-500 uppercase tracking-widest text-center mb-2" }, "Resumen de hoy"),
                     contract.commitments.map(c => (
                         React.createElement('div', { key: c.id, className: "bg-gray-800/50 p-3 rounded-lg flex justify-between items-center border border-gray-700" },
                             React.createElement('span', { className: "text-gray-300 font-medium text-sm" }, c.title),
-                            c.time && React.createElement('span', { className: "text-xs text-gray-500 font-mono" }, c.time)
+                            React.createElement('div', { className: "text-xs" },
+                                c.status === 'completed' && React.createElement('span', { className: "text-green-500" }, "✔"),
+                                c.status === 'failed' && React.createElement('span', { className: "text-red-500" }, "✘")
+                            )
                         )
                     ))
                 ),
@@ -715,9 +720,15 @@ const ActiveContractView = ({ contract, onStatusChange, onNext, onReset, onCompl
                             )
                         )
                     ) : (
-                        React.createElement('div', { className: "bg-surface/90 backdrop-blur p-4 rounded-xl border border-gray-600 shadow-lg text-center animate-in slide-in-from-bottom-10 fade-in" },
-                            React.createElement('p', { className: "font-bold text-gray-200" }, "¡Día Completado!"),
-                            React.createElement('p', { className: "text-xs text-gray-500 mt-1" }, "Has resuelto todos tus compromisos por hoy.")
+                        React.createElement('div', { className: "animate-in slide-in-from-bottom-10 fade-in flex justify-center" },
+                            React.createElement('button', 
+                                {
+                                    onClick: onCompleteDay,
+                                    className: "w-full max-w-xs bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl shadow-lg border border-green-400/50 flex items-center justify-center gap-2"
+                                },
+                                React.createElement(CheckCircleIcon, null),
+                                React.createElement('span', null, "Finalizar Día")
+                            )
                         )
                     )
                 ) : (
