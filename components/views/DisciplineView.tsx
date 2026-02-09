@@ -5,13 +5,29 @@ import { ContractIcon, CheckCircleIcon, PlusIcon, TrashIcon } from '../Icons';
 import { Commitment, ContractPhase } from '../../types';
 
 const DisciplineView: React.FC = () => {
-  const { contract, startContract, toggleCommitment, advancePhase, resetContract } = useTimeTracker();
+  const { contract, startContract, toggleCommitment, resetContract } = useTimeTracker();
   const [isSetupOpen, setIsSetupOpen] = useState(false);
   
   // Setup State
-  const [newCommitments, setNewCommitments] = useState<Omit<Commitment, 'id' | 'completedToday'>[]>([
+  const [newCommitments, setNewCommitments] = useState<Omit<Commitment, 'id' | 'status'>[]>([
       { title: '', time: '' }
   ]);
+
+  const handleAdvance = () => {
+      if (contract) {
+          let nextDuration = 1;
+          if (contract.currentPhase === 1) nextDuration = 3;
+          else if (contract.currentPhase === 3) nextDuration = 7;
+          else if (contract.currentPhase === 7) nextDuration = 10;
+          
+          const existingCommitments = contract.commitments.map(c => ({
+              title: c.title,
+              time: c.time
+          }));
+          
+          startContract(existingCommitments, nextDuration);
+      }
+  };
 
   if (!contract) {
       if (isSetupOpen) {
@@ -21,7 +37,7 @@ const DisciplineView: React.FC = () => {
                   setCommitments={setNewCommitments} 
                   onCancel={() => setIsSetupOpen(false)}
                   onStart={() => {
-                      startContract(newCommitments.filter(c => c.title.trim() !== ''));
+                      startContract(newCommitments.filter(c => c.title.trim() !== ''), 1);
                       setIsSetupOpen(false);
                   }}
               />
@@ -34,7 +50,7 @@ const DisciplineView: React.FC = () => {
       <ActiveContractView 
           contract={contract} 
           onToggle={toggleCommitment}
-          onAdvance={advancePhase}
+          onAdvance={handleAdvance}
           onReset={resetContract}
       />
   );
@@ -70,8 +86,8 @@ const Onboarding: React.FC<{ onStart: () => void }> = ({ onStart }) => (
 );
 
 const ContractSetup: React.FC<{
-    commitments: Omit<Commitment, 'id' | 'completedToday'>[];
-    setCommitments: React.Dispatch<React.SetStateAction<Omit<Commitment, 'id' | 'completedToday'>[]>>;
+    commitments: Omit<Commitment, 'id' | 'status'>[];
+    setCommitments: React.Dispatch<React.SetStateAction<Omit<Commitment, 'id' | 'status'>[]>>;
     onCancel: () => void;
     onStart: () => void;
 }> = ({ commitments, setCommitments, onCancel, onStart }) => {
@@ -140,7 +156,7 @@ const ActiveContractView: React.FC<{
     onReset: () => void;
 }> = ({ contract, onToggle, onAdvance, onReset }) => {
     
-    const allCompleted = contract.commitments.every((c: any) => c.completedToday);
+    const allCompleted = contract.commitments.every((c: any) => c.status === 'completed');
     const phaseProgress = (contract.dayInPhase / contract.currentPhase) * 100;
     const isPhaseDone = contract.dayInPhase >= contract.currentPhase;
 
@@ -173,19 +189,19 @@ const ActiveContractView: React.FC<{
                         key={c.id} 
                         onClick={() => onToggle(c.id)}
                         className={`w-full text-left p-4 rounded-xl border transition-all duration-200 flex items-center justify-between group ${
-                            c.completedToday 
+                            c.status === 'completed' 
                             ? 'bg-green-900/20 border-green-900/50' 
                             : 'bg-surface border-gray-700 hover:border-gray-500'
                         }`}
                     >
                         <div>
-                            <p className={`font-bold ${c.completedToday ? 'text-green-400 line-through' : 'text-white'}`}>{c.title}</p>
+                            <p className={`font-bold ${c.status === 'completed' ? 'text-green-400 line-through' : 'text-white'}`}>{c.title}</p>
                             {c.time && <p className="text-xs text-gray-500 mt-1">⏰ {c.time}</p>}
                         </div>
                         <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                            c.completedToday ? 'border-green-500 bg-green-500 text-black' : 'border-gray-600 group-hover:border-primary'
+                            c.status === 'completed' ? 'border-green-500 bg-green-500 text-black' : 'border-gray-600 group-hover:border-primary'
                         }`}>
-                            {c.completedToday && <CheckCircleIcon />}
+                            {c.status === 'completed' && <CheckCircleIcon />}
                         </div>
                     </button>
                 ))}

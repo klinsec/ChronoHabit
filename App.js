@@ -106,9 +106,9 @@ const AppContent = () => {
   };
 
   const navItems = [
-    { id: 'timer', label: 'Cronómetro', icon: React.createElement(ClockIcon, null) },
-    { id: 'routines', label: 'Rutinas', icon: React.createElement(RoutineIcon, null) },
     { id: 'tasks', label: 'Tareas', icon: React.createElement(ChecklistIcon, null) },
+    { id: 'routines', label: 'Rutinas', icon: React.createElement(RoutineIcon, null) },
+    { id: 'timer', label: 'Cronómetro', icon: React.createElement(ClockIcon, null) },
     { id: 'stats', label: 'Estadísticas', icon: React.createElement(ChartIcon, null) },
   ];
 
@@ -170,3 +170,4 @@ const App = () => (
 );
 
 export default App;
+    

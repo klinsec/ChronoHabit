@@ -78,9 +78,9 @@ const AppContent: React.FC = () => {
   };
 
   const navItems = [
-    { id: 'timer' as View, label: 'Cronómetro', icon: <ClockIcon /> },
-    { id: 'routines' as View, label: 'Rutinas', icon: <RoutineIcon /> },
     { id: 'tasks' as View, label: 'Tareas', icon: <ChecklistIcon /> },
+    { id: 'routines' as View, label: 'Rutinas', icon: <RoutineIcon /> },
+    { id: 'timer' as View, label: 'Cronómetro', icon: <ClockIcon /> },
     { id: 'stats' as View, label: 'Estadísticas', icon: <ChartIcon /> },
   ];
 
@@ -127,3 +127,4 @@ const App: React.FC = () => (
 );
 
 export default App;
+    

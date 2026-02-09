@@ -1,6 +1,8 @@
 
 // Helper to interact with Google Drive API
-// Note: This requires a Google Cloud Project with Drive API enabled and a Client ID.
+
+declare var gapi: any;
+declare var google: any;
 
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
@@ -10,76 +12,90 @@ let tokenClient: any;
 let gapiInited = false;
 let gisInited = false;
 
-export const initGoogleDrive = (clientId: string) => {
+// Wait for the scripts loaded in index.html to be available in the window object
+const waitForGoogleScripts = () => {
     return new Promise<void>((resolve, reject) => {
-        const gapiScript = document.createElement('script');
-        gapiScript.src = 'https://apis.google.com/js/api.js';
-        gapiScript.onload = () => {
-             // @ts-ignore
-             gapi.load('client', async () => {
-                try {
-                    // We don't strictly need apiKey for OAuth flows if we use the token correctly
-                     // @ts-ignore
-                    await gapi.client.init({
-                        discoveryDocs: [DISCOVERY_DOC],
-                    });
-                    gapiInited = true;
-                    checkInit(resolve);
-                } catch (err) {
-                    reject(err);
-                }
-             });
-        };
-        document.body.appendChild(gapiScript);
+        let attempts = 0;
+        const interval = setInterval(() => {
+            // @ts-ignore
+            if (typeof gapi !== 'undefined' && typeof google !== 'undefined') {
+                clearInterval(interval);
+                resolve();
+            }
+            attempts++;
+            if (attempts > 50) { // 5 seconds timeout
+                clearInterval(interval);
+                reject(new Error("Los servicios de Google no han cargado. Revisa tu conexión."));
+            }
+        }, 100);
+    });
+};
 
-        const gisScript = document.createElement('script');
-        gisScript.src = 'https://accounts.google.com/gsi/client';
-        gisScript.onload = () => {
+export const initGoogleDrive = async (clientId: string) => {
+    try {
+        await waitForGoogleScripts();
+
+        // 1. Init GAPI (for API calls)
+        await new Promise<void>((resolve, reject) => {
+            // @ts-ignore
+            gapi.load('client', {
+                callback: resolve,
+                onerror: reject,
+                timeout: 5000,
+                ontimeout: reject
+            });
+        });
+
+        // @ts-ignore
+        await gapi.client.init({
+            discoveryDocs: [DISCOVERY_DOC],
+        });
+        gapiInited = true;
+
+        // 2. Init GIS (for Auth Popup)
+        // @ts-ignore
+        if (google && google.accounts && google.accounts.oauth2) {
              // @ts-ignore
              tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: clientId,
                 scope: SCOPES,
-                callback: '', // defined later
+                callback: '' // Defined dynamically in signInToGoogle
             });
             gisInited = true;
-            checkInit(resolve);
-        };
-        document.body.appendChild(gisScript);
-    });
+        }
+
+        return true;
+    } catch (err) {
+        console.error("GAPI Init Error:", err);
+        throw err;
+    }
 };
-
-function checkInit(resolve: () => void) {
-    if (gapiInited && gisInited) {
-        resolve();
-    }
-}
-
-export const setGapiToken = (tokenResponse: any) => {
-    // @ts-ignore
-    if (typeof gapi !== 'undefined' && gapi.client) {
-        // @ts-ignore
-        gapi.client.setToken(tokenResponse);
-    }
-}
 
 export const signInToGoogle = () => {
     return new Promise<any>((resolve, reject) => {
         if (!tokenClient) {
-            reject("Google Client not initialized");
+            reject(new Error("Google Client no inicializado."));
             return;
         }
-        
-        tokenClient.callback = async (resp: any) => {
+
+        // Override the callback to capture the token response
+        tokenClient.callback = (resp: any) => {
             if (resp.error) {
                 reject(resp);
+                return;
             }
             // Important: Set the token for gapi calls
-            setGapiToken(resp);
+             // @ts-ignore
+            if (gapi.client) gapi.client.setToken(resp);
             resolve(resp);
         };
 
         // Trigger the popup
-        tokenClient.requestAccessToken({ prompt: 'consent' });
+        if (gapi.client.getToken() === null) {
+            tokenClient.requestAccessToken({ prompt: 'consent' });
+        } else {
+            tokenClient.requestAccessToken({ prompt: '' });
+        }
     });
 };
 

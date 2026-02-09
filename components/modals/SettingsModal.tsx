@@ -7,22 +7,20 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
+const GOOGLE_CLIENT_ID = '347833746217-of5l8r31t5csaqtqce7130raeisgidlv.apps.googleusercontent.com';
+
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
-  const { requestNotificationPermission, exportData, importData, setCloudConnected, triggerCloudSync, cloudStatus, lastSyncTime, dailyNotificationEnabled, toggleDailyNotification } = useTimeTracker();
+  const { requestNotificationPermission, exportData, importData, setCloudConnected, triggerCloudSync, cloudStatus, lastSyncTime, dailyNotificationEnabled, toggleDailyNotification, briefingTime, reviewTime, setNotificationTimes } = useTimeTracker();
   
-  const [clientId, setClientId] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showDriveConfig, setShowDriveConfig] = useState(false);
-  const [currentOrigin, setCurrentOrigin] = useState('');
+  
+  const [localBriefing, setLocalBriefing] = useState(briefingTime);
+  const [localReview, setLocalReview] = useState(reviewTime);
 
   useEffect(() => {
-      const storedClientId = localStorage.getItem('google_client_id');
-      if (storedClientId) {
-          setClientId(storedClientId);
-          setShowDriveConfig(true); 
-      }
-      setCurrentOrigin(window.location.origin);
+      // Try to init immediately in background
+      initGoogleDrive(GOOGLE_CLIENT_ID).catch(e => console.warn("Auto-init failed:", e));
   }, []);
 
   const handleDownloadBackup = () => {
@@ -38,22 +36,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   };
 
   const handleConnectDrive = async () => {
-      if (!clientId) {
-          alert("Por favor, introduce un Client ID.");
-          return;
-      }
-      localStorage.setItem('google_client_id', clientId);
       setIsLoading(true);
-      setStatusMsg('Conectando con Google...');
+      setStatusMsg('Inicializando...');
       try {
-          await initGoogleDrive(clientId); 
+          await initGoogleDrive(GOOGLE_CLIENT_ID);
+          setStatusMsg('Abre la ventana emergente...');
           await signInToGoogle();
           setCloudConnected(true);
           setStatusMsg('¡Nube conectada! Sincronizando...');
           await triggerCloudSync();
       } catch (err: any) {
           console.error(err);
-          setStatusMsg('Error: ' + (err.message || 'Fallo de conexión'));
+          // If popup blocked or closed
+          if (err.error === 'popup_closed_by_user') {
+               setStatusMsg('Cancelado por usuario.');
+          } else {
+               setStatusMsg('Error: ' + (err.message || JSON.stringify(err)));
+          }
       } finally {
           setIsLoading(false);
       }
@@ -63,6 +62,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
       setIsLoading(true);
       setStatusMsg('Buscando copia en tu Drive...');
       try {
+          // Ensure init
+          await initGoogleDrive(GOOGLE_CLIENT_ID);
+          
           const existingFile = await findBackupFile();
           if (!existingFile) {
               setStatusMsg('No hay copias en la nube.');
@@ -72,11 +74,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
           const success = importData(JSON.stringify(data), true);
           if (success) setStatusMsg('¡Restauración completada!');
       } catch (err: any) {
-          setStatusMsg('Error al bajar: ' + err.message);
+          setStatusMsg('Error al bajar: ' + (err.message || 'Desconocido'));
       } finally {
           setIsLoading(false);
       }
   };
+  
+  const handleSaveTimes = () => {
+      setNotificationTimes(localBriefing, localReview);
+  }
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -118,7 +124,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                     </button>
                     
                     <div className="flex items-center justify-between bg-gray-800 p-3 rounded-xl border border-gray-700">
-                        <span className="text-sm font-semibold">Resumen Diario (8:00 AM)</span>
+                        <span className="text-sm font-semibold">Alertas Diarias</span>
                          <button 
                             onClick={toggleDailyNotification}
                             className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 ease-in-out ${dailyNotificationEnabled ? 'bg-primary' : 'bg-gray-600'}`}
@@ -126,55 +132,59 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                             <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${dailyNotificationEnabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
                         </button>
                     </div>
+                    
+                    {dailyNotificationEnabled && (
+                        <div className="bg-gray-900/50 p-3 rounded-xl border border-gray-700 space-y-3">
+                            <div className="flex justify-between items-center">
+                                <label className="text-xs text-gray-400">Resumen Matutino:</label>
+                                <input 
+                                    type="time" 
+                                    value={localBriefing} 
+                                    onChange={(e) => setLocalBriefing(e.target.value)} 
+                                    onBlur={handleSaveTimes}
+                                    className="bg-gray-800 text-white rounded px-2 py-1 text-sm outline-none border border-gray-600 focus:border-primary"
+                                />
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <label className="text-xs text-gray-400">Revisión Nocturna:</label>
+                                <input 
+                                    type="time" 
+                                    value={localReview} 
+                                    onChange={(e) => setLocalReview(e.target.value)} 
+                                    onBlur={handleSaveTimes}
+                                    className="bg-gray-800 text-white rounded px-2 py-1 text-sm outline-none border border-gray-600 focus:border-primary"
+                                />
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* Main Cloud Setup */}
             <div className="space-y-3 pt-4 border-t border-gray-800">
-                <div className="flex justify-between items-center">
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Configuración Técnica Nube</h3>
-                    <button onClick={() => setShowDriveConfig(!showDriveConfig)} className="text-xs text-blue-400 hover:underline">
-                        {showDriveConfig ? 'Ocultar' : 'Mostrar'}
-                    </button>
-                </div>
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Nube (Google Drive)</h3>
 
-                {showDriveConfig && (
+                {cloudStatus !== 'connected' && (
                     <div className="space-y-3">
-                         <div className="p-4 bg-blue-900/20 border border-blue-900/50 rounded-xl space-y-3 text-xs text-blue-100">
-                            <p className="font-bold">Pasos para activar la Nube:</p>
-                            <ol className="list-decimal list-inside space-y-2 opacity-90">
-                                <li>Entra en <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer" className="underline font-bold">Google Cloud Console</a>.</li>
-                                <li>Crea un proyecto y activa la "Google Drive API".</li>
-                                <li>En "Pantalla de consentimiento OAuth", elige "Externo" y añade tu email.</li>
-                                <li>En "Credenciales", crea un "ID de cliente de OAuth".</li>
-                                <li><b>IMPORTANTE:</b> En "Orígenes de JavaScript", pega esto: <code className="bg-black p-1 rounded font-mono text-green-400 select-all block mt-1">{currentOrigin}</code></li>
-                                <li>Copia el "Client ID" que te den y pégalo abajo.</li>
-                            </ol>
-                        </div>
-                        <div className="space-y-2">
-                            <input 
-                                type="text" 
-                                placeholder="Pega aquí tu Client ID de Google" 
-                                value={clientId}
-                                onChange={(e) => setClientId(e.target.value)}
-                                className="w-full bg-black border border-gray-700 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-primary outline-none"
-                            />
-                            <div className="grid grid-cols-2 gap-3">
-                                <button 
-                                    onClick={handleConnectDrive}
-                                    disabled={isLoading}
-                                    className={`bg-primary text-bkg font-bold py-3 rounded-xl text-sm transition-transform active:scale-95 ${isLoading ? 'opacity-50' : ''}`}
-                                >
-                                    Conectar Nube
-                                </button>
-                                <button 
-                                    onClick={handleCloudRestore}
-                                    disabled={isLoading || cloudStatus !== 'connected'}
-                                    className={`bg-gray-700 text-white font-bold py-3 rounded-xl text-sm transition-transform active:scale-95 disabled:opacity-30`}
-                                >
-                                    Bajar de Nube
-                                </button>
-                            </div>
+                        <p className="text-xs text-gray-400">Conecta tu cuenta de Google para guardar tus datos automáticamente.</p>
+                        
+                        <button 
+                            onClick={handleConnectDrive}
+                            disabled={isLoading}
+                            className="w-full bg-primary text-bkg font-bold py-3 rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                            <span className="text-lg">☁️</span>
+                            <span>{isLoading ? "Cargando..." : "Conectar Nube"}</span>
+                        </button>
+                        
+                        <div className="text-center">
+                             <button 
+                                onClick={handleCloudRestore}
+                                disabled={isLoading}
+                                className="text-xs text-gray-500 hover:text-white underline disabled:opacity-30"
+                            >
+                                ¿Ya tienes datos? Bajar copia existente
+                            </button>
                         </div>
                     </div>
                 )}
@@ -182,7 +192,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
             {/* Local Section */}
             <div className="pt-4 border-t border-gray-800">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Datos</h3>
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Datos Locales</h3>
                 <div className="flex gap-3">
                     <button 
                         onClick={handleDownloadBackup}

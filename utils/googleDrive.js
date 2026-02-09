@@ -8,20 +8,19 @@ let tokenClient = null;
 let gapiInited = false;
 let gisInited = false;
 
-/**
- * Robustly waits for a global variable to be defined
- */
-const waitForGlobal = (name, timeout = 15000) => {
+// Wait for the scripts loaded in index.html to be available in the window object
+const waitForGoogleScripts = () => {
     return new Promise((resolve, reject) => {
-        if (window[name]) return resolve(window[name]);
-        const start = Date.now();
+        let attempts = 0;
         const interval = setInterval(() => {
-            if (window[name]) {
+            if (typeof window.gapi !== 'undefined' && typeof window.google !== 'undefined') {
                 clearInterval(interval);
-                resolve(window[name]);
-            } else if (Date.now() - start > timeout) {
+                resolve();
+            }
+            attempts++;
+            if (attempts > 50) { // 5 seconds timeout
                 clearInterval(interval);
-                reject(new Error(`La librería ${name} de Google tarda demasiado en cargar.`));
+                reject(new Error("Los servicios de Google no han cargado. Revisa tu conexión."));
             }
         }, 100);
     });
@@ -29,89 +28,66 @@ const waitForGlobal = (name, timeout = 15000) => {
 
 export const initGoogleDrive = async (clientId) => {
     try {
-        // 1. Wait for scripts to be present in window
-        await waitForGlobal('gapi');
-        await waitForGlobal('google');
+        await waitForGoogleScripts();
 
-        // 2. Initialize GAPI Client
+        // 1. Init GAPI (for API calls)
         await new Promise((resolve, reject) => {
             window.gapi.load('client', {
-                callback: async () => {
-                    try {
-                        await window.gapi.client.init({
-                            discoveryDocs: [DISCOVERY_DOC],
-                        });
-                        gapiInited = true;
-                        resolve();
-                    } catch (err) {
-                        console.warn("GAPI Init fail, retrying...", err);
-                        // Retry once after 2 seconds
-                        setTimeout(async () => {
-                            try {
-                                await window.gapi.client.init({ discoveryDocs: [DISCOVERY_DOC] });
-                                gapiInited = true;
-                                resolve();
-                            } catch (e) { reject(e); }
-                        }, 2000);
-                    }
-                },
-                onerror: () => reject(new Error("Error al cargar el cliente de Google (GAPI)")),
-                timeout: 10000
+                callback: resolve,
+                onerror: reject,
+                timeout: 5000,
+                ontimeout: reject
             });
         });
 
-        // 3. Initialize GIS Token Client
+        await window.gapi.client.init({
+            discoveryDocs: [DISCOVERY_DOC],
+        });
+        gapiInited = true;
+
+        // 2. Init GIS (for Auth Popup)
         if (window.google && window.google.accounts && window.google.accounts.oauth2) {
-            tokenClient = window.google.accounts.oauth2.initTokenClient({
+             tokenClient = window.google.accounts.oauth2.initTokenClient({
                 client_id: clientId,
                 scope: SCOPES,
-                callback: '', // defined in signInToGoogle
+                callback: '' // Defined dynamically in signInToGoogle
             });
             gisInited = true;
-        } else {
-            throw new Error("El sistema de cuentas de Google (GIS) no está disponible.");
         }
 
         return true;
     } catch (err) {
-        console.error("Google Drive Init Error:", err);
+        console.error("GAPI Init Error:", err);
         throw err;
-    }
-};
-
-export const setGapiToken = (tokenResponse) => {
-    if (window.gapi && window.gapi.client) {
-        window.gapi.client.setToken(tokenResponse);
     }
 };
 
 export const signInToGoogle = () => {
     return new Promise((resolve, reject) => {
         if (!tokenClient) {
-            reject(new Error("El cliente de Google no está listo. Espera un momento y vuelve a intentarlo."));
+            reject(new Error("Google Client no inicializado."));
             return;
         }
-        
-        tokenClient.callback = async (resp) => {
+
+        // Override the callback to capture the token response
+        tokenClient.callback = (resp) => {
             if (resp.error) {
-                console.error("Auth Error:", resp);
-                reject(new Error("Error de autorización: " + resp.error));
+                reject(resp);
                 return;
             }
-            setGapiToken(resp);
+            // Important: Set the token for gapi calls
+            if (window.gapi.client) window.gapi.client.setToken(resp);
             resolve(resp);
         };
 
-        try {
-            tokenClient.requestAccessToken({ prompt: 'consent' });
-        } catch (err) {
-            reject(err);
-        }
+        // Trigger the popup
+        // If we already have a token, don't prompt (unless expired, but library handles refresh mostly)
+        // Actually, for explicit Connect button, 'consent' is safer to ensure we get a fresh token if needed
+        tokenClient.requestAccessToken({ prompt: 'consent' });
     });
 };
 
 export const findBackupFile = async () => {
-    if (!gapiInited) return null;
     try {
         const response = await window.gapi.client.drive.files.list({
             q: `name = '${BACKUP_FILE_NAME}' and trashed = false`,
@@ -119,7 +95,10 @@ export const findBackupFile = async () => {
             spaces: 'drive'
         });
         const files = response.result.files;
-        return (files && files.length > 0) ? files[0] : null;
+        if (files && files.length > 0) {
+            return files[0];
+        }
+        return null;
     } catch (err) {
         console.error("Error finding backup file", err);
         throw err;
@@ -127,15 +106,15 @@ export const findBackupFile = async () => {
 };
 
 export const uploadBackupFile = async (data, fileId) => {
-    if (!gapiInited) throw new Error("Google Drive no está inicializado.");
-    const file = new Blob([data], { type: 'application/json' });
+    const fileContent = data;
+    const file = new Blob([fileContent], { type: 'application/json' });
     const metadata = {
         name: BACKUP_FILE_NAME,
         mimeType: 'application/json',
     };
 
     const tokenObj = window.gapi.client.getToken();
-    if (!tokenObj) throw new Error("Inicia sesión en Google primero.");
+    if (!tokenObj) throw new Error("No Google Token found");
     const accessToken = tokenObj.access_token;
     
     const form = new FormData();
@@ -156,22 +135,16 @@ export const uploadBackupFile = async (data, fileId) => {
         body: form
     });
     
-    if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Fallo al subir: ${response.status}`);
-    }
-
     return await response.json();
 };
 
 export const downloadBackupFile = async (fileId) => {
-    if (!gapiInited) throw new Error("Google Drive no está inicializado.");
     try {
         const response = await window.gapi.client.drive.files.get({
             fileId: fileId,
             alt: 'media'
         });
-        return response.result;
+        return response.result; // This is the JSON object
     } catch (err) {
         console.error("Error downloading file", err);
         throw err;

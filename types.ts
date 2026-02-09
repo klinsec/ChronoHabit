@@ -30,11 +30,13 @@ export interface Subtask {
 
 export type ContractPhase = number; // Changed from union to number for custom duration
 
+export type CommitmentStatus = 'pending' | 'completed' | 'failed';
+
 export interface Commitment {
   id: string;
   title: string;
   time?: string; // HH:mm format
-  completedToday: boolean;
+  status: CommitmentStatus; // Replaces completedToday boolean
 }
 
 export interface DisciplineContract {
@@ -46,6 +48,23 @@ export interface DisciplineContract {
   commitments: Commitment[];
   history: boolean[]; // Array of true/false for previous days in current phase
   failed: boolean;
+  allowedDays?: number[]; // Array of days (0=Sun, 1=Mon...) allowed for this contract
+}
+
+export interface ContractHistoryItem {
+    id: string;
+    startDate: number;
+    endDate: number;
+    phaseDuration: number;
+    status: 'completed' | 'failed';
+    commitmentsSnapshot: string[]; // List of titles
+}
+
+export interface SavedRoutine {
+    id: string;
+    title: string;
+    commitments: Omit<Commitment, 'id' | 'status'>[];
+    allowedDays?: number[];
 }
 
 export type View = 'timer' | 'history' | 'stats' | 'tasks' | 'routines' | 'discipline';
@@ -66,6 +85,13 @@ export interface BackupData {
   goals: Goal[];
   subtasks: Subtask[];
   contract?: DisciplineContract;
+  contractHistory?: ContractHistoryItem[];
+  savedRoutines?: SavedRoutine[];
+  settings?: {
+      dailyNotificationEnabled: boolean;
+      briefingTime?: string;
+      reviewTime?: string;
+  };
   timestamp: number;
   version: number;
 }

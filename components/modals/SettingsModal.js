@@ -1,7 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext.js';
-import { findBackupFile, downloadBackupFile } from '../../utils/googleDrive.js';
+import { findBackupFile, downloadBackupFile, initGoogleDrive, signInToGoogle } from '../../utils/googleDrive.js';
+
+const GOOGLE_CLIENT_ID = '347833746217-of5l8r31t5csaqtqce7130raeisgidlv.apps.googleusercontent.com';
 
 const SettingsModal = ({ onClose }) => {
   const { 
@@ -10,18 +12,24 @@ const SettingsModal = ({ onClose }) => {
     importData, 
     cloudStatus, 
     lastSyncTime, 
-    connectToCloud, 
     triggerCloudSync,
+    setCloudConnected,
     dailyNotificationEnabled,
-    toggleDailyNotification
+    toggleDailyNotification,
+    briefingTime,
+    reviewTime,
+    setNotificationTimes
   } = useTimeTracker();
   
   const [statusMsg, setStatusMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [currentOrigin, setCurrentOrigin] = useState('');
+  
+  const [localBriefing, setLocalBriefing] = useState(briefingTime);
+  const [localReview, setLocalReview] = useState(reviewTime);
 
   useEffect(() => {
-    setCurrentOrigin(window.location.origin);
+    // Try to init immediately
+    initGoogleDrive(GOOGLE_CLIENT_ID).catch(e => console.warn("Auto-init failed", e));
   }, []);
 
   const handleDownloadBackup = () => {
@@ -40,6 +48,7 @@ const SettingsModal = ({ onClose }) => {
       setIsLoading(true);
       setStatusMsg('Buscando copia en la nube...');
       try {
+          await initGoogleDrive(GOOGLE_CLIENT_ID);
           const existingFile = await findBackupFile();
           if (!existingFile) {
               setStatusMsg('No se encontró copia en la nube.');
@@ -57,17 +66,25 @@ const SettingsModal = ({ onClose }) => {
 
   const handleConnect = async () => {
       setIsLoading(true);
-      setStatusMsg('Conectando con Google...');
+      setStatusMsg('Inicializando...');
       try {
-          await connectToCloud();
-          setStatusMsg('');
+          await initGoogleDrive(GOOGLE_CLIENT_ID);
+          setStatusMsg('Abre la ventana emergente...');
+          await signInToGoogle();
+          setCloudConnected(true);
+          setStatusMsg('¡Nube conectada! Sincronizando...');
+          await triggerCloudSync();
       } catch (err) {
           console.error("Manual connect error:", err);
-          setStatusMsg('Fallo al conectar: ' + (err.message || 'Revisa tu conexión'));
+          setStatusMsg('Fallo al conectar: ' + (err.message || 'Error desconocido'));
       } finally {
           setIsLoading(false);
       }
   };
+  
+  const handleSaveTimes = () => {
+      setNotificationTimes(localBriefing, localReview);
+  }
 
   return (
     React.createElement('div', { className: "fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" },
@@ -103,7 +120,10 @@ const SettingsModal = ({ onClose }) => {
                     )
                 ) : (
                     React.createElement('div', { className: "space-y-3" },
-                        React.createElement('p', { className: "text-xs text-gray-400" }, "Guarda tus cronómetros automáticamente en tu cuenta de Google Drive."),
+                         React.createElement('div', { className: "flex justify-between items-center" },
+                            React.createElement('p', { className: "text-xs text-gray-400" }, "Guarda tus datos en Google Drive.")
+                        ),
+                        
                         React.createElement('button', 
                             { 
                                 onClick: handleConnect, 
@@ -111,7 +131,18 @@ const SettingsModal = ({ onClose }) => {
                                 className: "w-full bg-primary text-bkg font-bold py-3 rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
                             },
                             React.createElement('span', { className: "text-lg" }, "☁️"),
-                            React.createElement('span', null, isLoading ? "Cargando..." : "Conectar con Google")
+                            React.createElement('span', null, isLoading ? "Cargando..." : "Conectar Nube")
+                        ),
+
+                        React.createElement('div', { className: "text-center" },
+                             React.createElement('button', 
+                                { 
+                                    onClick: handleCloudRestore, 
+                                    disabled: isLoading,
+                                    className: "text-xs text-gray-500 hover:text-white underline disabled:opacity-30"
+                                },
+                                "¿Ya tienes datos? Bajar copia existente"
+                            )
                         )
                     )
                 ),
@@ -129,7 +160,7 @@ const SettingsModal = ({ onClose }) => {
                     React.createElement('span', null, "🔔 Permitir Notificaciones")
                 ),
                 React.createElement('div', { className: "flex items-center justify-between bg-gray-800 p-3 rounded-xl border border-gray-700" },
-                    React.createElement('span', { className: "text-sm font-semibold" }, "Resumen Diario (8:00 AM)"),
+                    React.createElement('span', { className: "text-sm font-semibold" }, "Alertas Diarias"),
                     React.createElement('button', 
                         {
                             onClick: toggleDailyNotification,
@@ -137,18 +168,40 @@ const SettingsModal = ({ onClose }) => {
                         },
                         React.createElement('div', { className: `bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${dailyNotificationEnabled ? 'translate-x-6' : 'translate-x-0'}` })
                     )
+                ),
+                dailyNotificationEnabled && React.createElement('div', { className: "bg-gray-900/50 p-3 rounded-xl border border-gray-700 space-y-3" },
+                    React.createElement('div', { className: "flex justify-between items-center" },
+                        React.createElement('label', { className: "text-xs text-gray-400" }, "Resumen Matutino:"),
+                        React.createElement('input', {
+                            type: "time",
+                            value: localBriefing,
+                            onChange: (e) => setLocalBriefing(e.target.value),
+                            onBlur: handleSaveTimes,
+                            className: "bg-gray-800 text-white rounded px-2 py-1 text-sm outline-none border border-gray-600 focus:border-primary"
+                        })
+                    ),
+                    React.createElement('div', { className: "flex justify-between items-center" },
+                        React.createElement('label', { className: "text-xs text-gray-400" }, "Revisión Nocturna:"),
+                        React.createElement('input', {
+                            type: "time",
+                            value: localReview,
+                            onChange: (e) => setLocalReview(e.target.value),
+                            onBlur: handleSaveTimes,
+                            className: "bg-gray-800 text-white rounded px-2 py-1 text-sm outline-none border border-gray-600 focus:border-primary"
+                        })
+                    )
                 )
             ),
 
             /* Local Options */
             React.createElement('div', { className: "space-y-3 pt-4 border-t border-gray-800" },
-                React.createElement('h3', { className: "text-xs font-bold text-gray-500 uppercase tracking-widest" }, "Datos"),
+                React.createElement('h3', { className: "text-xs font-bold text-gray-500 uppercase tracking-widest" }, "Datos Locales"),
                 React.createElement('button', 
                     {
                         onClick: handleDownloadBackup,
                         className: "w-full bg-gray-800 hover:bg-gray-700 text-on-surface font-semibold py-3 rounded-xl text-sm border border-gray-700 flex items-center justify-center gap-2"
                     },
-                    React.createElement('span', null, "💾 Guardar archivo JSON")
+                    React.createElement('span', null, "💾 Exportar JSON")
                 )
             )
         ),
