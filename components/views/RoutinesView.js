@@ -563,11 +563,11 @@ const ActiveContractView = ({ contract, onStatusChange, onNext, onReset, onCompl
     // Day 0 Handling
     if (contract.dayInPhase === 0) {
         return (
-            React.createElement('div', { className: "flex flex-col h-full mt-8 items-center justify-center text-center p-6 space-y-6" },
-                React.createElement('div', { className: "bg-gray-800 p-6 rounded-full border border-green-500/30 shadow-lg shadow-green-900/20" },
-                    React.createElement('span', { className: "text-4xl" }, "✨")
-                ),
-                React.createElement('div', null,
+            React.createElement('div', { className: "flex flex-col h-full mt-8 items-center p-6 space-y-6 overflow-y-auto" },
+                React.createElement('div', { className: "text-center" },
+                    React.createElement('div', { className: "bg-gray-800 p-6 rounded-full border border-green-500/30 shadow-lg shadow-green-900/20 inline-block mb-4" },
+                        React.createElement('span', { className: "text-4xl" }, "✨")
+                    ),
                     React.createElement('h2', { className: "text-2xl font-bold text-white mb-2" }, "¡Rutina Completada!"),
                     React.createElement('p', { className: "text-gray-400" },
                         `Has terminado tus innegociables de hoy. La Fase ${contract.currentPhase} comenzará oficialmente mañana.`
@@ -582,14 +582,26 @@ const ActiveContractView = ({ contract, onStatusChange, onNext, onReset, onCompl
                         React.createElement('span', { className: "text-xs text-primary font-bold bg-primary/10 px-2 py-1 rounded" }, "MAÑANA")
                     )
                 ),
+                
+                /* List of Commitments Preview */
+                React.createElement('div', { className: "w-full max-w-sm text-left space-y-2 bg-surface/30 p-4 rounded-xl border border-gray-800" },
+                    React.createElement('p', { className: "text-xs text-gray-500 uppercase tracking-widest text-center mb-2" }, "Tus innegociables"),
+                    contract.commitments.map(c => (
+                        React.createElement('div', { key: c.id, className: "bg-gray-800/50 p-3 rounded-lg flex justify-between items-center border border-gray-700" },
+                            React.createElement('span', { className: "text-gray-300 font-medium text-sm" }, c.title),
+                            c.time && React.createElement('span', { className: "text-xs text-gray-500 font-mono" }, c.time)
+                        )
+                    ))
+                ),
+
                 React.createElement('button', 
                     {
                         onClick: () => {
-                            if(confirm("¿Cancelar la espera y empezar ya? Esto contará como Día 1 HOY.")) {
+                            if(confirm("Si cancelas la rutina perderás todo el progreso. ¿Seguro que quieres continuar?")) {
                                 onReset(); 
                             }
                         },
-                        className: "text-xs text-gray-500 hover:text-white underline"
+                        className: "text-xs text-gray-500 hover:text-white underline mt-4"
                     },
                     "Cancelar y reconfigurar"
                 )

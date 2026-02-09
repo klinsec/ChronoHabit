@@ -30,7 +30,7 @@ const CloudIconIndicator = () => {
 };
 
 const AppContent = () => {
-  const [currentView, setCurrentView] = useState('timer');
+  const [currentView, setCurrentView] = useState('tasks');
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -101,7 +101,7 @@ const AppContent = () => {
       case 'tasks': return React.createElement(TasksView, null);
       case 'stats': return React.createElement(StatsView, null);
       case 'history': return React.createElement(HistoryView, null);
-      default: return React.createElement(TimerView, null);
+      default: return React.createElement(TasksView, null);
     }
   };
 
@@ -170,4 +170,3 @@ const App = () => (
 );
 
 export default App;
-    

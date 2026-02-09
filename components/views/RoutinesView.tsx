@@ -626,17 +626,18 @@ const ActiveContractView: React.FC<{
     // Day 0 Handling (Waiting for tomorrow)
     if (contract.dayInPhase === 0) {
         return (
-            <div className="flex flex-col h-full mt-8 items-center justify-center text-center p-6 space-y-6">
-                <div className="bg-gray-800 p-6 rounded-full border border-green-500/30 shadow-lg shadow-green-900/20">
-                    <span className="text-4xl">✨</span>
-                </div>
-                <div>
+            <div className="flex flex-col h-full mt-8 items-center p-6 space-y-6 overflow-y-auto">
+                <div className="text-center">
+                    <div className="bg-gray-800 p-6 rounded-full border border-green-500/30 shadow-lg shadow-green-900/20 inline-block mb-4">
+                        <span className="text-4xl">✨</span>
+                    </div>
                     <h2 className="text-2xl font-bold text-white mb-2">¡Rutina Completada!</h2>
                     <p className="text-gray-400">
                         Has terminado tus innegociables de hoy. 
                         La Fase {contract.currentPhase} comenzará oficialmente mañana.
                     </p>
                 </div>
+
                 <div className="w-full max-w-xs bg-surface p-4 rounded-xl border border-gray-700">
                     <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Próximo</p>
                     <div className="flex justify-between items-center mb-2">
@@ -644,14 +645,25 @@ const ActiveContractView: React.FC<{
                         <span className="text-xs text-primary font-bold bg-primary/10 px-2 py-1 rounded">MAÑANA</span>
                     </div>
                 </div>
+
+                {/* List of Commitments Preview */}
+                <div className="w-full max-w-sm text-left space-y-2 bg-surface/30 p-4 rounded-xl border border-gray-800">
+                    <p className="text-xs text-gray-500 uppercase tracking-widest text-center mb-2">Tus innegociables</p>
+                    {contract.commitments.map((c: any) => (
+                        <div key={c.id} className="bg-gray-800/50 p-3 rounded-lg flex justify-between items-center border border-gray-700">
+                            <span className="text-gray-300 font-medium text-sm">{c.title}</span>
+                            {c.time && <span className="text-xs text-gray-500 font-mono">{c.time}</span>}
+                        </div>
+                    ))}
+                </div>
+
                 <button 
                     onClick={() => {
-                        if(confirm("¿Cancelar la espera y empezar ya? Esto contará como Día 1 HOY.")) {
-                            // Manual override logic could go here, but for now we just let them reset entirely
+                        if(confirm("Si cancelas la rutina perderás todo el progreso. ¿Seguro que quieres continuar?")) {
                             onReset(); 
                         }
                     }}
-                    className="text-xs text-gray-500 hover:text-white underline"
+                    className="text-xs text-gray-500 hover:text-white underline mt-4"
                 >
                     Cancelar y reconfigurar
                 </button>

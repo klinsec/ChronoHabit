@@ -30,7 +30,7 @@ const CloudIconIndicator = () => {
 }
 
 const AppContent: React.FC = () => {
-  const [currentView, setCurrentView] = useState<View>('timer');
+  const [currentView, setCurrentView] = useState<View>('tasks');
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -73,7 +73,7 @@ const AppContent: React.FC = () => {
       case 'stats': return <StatsView />;
       // Fallback for history if stuck in old state, though hidden from nav
       case 'history': return <HistoryView />;
-      default: return <TimerView />;
+      default: return <TasksView />;
     }
   };
 
@@ -127,4 +127,3 @@ const App: React.FC = () => (
 );
 
 export default App;
-    
