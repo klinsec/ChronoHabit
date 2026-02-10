@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext';
-import { initGoogleDrive, signInToGoogle, findBackupFile, downloadBackupFile } from '../../utils/googleDrive';
+import { initGoogleDrive, findBackupFile, downloadBackupFile } from '../../utils/googleDrive';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -10,7 +10,7 @@ interface SettingsModalProps {
 const GOOGLE_CLIENT_ID = '347833746217-of5l8r31t5csaqtqce7130raeisgidlv.apps.googleusercontent.com';
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
-  const { requestNotificationPermission, exportData, importData, setCloudConnected, triggerCloudSync, cloudStatus, lastSyncTime, dailyNotificationEnabled, toggleDailyNotification, briefingTime, reviewTime, setNotificationTimes } = useTimeTracker();
+  const { requestNotificationPermission, exportData, importData, connectToCloud, triggerCloudSync, cloudStatus, lastSyncTime, dailyNotificationEnabled, toggleDailyNotification, briefingTime, reviewTime, setNotificationTimes } = useTimeTracker();
   
   const [statusMsg, setStatusMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -37,14 +37,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
   const handleConnectDrive = async () => {
       setIsLoading(true);
-      setStatusMsg('Inicializando...');
+      setStatusMsg('Conectando y comprobando copias...');
       try {
-          await initGoogleDrive(GOOGLE_CLIENT_ID);
-          setStatusMsg('Abre la ventana emergente...');
-          await signInToGoogle();
-          setCloudConnected(true);
-          setStatusMsg('¡Nube conectada! Sincronizando...');
-          await triggerCloudSync();
+          await connectToCloud();
+          setStatusMsg('');
       } catch (err: any) {
           console.error(err);
           // If popup blocked or closed

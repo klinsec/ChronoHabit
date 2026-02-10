@@ -91,6 +91,7 @@ export const signInToGoogle = () => {
         };
 
         // Trigger the popup
+        // @ts-ignore
         if (gapi.client.getToken() === null) {
             tokenClient.requestAccessToken({ prompt: 'consent' });
         } else {
@@ -159,7 +160,13 @@ export const downloadBackupFile = async (fileId: string) => {
             fileId: fileId,
             alt: 'media'
         });
-        return response.result; // This is the JSON object
+        // GAPI with alt=media typically returns the body in result
+        // If it's a string, parse it. If it's object, return it.
+        const result = response.result;
+        if (typeof result === 'string') {
+            return JSON.parse(result);
+        }
+        return result; 
     } catch (err) {
         console.error("Error downloading file", err);
         throw err;

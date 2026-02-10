@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext.js';
-import { findBackupFile, downloadBackupFile, initGoogleDrive, signInToGoogle } from '../../utils/googleDrive.js';
+import { findBackupFile, downloadBackupFile, initGoogleDrive } from '../../utils/googleDrive.js';
 
 const GOOGLE_CLIENT_ID = '347833746217-of5l8r31t5csaqtqce7130raeisgidlv.apps.googleusercontent.com';
 
@@ -13,7 +13,7 @@ const SettingsModal = ({ onClose }) => {
     cloudStatus, 
     lastSyncTime, 
     triggerCloudSync,
-    setCloudConnected,
+    connectToCloud,
     dailyNotificationEnabled,
     toggleDailyNotification,
     briefingTime,
@@ -66,14 +66,10 @@ const SettingsModal = ({ onClose }) => {
 
   const handleConnect = async () => {
       setIsLoading(true);
-      setStatusMsg('Inicializando...');
+      setStatusMsg('Conectando y comprobando copias...');
       try {
-          await initGoogleDrive(GOOGLE_CLIENT_ID);
-          setStatusMsg('Abre la ventana emergente...');
-          await signInToGoogle();
-          setCloudConnected(true);
-          setStatusMsg('¡Nube conectada! Sincronizando...');
-          await triggerCloudSync();
+          await connectToCloud();
+          setStatusMsg('');
       } catch (err) {
           console.error("Manual connect error:", err);
           setStatusMsg('Fallo al conectar: ' + (err.message || 'Error desconocido'));

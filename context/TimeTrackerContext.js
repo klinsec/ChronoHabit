@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { findBackupFile, uploadBackupFile, initGoogleDrive, signInToGoogle } from '../utils/googleDrive.js';
+import { findBackupFile, uploadBackupFile, initGoogleDrive, signInToGoogle, downloadBackupFile } from '../utils/googleDrive.js';
 
 const TimeTrackerContext = createContext(undefined);
 
@@ -34,7 +34,6 @@ const getContractWithTodayHistory = (c) => {
     let earned = 0;
     
     if (total > 0) {
-        // Decimal Calculation: Potential * Ratio
         earned = parseFloat((potential * (completed / total)).toFixed(1));
     }
 
@@ -177,8 +176,6 @@ export const TimeTrackerProvider = ({ children }) => {
                               completedCommitments: completed
                           });
 
-                          // Rule: Next Level = Floor(Earned Points) + 1
-                          // Capped at 10, min 1
                           let nextStreak = Math.floor(earnedPoints) + 1;
                           if (nextStreak > 10) nextStreak = 10;
                           if (nextStreak < 1) nextStreak = 1;
@@ -253,6 +250,26 @@ export const TimeTrackerProvider = ({ children }) => {
     });
   }, [tasks, timeEntries, goals, subtasks, contract, pastContracts, savedRoutines, dailyNotificationEnabled, briefingTime, reviewTime]);
 
+  const importData = useCallback((jsonData, skipConfirm = false) => {
+    try {
+        const backup = JSON.parse(jsonData);
+        if (!Array.isArray(backup.tasks)) throw new Error("Format error");
+        if (skipConfirm || window.confirm("¿Reemplazar datos locales?")) {
+            setTasks(backup.tasks);
+            setTimeEntries(backup.timeEntries);
+            setGoals(backup.goals || []);
+            setSubtasks(backup.subtasks || []);
+            if (backup.contract) setContract(backup.contract);
+            if (backup.contractHistory) setPastContracts(backup.contractHistory);
+            if (backup.savedRoutines) setSavedRoutines(backup.savedRoutines);
+            return true;
+        }
+        return false;
+    } catch (e) {
+        return false;
+    }
+  }, []);
+
   const triggerCloudSync = useCallback(async () => {
     if (cloudStatus === 'disconnected' || cloudStatus === 'error') {
         if (localStorage.getItem('chrono_cloud_connected') === 'true') {
@@ -275,6 +292,45 @@ export const TimeTrackerProvider = ({ children }) => {
         setCloudStatus('error');
     }
   }, [cloudStatus, exportData]);
+
+  const connectToCloud = useCallback(async () => {
+      setCloudStatus('syncing');
+      try {
+          await initGoogleDrive(CLIENT_ID);
+          await signInToGoogle();
+
+          const existingFile = await findBackupFile();
+          
+          if (existingFile) {
+              const isLocalDataEmpty = timeEntries.length === 0 && subtasks.length === 0 && !contract && pastContracts.length === 0;
+              
+              if (isLocalDataEmpty) {
+                  const cloudData = await downloadBackupFile(existingFile.id);
+                  importData(JSON.stringify(cloudData), true);
+              } else {
+                  if (window.confirm("Se ha encontrado una copia en Google Drive. \n\n¿Quieres RESTAURARLA (borra lo local) o MANTENER LOCAL (sobrescribe la nube)?\n\nAceptar = Restaurar\nCancelar = Mantener Local")) {
+                      const cloudData = await downloadBackupFile(existingFile.id);
+                      importData(JSON.stringify(cloudData), true);
+                  } else {
+                      await uploadBackupFile(exportData(), existingFile.id);
+                  }
+              }
+          } else {
+              await uploadBackupFile(exportData());
+          }
+
+          localStorage.setItem('chrono_cloud_connected', 'true');
+          setCloudStatus('connected');
+          const now = Date.now();
+          setLastSyncTime(now);
+          localStorage.setItem('chrono_last_sync', now.toString());
+
+      } catch (err) {
+          console.error("Cloud connect error:", err);
+          setCloudStatus('error');
+          throw err;
+      }
+  }, [timeEntries, subtasks, contract, pastContracts, exportData, importData]);
 
   const toggleDailyNotification = useCallback(() => {
     setDailyNotificationEnabled(prev => {
@@ -476,7 +532,8 @@ export const TimeTrackerProvider = ({ children }) => {
   }, [contract, triggerCloudSync]);
 
   const saveRoutine = useCallback((title, commitments, allowedDays) => {
-      setSavedRoutines(prev => [...prev, { id: `routine_${Date.now()}`, title, commitments, allowedDays }]);
+      const daysToSave = allowedDays || [0,1,2,3,4,5,6];
+      setSavedRoutines(prev => [...prev, { id: `routine_${Date.now()}`, title, commitments, allowedDays: daysToSave }]);
       triggerCloudSync();
   }, [triggerCloudSync]);
 
@@ -484,38 +541,6 @@ export const TimeTrackerProvider = ({ children }) => {
       setSavedRoutines(prev => prev.filter(r => r.id !== id));
       triggerCloudSync();
   }, [triggerCloudSync]);
-
-  const connectToCloud = useCallback(async () => {
-      try {
-          await initGoogleDrive(CLIENT_ID);
-          await signInToGoogle();
-          localStorage.setItem('chrono_cloud_connected', 'true');
-          setCloudStatus('connected');
-          await triggerCloudSync();
-      } catch (err) {
-          setCloudStatus('error');
-      }
-  }, [triggerCloudSync]);
-
-  const importData = useCallback((jsonData, skipConfirm = false) => {
-    try {
-        const backup = JSON.parse(jsonData);
-        if (!Array.isArray(backup.tasks)) throw new Error("Format error");
-        if (skipConfirm || window.confirm("¿Reemplazar datos locales?")) {
-            setTasks(backup.tasks);
-            setTimeEntries(backup.timeEntries);
-            setGoals(backup.goals || []);
-            setSubtasks(backup.subtasks || []);
-            if (backup.contract) setContract(backup.contract);
-            if (backup.contractHistory) setPastContracts(backup.contractHistory);
-            if (backup.savedRoutines) setSavedRoutines(backup.savedRoutines);
-            return true;
-        }
-        return false;
-    } catch (e) {
-        return false;
-    }
-  }, []);
 
   return React.createElement(TimeTrackerContext.Provider, { value: {
       tasks, timeEntries, goals, subtasks, activeEntry, liveElapsedTime, lastAddedSubtaskId,

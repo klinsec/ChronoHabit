@@ -144,7 +144,12 @@ export const downloadBackupFile = async (fileId) => {
             fileId: fileId,
             alt: 'media'
         });
-        return response.result; // This is the JSON object
+        
+        const result = response.result;
+        if (typeof result === 'string') {
+            return JSON.parse(result);
+        }
+        return result; 
     } catch (err) {
         console.error("Error downloading file", err);
         throw err;
