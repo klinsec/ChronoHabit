@@ -157,21 +157,30 @@ export const TimeTrackerProvider = ({ children }) => {
       
       contractsToCheck.forEach(c => {
           if (c.dailyHistory && c.dailyHistory.length > 0) {
-              // New Format: Sum detailed points
+              // New Format: Sum detailed points directly (1.8 points = 1.8 score)
               c.dailyHistory.forEach(h => {
                   if (h.points) {
-                      total += (h.points * 25); // Increased multiplier for impact
+                      total += h.points; 
                   }
               });
           } else if (c.history && Array.isArray(c.history)) {
               // Legacy Format: Fallback to boolean history
-              const completedDays = c.history.filter(dayOk => dayOk).length;
-              // Assume average level/points for legacy data (e.g. 5 points per day * 25)
-              total += (completedDays * 5 * 25);
+              // Calculate points based on 1->10 streak rule
+              let currentStreak = 1;
+              c.history.forEach(dayOk => {
+                  if (dayOk) {
+                      total += currentStreak;
+                      if (currentStreak < 10) currentStreak++;
+                  } else {
+                      // Penalty for legacy failure: reset to 1? Or maintain? 
+                      // Simple approach: reset streak on failure
+                      currentStreak = 1; 
+                  }
+              });
           }
       });
 
-      return Math.floor(total);
+      return parseFloat(total.toFixed(1)); // Keep 1 decimal for precision
   }, [timeEntries, subtasks, pastContracts, contract, tasks]);
 
   // Sync Score
@@ -384,7 +393,47 @@ export const TimeTrackerProvider = ({ children }) => {
       if (contract.lastCheckDate !== today) { 
           const dayOfWeek = new Date().getDay(); 
           if (contract.allowedDays?.includes(dayOfWeek) ?? true) { 
-              setContract(prev => prev ? ({ ...prev, dayInPhase: prev.dayInPhase + 1, lastCheckDate: today, dailyCompleted: false, commitments: prev.commitments.map(c => ({ ...c, status: 'pending' })) }) : null); 
+              setContract(prev => {
+                  if (!prev) return null;
+                  // Calculate Stats for Previous Day
+                  const total = prev.commitments.length;
+                  const completed = prev.commitments.filter(c => c.status === 'completed').length;
+                  const ratio = total > 0 ? completed / total : 0;
+                  const pointsEarned = parseFloat((prev.currentStreakLevel * ratio).toFixed(1));
+                  
+                  // Calculate Next Level: Floor of points earned + 1. Max 10.
+                  // If I earn 5.5 points, next level is 5+1 = 6.
+                  let nextLevel = Math.floor(pointsEarned) + 1;
+                  if (nextLevel > 10) nextLevel = 10;
+                  if (nextLevel < 1) nextLevel = 1;
+
+                  // Ensure history is recorded for the previous day
+                  const newHistory = [...prev.dailyHistory];
+                  const histIdx = newHistory.findIndex(h => h.date === prev.lastCheckDate);
+                  const historyEntry = { 
+                      date: prev.lastCheckDate, 
+                      points: pointsEarned, 
+                      streakLevel: prev.currentStreakLevel, 
+                      totalCommitments: total, 
+                      completedCommitments: completed 
+                  };
+                  
+                  if (histIdx >= 0) {
+                      newHistory[histIdx] = historyEntry;
+                  } else {
+                      newHistory.push(historyEntry);
+                  }
+
+                  return {
+                      ...prev,
+                      dayInPhase: prev.dayInPhase + 1,
+                      lastCheckDate: today,
+                      dailyCompleted: false,
+                      currentStreakLevel: nextLevel, // Update level based on performance
+                      commitments: prev.commitments.map(c => ({ ...c, status: 'pending' })),
+                      dailyHistory: newHistory
+                  };
+              }); 
           } else { 
               setContract(prev => prev ? ({ ...prev, lastCheckDate: today }) : null); 
           } 
