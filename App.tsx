@@ -6,12 +6,13 @@ import HistoryView from './components/views/HistoryView';
 import StatsView from './components/views/StatsView';
 import TasksView from './components/views/TasksView';
 import RoutinesView from './components/views/RoutinesView';
+import DisciplineView from './components/views/DisciplineView';
 import BottomNav from './components/BottomNav';
-import { ClockIcon, ListIcon, ChartIcon, ChecklistIcon, RoutineIcon } from './components/Icons';
+import { ClockIcon, ChartIcon, ChecklistIcon, RoutineIcon, ContractIcon } from './components/Icons';
 import { View } from './types';
 import ErrorBoundary from './components/ErrorBoundary';
 
-const APP_VERSION = '1.2.7';
+const APP_VERSION = '1.4.6';
 
 const CloudIconIndicator = () => {
     const { cloudStatus } = useTimeTracker();
@@ -53,6 +54,17 @@ const AppContent: React.FC = () => {
     };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('sw-update-found', handleSWUpdateFound);
+    
+    // Check initial state
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistration().then(reg => {
+            if (reg && reg.waiting) {
+                setWaitingWorker(reg.waiting);
+                setShowUpdateModal(true);
+            }
+        });
+    }
+
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('sw-update-found', handleSWUpdateFound);
@@ -71,9 +83,9 @@ const AppContent: React.FC = () => {
     switch (currentView) {
       case 'timer': return <TimerView />;
       case 'routines': return <RoutinesView />;
+      case 'discipline': return <DisciplineView />;
       case 'tasks': return <TasksView />;
       case 'stats': return <StatsView />;
-      // Fallback for history if stuck in old state, though hidden from nav
       case 'history': return <HistoryView />;
       default: return <TasksView />;
     }
@@ -83,7 +95,8 @@ const AppContent: React.FC = () => {
     { id: 'tasks' as View, label: 'Tareas', icon: <ChecklistIcon /> },
     { id: 'routines' as View, label: 'Rutinas', icon: <RoutineIcon /> },
     { id: 'timer' as View, label: 'Cronómetro', icon: <ClockIcon /> },
-    { id: 'stats' as View, label: 'Estadísticas', icon: <ChartIcon /> },
+    { id: 'discipline' as View, label: 'Disciplina', icon: <ContractIcon /> },
+    { id: 'stats' as View, label: 'Stats', icon: <ChartIcon /> },
   ];
 
   return (
@@ -111,9 +124,9 @@ const AppContent: React.FC = () => {
       {showUpdateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-6">
           <div className="bg-surface rounded-2xl p-6 w-full max-w-sm border border-primary/40 shadow-2xl">
-            <h2 className="text-xl font-bold mb-3 text-on-surface">¡Nueva Versión {APP_VERSION}!</h2>
-            <p className="text-gray-300 mb-6 text-sm">Actualiza ahora para obtener las últimas funciones.</p>
-            <button onClick={() => { if(waitingWorker) waitingWorker.postMessage({ type: 'SKIP_WAITING' }); setShowUpdateModal(false); }} className="w-full bg-primary text-bkg font-bold py-3 px-4 rounded-xl">Actualizar</button>
+            <h2 className="text-xl font-bold mb-3 text-on-surface">¡Actualización Disponible!</h2>
+            <p className="text-gray-300 mb-6 text-sm">Nueva versión {APP_VERSION} lista para instalar.</p>
+            <button onClick={() => { if(waitingWorker) waitingWorker.postMessage({ type: 'SKIP_WAITING' }); setShowUpdateModal(false); }} className="w-full bg-primary text-bkg font-bold py-3 px-4 rounded-xl">Actualizar Ahora</button>
           </div>
         </div>
       )}

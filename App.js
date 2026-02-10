@@ -6,11 +6,12 @@ import HistoryView from './components/views/HistoryView.js';
 import StatsView from './components/views/StatsView.js';
 import TasksView from './components/views/TasksView.js';
 import RoutinesView from './components/views/RoutinesView.js';
+import DisciplineView from './components/views/DisciplineView.js';
 import BottomNav from './components/BottomNav.js';
-import { ClockIcon, ListIcon, ChartIcon, ChecklistIcon, RoutineIcon } from './components/Icons.js';
+import { ClockIcon, ChartIcon, ChecklistIcon, RoutineIcon, ContractIcon } from './components/Icons.js';
 import ErrorBoundary from './components/ErrorBoundary.js';
 
-const APP_VERSION = '1.3.1';
+const APP_VERSION = '1.4.6';
 
 const CloudIconIndicator = () => {
     const { cloudStatus } = useTimeTracker();
@@ -71,7 +72,7 @@ const AppContent = () => {
           }
         })
         .catch(err => {
-           console.warn('Service Worker getRegistration failed (likely environment restriction):', err);
+           console.warn('Service Worker getRegistration failed:', err);
         });
     }
 
@@ -100,6 +101,7 @@ const AppContent = () => {
     switch (currentView) {
       case 'timer': return React.createElement(TimerView, null);
       case 'routines': return React.createElement(RoutinesView, null);
+      case 'discipline': return React.createElement(DisciplineView, null);
       case 'tasks': return React.createElement(TasksView, null);
       case 'stats': return React.createElement(StatsView, null);
       case 'history': return React.createElement(HistoryView, null);
@@ -111,7 +113,8 @@ const AppContent = () => {
     { id: 'tasks', label: 'Tareas', icon: React.createElement(ChecklistIcon, null) },
     { id: 'routines', label: 'Rutinas', icon: React.createElement(RoutineIcon, null) },
     { id: 'timer', label: 'Cronómetro', icon: React.createElement(ClockIcon, null) },
-    { id: 'stats', label: 'Estadísticas', icon: React.createElement(ChartIcon, null) },
+    { id: 'discipline', label: 'Disciplina', icon: React.createElement(ContractIcon, null) },
+    { id: 'stats', label: 'Stats', icon: React.createElement(ChartIcon, null) },
   ];
 
   const installBanner = showInstallBanner && React.createElement('div', { className: "bg-surface p-3 flex items-center justify-between gap-4 border-b border-gray-700 flex-shrink-0 z-20" },
@@ -124,9 +127,9 @@ const AppContent = () => {
   
   const updateModal = showUpdateModal && React.createElement('div', { className: "fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-6" },
     React.createElement('div', { className: "bg-surface rounded-2xl p-6 w-full max-w-sm border border-primary/40 shadow-2xl" },
-        React.createElement('h2', { className: "text-xl font-bold mb-3 text-on-surface" }, `¡Actualización ${APP_VERSION}!`),
+        React.createElement('h2', { className: "text-xl font-bold mb-3 text-on-surface" }, `¡Actualización Disponible!`),
         React.createElement('p', { className: "text-gray-300 mb-6 text-sm" },
-            "Hay una nueva versión de ChronoHabit lista para usar. Actualiza ahora para obtener las últimas funciones y mejoras. Tus datos están seguros."
+            `Nueva versión ${APP_VERSION} lista para instalar.`
         ),
         React.createElement('div', { className: "flex flex-col gap-3" },
             React.createElement('button', 
@@ -134,7 +137,7 @@ const AppContent = () => {
                   onClick: handleUpdateApp,
                   className: "w-full bg-primary hover:bg-purple-500 text-bkg font-bold py-3 px-4 rounded-xl transition-transform active:scale-95 shadow-lg"
                 },
-                "Actualizar ahora"
+                "Actualizar Ahora"
             ),
             React.createElement('button', 
                 { 

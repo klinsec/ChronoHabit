@@ -41,8 +41,8 @@ export const requestFcmToken = async (userId?: string): Promise<string | null> =
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-            // FIX: Register SW explicitly
-            const swRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+            // FIX: Use existing registration
+            const swRegistration = await navigator.serviceWorker.ready;
 
             const token = await getToken(messaging, { 
                 vapidKey: VAPID_KEY,

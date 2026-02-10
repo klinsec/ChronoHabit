@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
   <head>
@@ -53,28 +54,24 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./service-worker.js').then(registration => {
-            console.log('ServiceWorker registration successful with scope: ', registration.scope);
-            
-            // Check if there is already a waiting worker (update ready)
-            if (registration.waiting) {
-                window.dispatchEvent(new CustomEvent('sw-update-found', { detail: registration }));
-            }
+          // Use a root-relative path to avoid issues with current directory resolution
+          // in nested preview environments.
+          const swPath = './service-worker.js';
+          
+          navigator.serviceWorker.register(swPath)
+            .then(reg => {
+                console.log('SW Registered:', reg.scope);
+            })
+            .catch(err => {
+                console.warn('SW Registration Failed. App will run in online-only mode.', err);
+                // If it's the specific origin mismatch error, it likely means we are in a 
+                // restricted preview environment where the SW file triggers a redirect (404/Auth).
+                // Nothing to do but log warning.
+            });
 
-            // Detect new updates while the app is open
-            registration.onupdatefound = () => {
-                const installingWorker = registration.installing;
-                if (installingWorker) {
-                    installingWorker.onstatechange = () => {
-                        if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            // New update available, notify App.js
-                            window.dispatchEvent(new CustomEvent('sw-update-found', { detail: registration }));
-                        }
-                    };
-                }
-            };
-          }).catch(err => {
-            console.log('ServiceWorker registration failed: ', err);
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+             console.log("Controller changed, refreshing page...");
+             window.location.reload();
           });
         });
       }

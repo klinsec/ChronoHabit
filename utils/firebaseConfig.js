@@ -23,49 +23,31 @@ let db = null;
 
 try {
     app = initializeApp(firebaseConfig);
-    
-    // Database connection attempt
     try {
         db = getDatabase(app);
     } catch (e) {
-        console.error("Standard DB connect failed, trying explicit URL", e);
+        console.error("DB Connect error", e);
         try {
             db = getDatabase(app, firebaseConfig.databaseURL);
-        } catch (e2) {
-            console.error("Critical DB Error:", e2);
-        }
+        } catch (e2) {}
     }
-
-    // Analytics (safe fail)
     try { getAnalytics(app); } catch (e) {}
-
-    // Messaging (safe fail)
     try { messaging = getMessaging(app); } catch (e) {}
-
 } catch (error) {
     console.error("Firebase Init Error:", error);
 }
 
 // 1. Notificaciones Push
 export const requestFcmToken = async (userId) => {
-    if (!messaging) {
-        console.warn("Messaging not supported/initialized.");
-        return null;
-    }
+    if (!messaging) return null;
     
     try {
         const permission = await Notification.requestPermission();
         
         if (permission === 'granted') {
-            // FIX CRÍTICO: Registrar el SW manualmente con ruta relativa
-            // Esto soluciona el error 404 en GitHub Pages (subdirectorios)
-            let swRegistration;
-            try {
-                swRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
-            } catch (swError) {
-                console.error("Fallo al registrar SW de notificaciones:", swError);
-                // Intentamos continuar sin registro explícito por si acaso
-            }
+            // FIX: No registramos un nuevo SW aquí. Usamos el existente (service-worker.js)
+            // que ahora incluye la lógica de Firebase. Esto evita conflictos de control.
+            const swRegistration = await navigator.serviceWorker.ready;
 
             const token = await getToken(messaging, { 
                 vapidKey: VAPID_KEY,
@@ -74,7 +56,6 @@ export const requestFcmToken = async (userId) => {
             
             if (token) {
                 console.log("FCM Token:", token);
-                // Save to DB
                 if (db && userId) {
                     await set(ref(db, 'tokens_notificaciones/' + userId), {
                         token: token,
@@ -84,8 +65,6 @@ export const requestFcmToken = async (userId) => {
                 }
                 return token;
             }
-        } else {
-            console.warn("Permiso de notificaciones denegado");
         }
     } catch (error) {
         console.error("Error requesting FCM token:", error);
