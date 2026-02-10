@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { uploadBackupFile, signInToGoogle, getUserInfo } from '../utils/googleDrive.js';
+import { uploadBackupFile, signInToGoogle, getUserInfo, initGoogleDrive, checkTokenAndRestore } from '../utils/googleDrive.js';
 import { requestFcmToken, onMessageListener, syncUserScore, getLeaderboardData } from '../utils/firebaseConfig.js';
 
 const TimeTrackerContext = createContext(undefined);
@@ -36,6 +36,7 @@ const generateFunName = () => {
 
 // ID Global por defecto para conectar a todos los usuarios automáticamente
 const DEFAULT_PANTRY_ID = "0382bbea-fde0-4545-bbff-429b1dea890f";
+const GOOGLE_CLIENT_ID = '347833746217-of5l8r31t5csaqtqce7130raeisgidlv.apps.googleusercontent.com';
 
 const DEFAULT_TASKS = [
     { id: 't1', name: 'Trabajo', color: '#3b82f6', icon: '💼', difficulty: 5 },
@@ -105,6 +106,32 @@ export const TimeTrackerProvider = ({ children }) => {
   const [cloudStatus, setCloudStatus] = useState('disconnected');
   const [lastSyncTime, setLastSyncTime] = useState(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+
+  // Auto-Init Google Drive and Restore Session
+  useEffect(() => {
+      const initCloud = async () => {
+          try {
+              await initGoogleDrive(GOOGLE_CLIENT_ID);
+              const restoredToken = checkTokenAndRestore();
+              if (restoredToken) {
+                  setCloudStatus('connected');
+                  console.log("Sesión de Drive restaurada.");
+                  // Opcional: Refrescar nombre de usuario si es necesario
+                  try {
+                      const userInfo = await getUserInfo(restoredToken);
+                      if (userInfo && userInfo.name) {
+                          updateUsername(userInfo.name);
+                      }
+                  } catch(e) {
+                      console.warn("No se pudo actualizar info de usuario en segundo plano", e);
+                  }
+              }
+          } catch (e) {
+              console.warn("Auto-init de Google Drive falló (normal si no hay internet o scripts bloqueados)", e);
+          }
+      };
+      initCloud();
+  }, []);
 
   // Persistence Effects
   useEffect(() => localStorage.setItem('tasks', JSON.stringify(tasks)), [tasks]);
@@ -193,6 +220,7 @@ export const TimeTrackerProvider = ({ children }) => {
   }, [globalRankingId]);
 
   const updateUsername = (name) => {
+      if (name === userProfile.name) return; // Avoid loops
       setUserProfile(prev => ({ ...prev, name }));
       // Trigger sync immediately with new name
       const score = calculateTotalScore();

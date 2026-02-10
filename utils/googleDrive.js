@@ -3,6 +3,7 @@
 const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile';
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
 const BACKUP_FILE_NAME = 'chronohabit_backup.json';
+const TOKEN_STORAGE_KEY = 'chronohabit_google_token';
 
 let tokenClient = null;
 let gapiInited = false;
@@ -64,6 +65,28 @@ export const initGoogleDrive = async (clientId) => {
     }
 };
 
+export const checkTokenAndRestore = () => {
+    try {
+        const stored = localStorage.getItem(TOKEN_STORAGE_KEY);
+        if (stored) {
+            const tokenData = JSON.parse(stored);
+            // Check expiry with a 1-minute buffer
+            if (Date.now() < tokenData.expires_at - 60000) { 
+                if (window.gapi && window.gapi.client) {
+                    window.gapi.client.setToken({ access_token: tokenData.access_token });
+                    return tokenData.access_token;
+                }
+            } else {
+                localStorage.removeItem(TOKEN_STORAGE_KEY); // Expired
+            }
+        }
+    } catch(e) {
+        console.error("Error restoring token", e);
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
+    return null;
+};
+
 export const signInToGoogle = () => {
     return new Promise((resolve, reject) => {
         if (!tokenClient) {
@@ -78,6 +101,16 @@ export const signInToGoogle = () => {
                 reject(resp);
                 return;
             }
+            
+            // Save Token to LocalStorage
+            if (resp.access_token && resp.expires_in) {
+                const expiresAt = Date.now() + (resp.expires_in * 1000);
+                localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify({
+                    access_token: resp.access_token,
+                    expires_at: expiresAt
+                }));
+            }
+
             // Important: Set the token for gapi calls safely
             if (window.gapi && window.gapi.client) {
                 window.gapi.client.setToken(resp);
