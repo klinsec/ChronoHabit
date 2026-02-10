@@ -57,7 +57,7 @@ const DateNavigator = ({ period, currentDate, setCurrentDate, dateRangeDisplay }
 const RankBadge = ({ rank }) => {
     let colorClass = "bg-gray-700 text-gray-300";
     
-    // Mantenemos colores para destacar, pero usamos números en lugar de iconos
+    // Numbers only, no medals, just colors
     if (rank === 1) { colorClass = "bg-yellow-500/20 text-yellow-500"; }
     else if (rank === 2) { colorClass = "bg-gray-400/20 text-gray-300"; }
     else if (rank === 3) { colorClass = "bg-orange-600/20 text-orange-500"; }
@@ -84,7 +84,9 @@ const RankingTable = ({ data, localUser, title, icon, showFooterSelf = false, on
         }
     }
 
-    // 3. Filtrar usuarios con 0 puntos si se solicita (excepto el usuario local)
+    // 3. Filtrar usuarios con 0 puntos si se solicita (excepto el usuario local si showFooterSelf es true, aunque el footer lo maneja aparte)
+    // Actually, filterZero should filter everyone with 0. 
+    // If showFooterSelf is true, we will re-check localUser separately for the footer if they get filtered out here.
     if (filterZero) {
         activeUsers = activeUsers.filter(u => u.points > 0 || (localUser && u.id === localUser.id));
     }
@@ -92,7 +94,7 @@ const RankingTable = ({ data, localUser, title, icon, showFooterSelf = false, on
     // 4. Ordenar por puntos descendente
     activeUsers.sort((a, b) => b.points - a.points);
     
-    // Find self index in the FULL list
+    // Find self index in the FULL sorted list
     const currentUserId = localUser?.id;
     const selfIndex = activeUsers.findIndex(u => u.id === currentUserId);
     const selfData = selfIndex >= 0 ? { ...activeUsers[selfIndex], rank: selfIndex + 1 } : null;
@@ -100,8 +102,9 @@ const RankingTable = ({ data, localUser, title, icon, showFooterSelf = false, on
     // 5. Apply Limit (Mostrar solo los top N)
     const displayUsers = limit ? activeUsers.slice(0, limit) : activeUsers;
     
-    // Check if self is in the visible list
-    const isSelfInTop = selfIndex >= 0 && selfIndex < displayUsers.length;
+    // Check if self is in the visible list (index < limit)
+    // Note: selfIndex is 0-based. Limit is count. e.g., Limit 10. Index 0-9 are visible.
+    const isSelfInTop = selfIndex >= 0 && (limit ? selfIndex < limit : true);
 
     return (
         React.createElement('div', { className: "bg-surface rounded-2xl overflow-hidden border border-gray-800 shadow-lg mb-6" },
@@ -165,12 +168,12 @@ const RankingTable = ({ data, localUser, title, icon, showFooterSelf = false, on
             limit && activeUsers.length > limit && (
                  React.createElement('div', { className: "px-4 py-2 bg-gray-900/30 text-center text-xs text-gray-500 font-mono tracking-widest" }, "...")
             ),
-            // Self Row at bottom if not in top list
+            // Self Row at bottom if not in visible list
             showFooterSelf && !isSelfInTop && selfData && (
-                React.createElement('div', { className: "border-t border-gray-700 bg-gray-800 p-3 flex justify-between items-center" },
+                React.createElement('div', { className: "border-t border-gray-700 bg-gray-800 p-3 flex justify-between items-center animate-in slide-in-from-bottom-2" },
                     React.createElement('div', { className: "flex items-center gap-3" },
                         React.createElement('span', { className: "text-gray-400 text-xs uppercase" }, "Tu Posición:"),
-                        React.createElement('span', { className: "font-bold text-white" }, `${selfData.rank}º`)
+                        React.createElement(RankBadge, { rank: selfData.rank })
                     ),
                     React.createElement('span', { className: "font-mono font-bold text-primary" }, Math.floor(selfData.points).toLocaleString())
                 )
