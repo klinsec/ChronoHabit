@@ -134,6 +134,8 @@ export const TimeTrackerProvider = ({ children }) => {
   // Score Logic
   const calculateTotalScore = useCallback(() => {
       let total = 0;
+      
+      // 1. Timer Points
       timeEntries.forEach(entry => {
           if (entry.endTime) {
               const task = tasks.find(t => t.id === entry.taskId);
@@ -143,11 +145,32 @@ export const TimeTrackerProvider = ({ children }) => {
               }
           }
       });
+
+      // 2. Subtask Points
       subtasks.forEach(s => {
           if (s.completed && s.difficulty) total += s.difficulty;
       });
-      const allHistory = [...pastContracts.flatMap(c => c.dailyHistory), ...(contract ? contract.dailyHistory : [])];
-      allHistory.forEach(h => total += (h.points || 0));
+
+      // 3. Routine Points
+      // Handle both new detailed dailyHistory and legacy history
+      const contractsToCheck = [...pastContracts, ...(contract ? [contract] : [])];
+      
+      contractsToCheck.forEach(c => {
+          if (c.dailyHistory && c.dailyHistory.length > 0) {
+              // New Format: Sum detailed points
+              c.dailyHistory.forEach(h => {
+                  if (h.points) {
+                      total += (h.points * 25); // Increased multiplier for impact
+                  }
+              });
+          } else if (c.history && Array.isArray(c.history)) {
+              // Legacy Format: Fallback to boolean history
+              const completedDays = c.history.filter(dayOk => dayOk).length;
+              // Assume average level/points for legacy data (e.g. 5 points per day * 25)
+              total += (completedDays * 5 * 25);
+          }
+      });
+
       return Math.floor(total);
   }, [timeEntries, subtasks, pastContracts, contract, tasks]);
 

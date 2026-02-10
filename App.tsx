@@ -6,13 +6,12 @@ import HistoryView from './components/views/HistoryView';
 import StatsView from './components/views/StatsView';
 import TasksView from './components/views/TasksView';
 import RoutinesView from './components/views/RoutinesView';
-import DisciplineView from './components/views/DisciplineView';
 import BottomNav from './components/BottomNav';
-import { ClockIcon, ChartIcon, ChecklistIcon, RoutineIcon, ContractIcon } from './components/Icons';
+import { ClockIcon, ChartIcon, ChecklistIcon, RoutineIcon } from './components/Icons';
 import { View } from './types';
 import ErrorBoundary from './components/ErrorBoundary';
 
-const APP_VERSION = '1.4.9';
+const APP_VERSION = '1.4.11';
 
 const CloudIconIndicator = () => {
     const { cloudStatus } = useTimeTracker();
@@ -83,7 +82,6 @@ const AppContent: React.FC = () => {
     switch (currentView) {
       case 'timer': return <TimerView />;
       case 'routines': return <RoutinesView />;
-      case 'discipline': return <DisciplineView />;
       case 'tasks': return <TasksView />;
       case 'stats': return <StatsView />;
       case 'history': return <HistoryView />;
@@ -95,7 +93,6 @@ const AppContent: React.FC = () => {
     { id: 'tasks' as View, label: 'Tareas', icon: <ChecklistIcon /> },
     { id: 'routines' as View, label: 'Rutinas', icon: <RoutineIcon /> },
     { id: 'timer' as View, label: 'Cronómetro', icon: <ClockIcon /> },
-    { id: 'discipline' as View, label: 'Disciplina', icon: <ContractIcon /> },
     { id: 'stats' as View, label: 'Stats', icon: <ChartIcon /> },
   ];
 

@@ -14,13 +14,8 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// REMOVED: onBackgroundMessage is handled by firebase-messaging-sw.js or automatically by the browser.
-// Keeping it here caused duplicate notifications.
-
 // --- 2. App Caching Logic ---
-const CACHE_NAME = 'chronohabit-v1.4.9'; 
-// Only cache LOCAL files during install to avoid CORS errors with external CDNs.
-// External resources will be cached at runtime by the fetch handler below.
+const CACHE_NAME = 'chronohabit-v1.4.12'; 
 const urlsToCache = [
   './',
   './index.html',
@@ -38,7 +33,6 @@ const urlsToCache = [
   './components/views/StatsView.js',
   './components/views/TasksView.js',
   './components/views/RoutinesView.js',
-  './components/views/DisciplineView.js',
   './components/modals/TaskModal.js',
   './components/modals/EntryModal.js',
   './components/modals/GoalModal.js',
@@ -53,7 +47,6 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        // Use { cache: 'reload' } to ensure we get fresh files from network
         const cachePromises = urlsToCache.map(urlToCache => {
           return fetch(new Request(urlToCache, { cache: 'reload' })) 
             .then(response => {
@@ -72,18 +65,8 @@ self.addEventListener('fetch', event => {
     caches.match(event.request)
       .then(response => {
         if (response) return response;
-        
-        // Runtime Caching for everything else (including CDNs)
         return fetch(event.request).then(
           networkResponse => {
-            // Check if we received a valid response
-            if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-                // If it's an opaque response (CDN with no-cors) or valid, we might still want to cache it,
-                // but strictly checking type === 'basic' excludes CDNs.
-                // We allow caching if response is ok (200) OR if it's opaque (status 0) and we want to risk it.
-                // Safer approach for this app: Cache successful GET requests.
-            }
-
             if (networkResponse && (networkResponse.ok || networkResponse.type === 'opaque') && event.request.method === 'GET' && event.request.url.startsWith('http')) {
               const responseToCache = networkResponse.clone();
               caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseToCache));
@@ -104,7 +87,6 @@ self.addEventListener('activate', event => {
       return Promise.all(
         cacheNames.map(cacheName => {
           if (cacheWhitelist.indexOf(cacheName) === -1) {
-            console.log('Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -124,25 +106,24 @@ self.addEventListener('notificationclick', function(event) {
   console.log('[Service Worker] Notification click received.');
   event.notification.close();
 
-  // Get the base URL of the app dynamically from the registration scope
-  const urlToOpen = new URL(self.registration.scope).href;
+  const targetUrl = 'https://klinsec.github.io/ChronoHabit/';
 
   event.waitUntil(
     self.clients.matchAll({
       type: 'window',
-      includeUncontrolled: true // Finds tabs controlled by this SW or not (important for PWAs)
+      includeUncontrolled: true 
     }).then(function(windowClients) {
       // 1. Check if app is already open
       for (let i = 0; i < windowClients.length; i++) {
         const client = windowClients[i];
-        // Check if the client URL starts with our app base URL
-        if (client.url.startsWith(urlToOpen) && 'focus' in client) {
+        // Match loosely to allow dev environments or specific paths
+        if (client.url.includes('ChronoHabit') && 'focus' in client) {
           return client.focus();
         }
       }
-      // 2. If not open, open a new window
+      // 2. If not open, open a new window with the specific URL
       if (self.clients.openWindow) {
-        return self.clients.openWindow(urlToOpen);
+        return self.clients.openWindow(targetUrl);
       }
     })
   );

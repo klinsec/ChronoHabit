@@ -58,10 +58,6 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
                         key={starIndex} 
                         className="relative w-8 h-8 cursor-pointer group"
                         onClick={(e) => {
-                            // Simple logic: Left click = half, Right click = full? 
-                            // Easier: Just toggle. If clicking a star that is already full, make it half. If half, make it empty?
-                            // Let's implement smart click detection or simple steps.
-                            
                             // Smart click: Get bounding rect to see if click was on left or right half
                             const rect = e.currentTarget.getBoundingClientRect();
                             const x = e.clientX - rect.left;
@@ -88,8 +84,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface rounded-2xl p-6 w-full max-w-sm overflow-y-auto max-h-screen">
+    <div className="fixed inset-0 bg-black bg-opacity-70 z-50 p-0 sm:p-4 flex items-end sm:items-center justify-center">
+      <div className="bg-surface rounded-t-2xl sm:rounded-2xl p-4 w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl border-t sm:border border-gray-700">
         <h2 className="text-xl font-bold mb-4">{task ? 'Editar Tarea' : 'Nueva Tarea'}</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -101,6 +97,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
               onChange={e => setName(e.target.value)}
               className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-primary focus:border-primary"
               required
+              autoFocus={!task}
             />
           </div>
 

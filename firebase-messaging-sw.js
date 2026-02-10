@@ -16,10 +16,17 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Background message received:', payload);
   
-  // Customize notification here
-  const notificationTitle = payload.notification.title;
+  // Prevent duplicate notifications:
+  // If the payload contains a 'notification' property, the Firebase SDK 
+  // will automatically show a notification. We should NOT show another one.
+  if (payload.notification) {
+      return; 
+  }
+
+  // Only show manual notification for Data messages (no notification field)
+  const notificationTitle = payload.data?.title || 'ChronoHabit';
   const notificationOptions = {
-    body: payload.notification.body,
+    body: payload.data?.body || 'Tienes una nueva notificación',
     icon: './icon-192.png',
     data: payload.data
   };
