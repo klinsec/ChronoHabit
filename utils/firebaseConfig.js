@@ -20,34 +20,42 @@ const firebaseConfig = {
 let app;
 let messaging;
 let analytics;
-let db;
+let db = null;
 
 try {
     app = initializeApp(firebaseConfig);
-    // console.log("Firebase App inicializada");
+    console.log("Firebase App inicializada");
 
     try {
-        // Force the URL explicitly to avoid config resolution errors
-        db = getDatabase(app, firebaseConfig.databaseURL);
-        // console.log("Realtime Database activo");
+        // Inicializar Database
+        // Al usar gstatic en importmap, getDatabase(app) debería funcionar correctamente
+        db = getDatabase(app);
+        console.log("Realtime Database conectado.");
     } catch (e) {
-        console.warn("Error iniciando Realtime Database:", e);
+        console.error("Error al conectar Database (Standard):", e);
+        try {
+            // Intento con URL explícita si falla el standard
+            db = getDatabase(app, firebaseConfig.databaseURL);
+            console.log("Realtime Database conectado (URL Explícita).");
+        } catch (e2) {
+            console.error("Error CRÍTICO: No se pudo conectar a Realtime Database.", e2);
+        }
     }
 
     try {
         analytics = getAnalytics(app);
     } catch (e) {
-        // Ignorar errores de analytics
+        // Analytics puede fallar por bloqueadores
     }
 
     try {
         messaging = getMessaging(app);
     } catch (e) {
-        // console.warn("Error iniciando Messaging:", e);
+        // Messaging puede fallar en entorno no seguro
     }
 
 } catch (error) {
-    console.error("Error CRÍTICO al inicializar Firebase:", error);
+    console.error("Error CRÍTICO al inicializar Firebase App:", error);
 }
 
 // 1. Notificaciones
@@ -81,33 +89,31 @@ export const onMessageListener = () => {
 
 // Sincronizar puntuación del usuario actual
 export const syncUserScore = async (userProfile, score) => {
-    if (!db || !userProfile.id) return;
+    if (!db) return; 
+    if (!userProfile.id) return;
 
     try {
-        // Referencia al nodo del usuario en 'leaderboard'
         const userRef = ref(db, 'leaderboard/' + userProfile.id);
-        
         await set(userRef, {
             id: userProfile.id,
             username: userProfile.name,
             points: score,
             updatedAt: Date.now()
         });
-        
     } catch (error) {
-        console.error("Error sincronizando ranking en RTDB:", error);
+        console.debug("Sync error (posiblemente offline):", error);
     }
 };
 
 // Suscribirse a cambios en tiempo real del ranking
 export const subscribeToLeaderboard = (onData, onError) => {
     if (!db) {
-        if(onError) onError(new Error("Base de datos no inicializada (db undefined)"));
+        console.warn("Base de datos no disponible. Ranking desactivado.");
+        if(onData) onData([]); 
         return () => {};
     }
 
     try {
-        // Consulta: Ordenar por 'points' y traer los últimos 100 (los más altos)
         const leaderboardRef = ref(db, 'leaderboard');
         const q = query(leaderboardRef, orderByChild('points'), limitToLast(100));
 
@@ -118,13 +124,10 @@ export const subscribeToLeaderboard = (onData, onError) => {
                     leaderboardData.push(childSnapshot.val());
                 });
             }
-            
-            // Invertimos el array para que el puntaje más alto (que viene al final) sea el primero [0]
             leaderboardData.reverse();
-            
             onData(leaderboardData);
         }, (error) => {
-            console.error("Error escuchando ranking RTDB:", error);
+            console.error("Error escuchando ranking:", error);
             if (onError) onError(error);
         });
 
