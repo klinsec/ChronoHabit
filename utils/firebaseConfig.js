@@ -2,13 +2,14 @@
 import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { getAnalytics } from 'firebase/analytics';
-import { getFirestore, doc, setDoc, onSnapshot, collection, query, orderBy, limit } from 'firebase/firestore';
+import { getDatabase, ref, set, onValue, query, orderByChild, limitToLast } from 'firebase/database';
 
-// Configuración de Firebase proporcionada
+// Configuración de Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyDHmV3KCrZPym4Vep2dlwAbrgOegQAEQ8M",
   authDomain: "chronohabit-486817-2d6f3.firebaseapp.com",
   projectId: "chronohabit-486817-2d6f3",
+  databaseURL: "https://chronohabit-486817-2d6f3-default-rtdb.firebaseio.com/",
   storageBucket: "chronohabit-486817-2d6f3.firebasestorage.app",
   messagingSenderId: "818201828266",
   appId: "1:818201828266:web:de6e5d9f452f48554529d3",
@@ -23,25 +24,26 @@ let db;
 
 try {
     app = initializeApp(firebaseConfig);
-    console.log("Firebase App inicializada");
+    // console.log("Firebase App inicializada");
 
     try {
-        db = getFirestore(app);
-        console.log("Firestore (Base de datos) activo");
+        // Force the URL explicitly to avoid config resolution errors
+        db = getDatabase(app, firebaseConfig.databaseURL);
+        // console.log("Realtime Database activo");
     } catch (e) {
-        console.warn("Error iniciando Firestore:", e);
+        console.warn("Error iniciando Realtime Database:", e);
     }
 
     try {
         analytics = getAnalytics(app);
     } catch (e) {
-        // Ignorar errores de analytics (común en bloqueadores)
+        // Ignorar errores de analytics
     }
 
     try {
         messaging = getMessaging(app);
     } catch (e) {
-        console.warn("Error iniciando Messaging:", e);
+        // console.warn("Error iniciando Messaging:", e);
     }
 
 } catch (error) {
@@ -75,47 +77,61 @@ export const onMessageListener = () => {
     });
 };
 
-// --- 2. SISTEMA DE RANKING REAL (FIRESTORE) ---
+// --- 2. SISTEMA DE RANKING REALTIME DATABASE ---
 
 // Sincronizar puntuación del usuario actual
 export const syncUserScore = async (userProfile, score) => {
     if (!db || !userProfile.id) return;
 
     try {
-        // Referencia al documento único del usuario en la colección 'leaderboard'
-        const userRef = doc(db, "leaderboard", userProfile.id);
+        // Referencia al nodo del usuario en 'leaderboard'
+        const userRef = ref(db, 'leaderboard/' + userProfile.id);
         
-        // setDoc con merge: true actualiza campos sin borrar el resto
-        await setDoc(userRef, {
+        await set(userRef, {
             id: userProfile.id,
             username: userProfile.name,
             points: score,
             updatedAt: Date.now()
-        }, { merge: true });
+        });
         
-        // console.log("Puntos sincronizados en Firestore:", score);
     } catch (error) {
-        console.error("Error sincronizando ranking en Firestore:", error);
+        console.error("Error sincronizando ranking en RTDB:", error);
     }
 };
 
 // Suscribirse a cambios en tiempo real del ranking
-export const subscribeToLeaderboard = (callback) => {
-    if (!db) return () => {};
+export const subscribeToLeaderboard = (onData, onError) => {
+    if (!db) {
+        if(onError) onError(new Error("Base de datos no inicializada (db undefined)"));
+        return () => {};
+    }
 
-    // Consulta: Top 100 usuarios ordenados por puntos descendente
-    const q = query(collection(db, "leaderboard"), orderBy("points", "desc"), limit(100));
+    try {
+        // Consulta: Ordenar por 'points' y traer los últimos 100 (los más altos)
+        const leaderboardRef = ref(db, 'leaderboard');
+        const q = query(leaderboardRef, orderByChild('points'), limitToLast(100));
 
-    // onSnapshot escucha cambios en tiempo real
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-        const leaderboardData = [];
-        querySnapshot.forEach((doc) => {
-            leaderboardData.push(doc.data());
+        const unsubscribe = onValue(q, (snapshot) => {
+            const leaderboardData = [];
+            if (snapshot.exists()) {
+                snapshot.forEach((childSnapshot) => {
+                    leaderboardData.push(childSnapshot.val());
+                });
+            }
+            
+            // Invertimos el array para que el puntaje más alto (que viene al final) sea el primero [0]
+            leaderboardData.reverse();
+            
+            onData(leaderboardData);
+        }, (error) => {
+            console.error("Error escuchando ranking RTDB:", error);
+            if (onError) onError(error);
         });
-        callback(leaderboardData);
-    }, (error) => {
-        console.error("Error escuchando ranking:", error);
-    });
 
-    return unsubscribe;
+        return unsubscribe;
+    } catch (e) {
+        console.error("Excepción al crear query RTDB:", e);
+        if (onError) onError(e);
+        return () => {};
+    }
 };

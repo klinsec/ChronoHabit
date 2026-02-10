@@ -164,7 +164,7 @@ const RankingTable = ({ data, localUser, title, icon, showFooterSelf = false, on
 };
 
 const RankingView = () => {
-    const { userProfile, updateUsername, leaderboard, calculateTotalScore, addFriend, removeFriend } = useTimeTracker();
+    const { userProfile, updateUsername, leaderboard, calculateTotalScore, addFriend, removeFriend, rankingError } = useTimeTracker();
     const [isEditingName, setIsEditingName] = useState(false);
     const [newName, setNewName] = useState(userProfile.name);
     const [friendInput, setFriendInput] = useState('');
@@ -204,6 +204,23 @@ const RankingView = () => {
     return (
         React.createElement('div', { className: "space-y-6 animate-in fade-in duration-300" },
             
+            /* Error Warning */
+            rankingError && (
+                React.createElement('div', { className: "bg-red-900/50 border border-red-500/50 text-red-200 p-3 rounded-lg text-xs break-words" },
+                    React.createElement('p', { className: "font-bold mb-1" }, "⚠️ Error de Conexión"),
+                    React.createElement('p', { className: "font-mono bg-black/20 p-1 rounded mb-2" }, 
+                        typeof rankingError === 'object' ? JSON.stringify(rankingError) : String(rankingError)
+                    ),
+                    React.createElement('p', null, "Posibles causas:"),
+                    React.createElement('ul', { className: "list-disc pl-4 space-y-1 mt-1 text-[10px]" },
+                        React.createElement('li', null, "Reglas de base de datos (comprueba que .read y .write sean true)"),
+                        React.createElement('li', null, "API Key restringida en Google Cloud Console (puede que necesites añadir tu dominio o localhost)"),
+                        React.createElement('li', null, "API 'Realtime Database' inhabilitada en la consola de Google Cloud"),
+                        React.createElement('li', null, "Conexión a internet inestable (Firebase offline)")
+                    )
+                )
+            ),
+
             /* Profile Card */
             React.createElement('div', { className: "bg-gradient-to-r from-gray-800 to-gray-900 p-4 rounded-2xl border border-gray-700" },
                 React.createElement('div', { className: "flex justify-between items-start mb-2" },
