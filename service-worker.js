@@ -26,7 +26,9 @@ messaging.onBackgroundMessage((payload) => {
 });
 
 // --- 2. App Caching Logic ---
-const CACHE_NAME = 'chronohabit-v1.4.6'; 
+const CACHE_NAME = 'chronohabit-v1.4.7'; 
+// Only cache LOCAL files during install to avoid CORS errors with external CDNs.
+// External resources will be cached at runtime by the fetch handler below.
 const urlsToCache = [
   './',
   './index.html',
@@ -52,12 +54,7 @@ const urlsToCache = [
   './components/modals/SettingsModal.js',
   './components/ErrorBoundary.js',
   './icon-192.png',
-  './icon-512.png',
-  'https://cdn.tailwindcss.com',
-  'https://aistudiocdn.com/recharts@^3.3.0',
-  'https://aistudiocdn.com/react@^19.2.0/',
-  'https://aistudiocdn.com/react@^19.2.0',
-  'https://aistudiocdn.com/react-dom@^19.2.0/'
+  './icon-512.png'
 ];
 
 self.addEventListener('install', event => {
@@ -83,9 +80,19 @@ self.addEventListener('fetch', event => {
     caches.match(event.request)
       .then(response => {
         if (response) return response;
+        
+        // Runtime Caching for everything else (including CDNs)
         return fetch(event.request).then(
           networkResponse => {
-            if (networkResponse && networkResponse.ok && event.request.method === 'GET' && event.request.url.startsWith('http')) {
+            // Check if we received a valid response
+            if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+                // If it's an opaque response (CDN with no-cors) or valid, we might still want to cache it,
+                // but strictly checking type === 'basic' excludes CDNs.
+                // We allow caching if response is ok (200) OR if it's opaque (status 0) and we want to risk it.
+                // Safer approach for this app: Cache successful GET requests.
+            }
+
+            if (networkResponse && (networkResponse.ok || networkResponse.type === 'opaque') && event.request.method === 'GET' && event.request.url.startsWith('http')) {
               const responseToCache = networkResponse.clone();
               caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseToCache));
             }
