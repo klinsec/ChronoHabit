@@ -1,9 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
-import { useTimeTracker } from '../../context/TimeTrackerContext.js';
+import React, { useState, useEffect, useRef } from 'react';
+import { useTimeTracker, GOOGLE_CLIENT_ID } from '../../context/TimeTrackerContext.js';
 import { findBackupFile, downloadBackupFile, initGoogleDrive } from '../../utils/googleDrive.js';
-
-const GOOGLE_CLIENT_ID = '347833746217-of5l8r31t5csaqtqce7130raeisgidlv.apps.googleusercontent.com';
 
 const SettingsModal = ({ onClose }) => {
   const { 
@@ -20,11 +18,7 @@ const SettingsModal = ({ onClose }) => {
   
   const [statusMsg, setStatusMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    // Try to init immediately
-    initGoogleDrive(GOOGLE_CLIENT_ID).catch(e => console.warn("Auto-init failed", e));
-  }, []);
+  const fileInputRef = useRef(null);
 
   const handleDownloadBackup = () => {
       const data = exportData();
@@ -60,16 +54,68 @@ const SettingsModal = ({ onClose }) => {
 
   const handleConnect = async () => {
       setIsLoading(true);
-      setStatusMsg('Conectando y comprobando copias...');
+      setStatusMsg('Conectando...');
       try {
           await connectToCloud();
-          setStatusMsg('');
+          
+          // Check for existing backup immediately after connection
+          setStatusMsg('Buscando copias existentes...');
+          const existingFile = await findBackupFile();
+          
+          if (existingFile) {
+              if (window.confirm("Se ha encontrado una copia de seguridad en Google Drive. ¿Quieres descargarla y mezclarla con tus datos actuales? \n\n(Cancelar para mantener solo los datos locales y sobreescribir la nube después)")) {
+                  setStatusMsg('Descargando copia...');
+                  const data = await downloadBackupFile(existingFile.id);
+                  const success = importData(JSON.stringify(data), true); // Merge = true
+                  if(success) setStatusMsg('Conectado y Sincronizado.');
+              } else {
+                  setStatusMsg('Conectado. Usando datos locales.');
+                  // Optional: Trigger upload immediately to sync local state to cloud
+                  // triggerCloudSync(); 
+              }
+          } else {
+              setStatusMsg('Conectado. No hay copias previas.');
+          }
+
       } catch (err) {
           console.error("Manual connect error:", err);
           setStatusMsg('Fallo al conectar: ' + (err.message || 'Error desconocido'));
       } finally {
           setIsLoading(false);
       }
+  };
+
+  const handleImportClick = () => {
+      fileInputRef.current.click();
+  };
+
+  const handleFileChange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          try {
+              const jsonContent = event.target.result;
+              // Check validity roughly
+              JSON.parse(jsonContent); 
+              
+              const shouldMerge = window.confirm("¿Quieres MEZCLAR estos datos con los actuales?\n\nCancelar: Reemplazar todo (Borra datos actuales).\nAceptar: Combinar datos.");
+              const success = importData(jsonContent, shouldMerge);
+              
+              if (success) {
+                  alert("Importación completada con éxito.");
+                  onClose();
+              } else {
+                  alert("Error al importar los datos. El formato podría ser incorrecto.");
+              }
+          } catch (err) {
+              alert("El archivo seleccionado no es un JSON válido.");
+          }
+      };
+      reader.readAsText(file);
+      // Reset input
+      e.target.value = null; 
   };
 
   return (
@@ -118,17 +164,6 @@ const SettingsModal = ({ onClose }) => {
                             },
                             React.createElement('span', { className: "text-lg" }, "☁️"),
                             React.createElement('span', null, isLoading ? "Cargando..." : "Conectar Nube")
-                        ),
-
-                        React.createElement('div', { className: "text-center" },
-                             React.createElement('button', 
-                                { 
-                                    onClick: handleCloudRestore, 
-                                    disabled: isLoading,
-                                    className: "text-xs text-gray-500 hover:text-white underline disabled:opacity-30"
-                                },
-                                "¿Ya tienes datos? Bajar copia existente"
-                            )
                         )
                     )
                 ),
@@ -157,12 +192,29 @@ const SettingsModal = ({ onClose }) => {
             /* Local Options */
             React.createElement('div', { className: "space-y-3 pt-4 border-t border-gray-800" },
                 React.createElement('h3', { className: "text-xs font-bold text-gray-500 uppercase tracking-widest" }, "Datos Locales"),
-                React.createElement('button', 
-                    {
-                        onClick: handleDownloadBackup,
-                        className: "w-full bg-gray-800 hover:bg-gray-700 text-on-surface font-semibold py-3 rounded-xl text-sm border border-gray-700 flex items-center justify-center gap-2"
-                    },
-                    React.createElement('span', null, "💾 Exportar JSON")
+                React.createElement('div', { className: "grid grid-cols-2 gap-3" },
+                    React.createElement('button', 
+                        {
+                            onClick: handleDownloadBackup,
+                            className: "w-full bg-gray-800 hover:bg-gray-700 text-on-surface font-semibold py-3 rounded-xl text-sm border border-gray-700 flex items-center justify-center gap-2"
+                        },
+                        React.createElement('span', null, "💾 Exportar JSON")
+                    ),
+                    React.createElement('button', 
+                        {
+                            onClick: handleImportClick,
+                            className: "w-full bg-gray-800 hover:bg-gray-700 text-on-surface font-semibold py-3 rounded-xl text-sm border border-gray-700 flex items-center justify-center gap-2"
+                        },
+                        React.createElement('span', null, "📂 Importar JSON")
+                    ),
+                    /* Hidden Input */
+                    React.createElement('input', {
+                        type: "file",
+                        accept: ".json",
+                        ref: fileInputRef,
+                        style: { display: 'none' },
+                        onChange: handleFileChange
+                    })
                 )
             )
         ),

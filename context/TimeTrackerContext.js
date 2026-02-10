@@ -25,7 +25,7 @@ const FUN_ALIASES = [
 
 const generateFunName = () => FUN_ALIASES[Math.floor(Math.random() * FUN_ALIASES.length)];
 
-const GOOGLE_CLIENT_ID = '347833746217-of5l8r31t5csaqtqce7130raeisgidlv.apps.googleusercontent.com';
+export const GOOGLE_CLIENT_ID = '347833746217-of5l8r31t5csaqtqce7130raeisgidlv.apps.googleusercontent.com';
 
 const DEFAULT_TASKS = [
     { id: 't1', name: 'Trabajo', color: '#3b82f6', icon: '💼', difficulty: 5 },
@@ -98,6 +98,24 @@ export const TimeTrackerProvider = ({ children }) => {
       return false;
   });
 
+  // AUTO-INIT GOOGLE DRIVE ON MOUNT
+  useEffect(() => {
+      const initDrive = async () => {
+          try {
+              await initGoogleDrive(GOOGLE_CLIENT_ID);
+              // Check if we have a valid token saved
+              const token = checkTokenAndRestore();
+              if (token) {
+                  setCloudStatus('connected');
+                  console.log("Google Drive auto-connected via stored token.");
+              }
+          } catch (e) {
+              console.warn("Failed to auto-init Google Drive:", e);
+          }
+      };
+      initDrive();
+  }, []);
+
   // Persistence Effects
   useEffect(() => localStorage.setItem('tasks', JSON.stringify(tasks)), [tasks]);
   useEffect(() => localStorage.setItem('timeEntries', JSON.stringify(timeEntries)), [timeEntries]);
@@ -152,35 +170,26 @@ export const TimeTrackerProvider = ({ children }) => {
       });
 
       // 3. Routine Points
-      // Handle both new detailed dailyHistory and legacy history
       const contractsToCheck = [...pastContracts, ...(contract ? [contract] : [])];
-      
       contractsToCheck.forEach(c => {
           if (c.dailyHistory && c.dailyHistory.length > 0) {
-              // New Format: Sum detailed points directly (1.8 points = 1.8 score)
               c.dailyHistory.forEach(h => {
-                  if (h.points) {
-                      total += h.points; 
-                  }
+                  if (h.points) total += h.points; 
               });
           } else if (c.history && Array.isArray(c.history)) {
-              // Legacy Format: Fallback to boolean history
-              // Calculate points based on 1->10 streak rule
               let currentStreak = 1;
               c.history.forEach(dayOk => {
                   if (dayOk) {
                       total += currentStreak;
                       if (currentStreak < 10) currentStreak++;
                   } else {
-                      // Penalty for legacy failure: reset to 1? Or maintain? 
-                      // Simple approach: reset streak on failure
                       currentStreak = 1; 
                   }
               });
           }
       });
 
-      return parseFloat(total.toFixed(1)); // Keep 1 decimal for precision
+      return parseFloat(total.toFixed(1)); 
   }, [timeEntries, subtasks, pastContracts, contract, tasks]);
 
   // Sync Score
@@ -231,26 +240,59 @@ export const TimeTrackerProvider = ({ children }) => {
   const importData = useCallback((json, merge = false) => {
       try {
           const data = JSON.parse(json);
-          const update = (key, setter) => { if (data[key]) setter(data[key]); };
-          update('tasks', setTasks);
-          update('timeEntries', setTimeEntries);
-          update('subtasks', setSubtasks);
-          update('goals', setGoals);
-          update('contract', setContract);
-          update('pastContracts', setPastContracts);
-          update('savedRoutines', setSavedRoutines);
-          update('userProfile', setUserProfile);
+          const update = (key, setter) => { 
+              if (data[key]) {
+                  if (merge && Array.isArray(data[key])) {
+                      // Simple merge strategy for arrays: concat unique IDs if possible, or just append
+                      setter(prev => {
+                          // Very basic merge: just replacing for now to avoid complexity, unless specified
+                          // For arrays like tasks, we should probably merge by ID
+                          if (key === 'tasks' || key === 'subtasks' || key === 'timeEntries') {
+                              const existingIds = new Set(prev.map(i => i.id));
+                              const newItems = data[key].filter(i => !existingIds.has(i.id));
+                              return [...prev, ...newItems];
+                          }
+                          return data[key];
+                      });
+                  } else {
+                      setter(data[key]); 
+                  }
+              }
+          };
+          
+          if (merge) {
+              update('tasks', setTasks);
+              update('timeEntries', setTimeEntries);
+              update('subtasks', setSubtasks);
+              update('goals', setGoals);
+              // Contracts usually single source of truth, harder to merge
+              if(data.contract && !contract) update('contract', setContract);
+              update('pastContracts', setPastContracts);
+              update('savedRoutines', setSavedRoutines);
+              // Profile usually keep local unless empty
+              if(userProfile.name === 'Usuario' || !userProfile.id) update('userProfile', setUserProfile);
+          } else {
+              update('tasks', setTasks);
+              update('timeEntries', setTimeEntries);
+              update('subtasks', setSubtasks);
+              update('goals', setGoals);
+              update('contract', setContract);
+              update('pastContracts', setPastContracts);
+              update('savedRoutines', setSavedRoutines);
+              update('userProfile', setUserProfile);
+          }
           return true;
       } catch (e) {
           console.error("Import error", e);
           return false;
       }
-  }, []);
+  }, [contract, userProfile]);
 
   const connectToCloud = async () => {
       try {
           const tokenResponse = await signInToGoogle();
           setCloudStatus('connected');
+          return true;
       } catch (error) {
           setCloudStatus('error');
           throw error;
@@ -395,19 +437,14 @@ export const TimeTrackerProvider = ({ children }) => {
           if (contract.allowedDays?.includes(dayOfWeek) ?? true) { 
               setContract(prev => {
                   if (!prev) return null;
-                  // Calculate Stats for Previous Day
                   const total = prev.commitments.length;
                   const completed = prev.commitments.filter(c => c.status === 'completed').length;
                   const ratio = total > 0 ? completed / total : 0;
                   const pointsEarned = parseFloat((prev.currentStreakLevel * ratio).toFixed(1));
-                  
-                  // Calculate Next Level: Floor of points earned + 1. Max 10.
-                  // If I earn 5.5 points, next level is 5+1 = 6.
                   let nextLevel = Math.floor(pointsEarned) + 1;
                   if (nextLevel > 10) nextLevel = 10;
                   if (nextLevel < 1) nextLevel = 1;
 
-                  // Ensure history is recorded for the previous day
                   const newHistory = [...prev.dailyHistory];
                   const histIdx = newHistory.findIndex(h => h.date === prev.lastCheckDate);
                   const historyEntry = { 
@@ -429,7 +466,7 @@ export const TimeTrackerProvider = ({ children }) => {
                       dayInPhase: prev.dayInPhase + 1,
                       lastCheckDate: today,
                       dailyCompleted: false,
-                      currentStreakLevel: nextLevel, // Update level based on performance
+                      currentStreakLevel: nextLevel, 
                       commitments: prev.commitments.map(c => ({ ...c, status: 'pending' })),
                       dailyHistory: newHistory
                   };
@@ -451,7 +488,6 @@ export const TimeTrackerProvider = ({ children }) => {
       }
       
       try {
-          // Force UI update immediately if granted
           if (Notification.permission === 'granted') setNotificationsEnabled(true);
           
           const token = await requestFcmToken(userProfile.id);
@@ -460,7 +496,6 @@ export const TimeTrackerProvider = ({ children }) => {
               alert("Notificaciones activadas correctamente.");
           } else {
               setNotificationsEnabled(false);
-              // Handle denied state
               if (Notification.permission === 'denied') {
                   alert("Has bloqueado las notificaciones. Habilítalas en la configuración de tu navegador.");
               }
