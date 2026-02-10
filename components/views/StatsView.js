@@ -68,14 +68,29 @@ const RankBadge = ({ rank }) => {
     );
 };
 
-const RankingTable = ({ data, currentUserId, title, icon, showFooterSelf = false, onRemoveItem }) => {
-    // Filter users with 0 points
-    const activeUsers = data.filter(u => u.points > 0);
+const RankingTable = ({ data, localUser, title, icon, showFooterSelf = false, onRemoveItem }) => {
+    // 1. Crear una copia de los datos remotos o usar array vacío
+    let activeUsers = data ? [...data] : [];
+
+    // 2. Inyectar al usuario local si no está en la lista (para que siempre te veas a ti mismo)
+    if (localUser) {
+        const exists = activeUsers.find(u => u.id === localUser.id);
+        if (!exists) {
+            activeUsers.push(localUser);
+        } else {
+            // Actualizar con datos locales más recientes si ya existe
+            activeUsers = activeUsers.map(u => u.id === localUser.id ? { ...u, points: localUser.points, username: localUser.username } : u);
+        }
+    }
+
+    // 3. Ordenar por puntos descendente
+    activeUsers.sort((a, b) => b.points - a.points);
     
-    // Find self index in the filtered list
+    // Find self index
+    const currentUserId = localUser?.id;
     const selfIndex = activeUsers.findIndex(u => u.id === currentUserId);
     const selfData = selfIndex >= 0 ? { ...activeUsers[selfIndex], rank: selfIndex + 1 } : null;
-    const isSelfInTop = selfIndex >= 0 && selfIndex < activeUsers.length;
+    const isSelfInTop = selfIndex >= 0 && selfIndex < activeUsers.length; // Siempre true si la lista muestra todo
 
     return (
         React.createElement('div', { className: "bg-surface rounded-2xl overflow-hidden border border-gray-800 shadow-lg mb-6" },
@@ -100,7 +115,7 @@ const RankingTable = ({ data, currentUserId, title, icon, showFooterSelf = false
                             React.createElement('tr', null,
                                 React.createElement('td', { colSpan: onRemoveItem ? 4 : 3, className: "px-4 py-6 text-center text-gray-500" }, 
                                     React.createElement('div', { className: "flex flex-col items-center gap-2" },
-                                        React.createElement('span', null, "😴 Nadie ha puntuado aún")
+                                        React.createElement('span', null, "😴 Sin datos aún")
                                     )
                                 )
                             )
@@ -114,10 +129,13 @@ const RankingTable = ({ data, currentUserId, title, icon, showFooterSelf = false
                                         React.createElement(RankBadge, { rank: index + 1 })
                                     ),
                                     React.createElement('td', { className: `px-4 py-3 ${user.id === currentUserId ? 'font-bold text-primary' : 'text-gray-300'}` }, 
-                                        user.username || 'Anónimo'
+                                        React.createElement('div', { className: "flex flex-col" },
+                                            React.createElement('span', null, user.username || 'Anónimo'),
+                                            user.id === currentUserId && React.createElement('span', { className: "text-[10px] text-gray-500" }, "(Tú)")
+                                        )
                                     ),
                                     React.createElement('td', { className: "px-4 py-3 text-right font-mono font-bold text-white" }, 
-                                        user.points.toLocaleString()
+                                        Math.floor(user.points || 0).toLocaleString()
                                     ),
                                     onRemoveItem && React.createElement('td', { className: "px-2 py-3 text-center" }, 
                                         user.id !== currentUserId && (
@@ -138,7 +156,7 @@ const RankingTable = ({ data, currentUserId, title, icon, showFooterSelf = false
                         React.createElement('span', { className: "text-gray-400 text-xs uppercase" }, "Tu Posición:"),
                         React.createElement('span', { className: "font-bold text-white" }, `${selfData.rank}º`)
                     ),
-                    React.createElement('span', { className: "font-mono font-bold text-primary" }, selfData.points.toLocaleString())
+                    React.createElement('span', { className: "font-mono font-bold text-primary" }, Math.floor(selfData.points).toLocaleString())
                 )
             )
         )
@@ -172,10 +190,16 @@ const RankingView = () => {
     };
 
     const myScore = calculateTotalScore();
+    const localUserObj = {
+        id: userProfile.id,
+        username: userProfile.name,
+        points: myScore
+    };
 
     // Filter logic: Friends are those in local friends list AND existing in leaderboard, OR self
-    const friendsData = leaderboard.filter(u => userProfile.friends.includes(u.id) || u.id === userProfile.id);
-    const globalData = leaderboard; // Full list
+    // If friends data hasn't loaded yet from cloud, at least show self.
+    const friendsData = (leaderboard || []).filter(u => userProfile.friends.includes(u.id));
+    const globalData = leaderboard || []; 
 
     return (
         React.createElement('div', { className: "space-y-6 animate-in fade-in duration-300" },
@@ -231,7 +255,7 @@ const RankingView = () => {
                     title: "Ranking de Amigos", 
                     icon: React.createElement(UsersIcon, null),
                     data: friendsData, 
-                    currentUserId: userProfile.id,
+                    localUser: localUserObj,
                     onRemoveItem: removeFriend
                 })
             ),
@@ -241,7 +265,7 @@ const RankingView = () => {
                 title: "Ranking Global", 
                 icon: React.createElement(StarIcon, null),
                 data: globalData, 
-                currentUserId: userProfile.id,
+                localUser: localUserObj,
                 showFooterSelf: true
             })
         )
