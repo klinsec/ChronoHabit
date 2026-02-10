@@ -14,19 +14,11 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-messaging.onBackgroundMessage((payload) => {
-  console.log('[service-worker.js] Background message received:', payload);
-  const notificationTitle = payload.notification.title;
-  const notificationOptions = {
-    body: payload.notification.body,
-    icon: './icon-192.png',
-    data: payload.data
-  };
-  self.registration.showNotification(notificationTitle, notificationOptions);
-});
+// REMOVED: onBackgroundMessage is handled by firebase-messaging-sw.js or automatically by the browser.
+// Keeping it here caused duplicate notifications.
 
 // --- 2. App Caching Logic ---
-const CACHE_NAME = 'chronohabit-v1.4.8'; 
+const CACHE_NAME = 'chronohabit-v1.4.9'; 
 // Only cache LOCAL files during install to avoid CORS errors with external CDNs.
 // External resources will be cached at runtime by the fetch handler below.
 const urlsToCache = [
