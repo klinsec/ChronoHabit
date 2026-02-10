@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { uploadBackupFile, signInToGoogle, getUserInfo, initGoogleDrive, checkTokenAndRestore } from '../utils/googleDrive.js';
-import { requestFcmToken, onMessageListener, syncUserScore, subscribeToLeaderboard } from '../utils/firebaseConfig.js';
+import { requestFcmToken, syncUserScore, subscribeToLeaderboard } from '../utils/firebaseConfig.js';
 
 const TimeTrackerContext = createContext(undefined);
 
@@ -16,23 +16,14 @@ export const useTimeTracker = () => {
 // Helper to get ISO date string YYYY-MM-DD
 const getTodayStr = () => new Date().toISOString().split('T')[0];
 
-// ID Corto y legible: 6 caracteres alfanuméricos mayúsculas
-const generateId = () => {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
-};
+const generateId = () => Math.random().toString(36).substring(2, 8).toUpperCase();
 
-// Generador de Nombres (Una sola palabra curiosa)
 const FUN_ALIASES = [
     "Axolote", "Capibara", "Ornitorrinco", "Cactus", "Tostada", "Ninja", 
-    "Samurái", "Vikingo", "Robot", "Fantasma", "Llama", "Yeti", "Kraken", 
-    "Dragón", "Fénix", "Espectro", "Gárgola", "Quimera", "Hidra", "Cíclope",
-    "Minotauro", "Centauro", "Grifo", "Banshee", "Basilisco", "Mandrágora",
-    "Narval", "Tejón", "Mapache", "Chupacabra", "Glitch", "Pixel", "Vórtice"
+    "Samurái", "Vikingo", "Robot", "Fantasma", "Llama", "Yeti", "Kraken"
 ];
 
-const generateFunName = () => {
-    return FUN_ALIASES[Math.floor(Math.random() * FUN_ALIASES.length)];
-};
+const generateFunName = () => FUN_ALIASES[Math.floor(Math.random() * FUN_ALIASES.length)];
 
 const GOOGLE_CLIENT_ID = '347833746217-of5l8r31t5csaqtqce7130raeisgidlv.apps.googleusercontent.com';
 
@@ -45,7 +36,7 @@ const DEFAULT_TASKS = [
 ];
 
 export const TimeTrackerProvider = ({ children }) => {
-  // State definitions with lazy initialization
+  // State definitions
   const [tasks, setTasks] = useState(() => {
       const saved = localStorage.getItem('tasks');
       return saved ? JSON.parse(saved) : DEFAULT_TASKS;
@@ -100,28 +91,6 @@ export const TimeTrackerProvider = ({ children }) => {
   const [lastSyncTime, setLastSyncTime] = useState(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
-  // Auto-Init Google Drive
-  useEffect(() => {
-      const initCloud = async () => {
-          try {
-              await initGoogleDrive(GOOGLE_CLIENT_ID);
-              const restoredToken = checkTokenAndRestore();
-              if (restoredToken) {
-                  setCloudStatus('connected');
-                  try {
-                      const userInfo = await getUserInfo(restoredToken);
-                      if (userInfo && userInfo.name) {
-                          updateUsername(userInfo.name);
-                      }
-                  } catch(e) { console.warn("Background user info fetch failed", e); }
-              }
-          } catch (e) {
-              console.warn("Google Drive init failed", e);
-          }
-      };
-      initCloud();
-  }, []);
-
   // Persistence Effects
   useEffect(() => localStorage.setItem('tasks', JSON.stringify(tasks)), [tasks]);
   useEffect(() => localStorage.setItem('timeEntries', JSON.stringify(timeEntries)), [timeEntries]);
@@ -155,7 +124,7 @@ export const TimeTrackerProvider = ({ children }) => {
     return () => clearInterval(interval);
   }, [activeEntry]);
 
-  // --- Score Calculation & Sync ---
+  // Score Logic
   const calculateTotalScore = useCallback(() => {
       let total = 0;
       timeEntries.forEach(entry => {
@@ -172,41 +141,25 @@ export const TimeTrackerProvider = ({ children }) => {
       });
       const allHistory = [...pastContracts.flatMap(c => c.dailyHistory), ...(contract ? contract.dailyHistory : [])];
       allHistory.forEach(h => total += (h.points || 0));
-      
       return Math.floor(total);
   }, [timeEntries, subtasks, pastContracts, contract, tasks]);
 
-  // --- FIRESTORE REALTIME SYNC ---
-  
-  // 1. Sync User Score to Firestore (Push)
+  // Sync Score
   useEffect(() => {
       const score = calculateTotalScore();
-      // Sync immediately on score change
       syncUserScore(userProfile, score);
-
-      // Debounce/Periodic sync backup
-      const interval = setInterval(() => {
-          syncUserScore(userProfile, score);
-      }, 60000); // 1 minute
-      
+      const interval = setInterval(() => syncUserScore(userProfile, score), 60000);
       return () => clearInterval(interval);
   }, [userProfile, calculateTotalScore]);
 
-  // 2. Subscribe to Leaderboard (Pull Real-Time)
+  // Subscribe Leaderboard
   useEffect(() => {
       const unsubscribe = subscribeToLeaderboard(
-          (data) => {
-              setLeaderboard(data);
-              setRankingError(null);
-          },
-          (error) => {
-              setRankingError(error.message);
-          }
+          (data) => { setLeaderboard(data); setRankingError(null); },
+          (error) => setRankingError(error.message)
       );
       return () => unsubscribe();
   }, []);
-
-  // ---
 
   const updateUsername = (name) => {
       if (name === userProfile.name) return;
@@ -216,12 +169,7 @@ export const TimeTrackerProvider = ({ children }) => {
   };
   
   const addFriend = (friendId) => {
-      if (!friendId) return;
-      if (friendId === userProfile.id) {
-          alert("No puedes añadirte a ti mismo.");
-          return;
-      }
-      if (!userProfile.friends.includes(friendId)) {
+      if (friendId && friendId !== userProfile.id && !userProfile.friends.includes(friendId)) {
           setUserProfile(prev => ({ ...prev, friends: [...prev.friends, friendId] }));
       }
   };
@@ -230,24 +178,21 @@ export const TimeTrackerProvider = ({ children }) => {
       setUserProfile(prev => ({ ...prev, friends: prev.friends.filter(f => f !== friendId) }));
   };
 
-  // Cloud Export/Import (Backup logic)
+  // Import/Export Logic
   const exportData = useCallback(() => {
       const data = {
           version: 1,
           timestamp: Date.now(),
           tasks, timeEntries, subtasks, goals, contract, pastContracts, savedRoutines,
-          settings: { notificationsEnabled },
           userProfile
       };
       return JSON.stringify(data, null, 2);
-  }, [tasks, timeEntries, subtasks, goals, contract, pastContracts, savedRoutines, notificationsEnabled, userProfile]);
+  }, [tasks, timeEntries, subtasks, goals, contract, pastContracts, savedRoutines, userProfile]);
 
   const importData = useCallback((json, merge = false) => {
       try {
           const data = JSON.parse(json);
-          const update = (key, setter) => {
-              if (data[key]) setter(data[key]);
-          };
+          const update = (key, setter) => { if (data[key]) setter(data[key]); };
           update('tasks', setTasks);
           update('timeEntries', setTimeEntries);
           update('subtasks', setSubtasks);
@@ -267,16 +212,7 @@ export const TimeTrackerProvider = ({ children }) => {
       try {
           const tokenResponse = await signInToGoogle();
           setCloudStatus('connected');
-          if (tokenResponse && tokenResponse.access_token) {
-              try {
-                  const userInfo = await getUserInfo(tokenResponse.access_token);
-                  if (userInfo && userInfo.name) {
-                      updateUsername(userInfo.name);
-                  }
-              } catch (e) { console.warn(e); }
-          }
       } catch (error) {
-          console.error("Google Connect failed", error);
           setCloudStatus('error');
           throw error;
       }
@@ -286,17 +222,15 @@ export const TimeTrackerProvider = ({ children }) => {
       if (cloudStatus !== 'connected') return;
       setCloudStatus('syncing');
       try {
-          const data = exportData();
-          await uploadBackupFile(data); 
+          await uploadBackupFile(exportData()); 
           setLastSyncTime(Date.now());
           setCloudStatus('connected');
       } catch (e) {
-          console.error(e);
           setCloudStatus('error');
       }
   }, [cloudStatus, exportData]);
 
-  // --- Task Methods Wrappers to trigger sync ---
+  // Basic CRUD wrappers
   const addTask = (task) => { setTasks(prev => [...prev, task]); triggerCloudSync(); };
   const updateTask = (task) => { setTasks(prev => prev.map(t => t.id === task.id ? task : t)); triggerCloudSync(); };
   const deleteTask = (taskId) => {
@@ -307,7 +241,6 @@ export const TimeTrackerProvider = ({ children }) => {
   };
   const getTaskById = (taskId) => tasks.find(t => t.id === taskId);
 
-  // --- Time Entry Methods ---
   const startTask = (taskId) => {
     if (activeEntry) stopTask();
     const newEntry = { id: `entry_${Date.now()}`, taskId, startTime: Date.now(), endTime: null };
@@ -338,13 +271,12 @@ export const TimeTrackerProvider = ({ children }) => {
   };
 
   const deleteAllData = () => {
-      if (window.confirm("¿Estás seguro de que quieres borrar TODO? Esta acción no se puede deshacer.")) {
+      if (window.confirm("¿Borrar TODO?")) {
           localStorage.clear();
           window.location.reload();
       }
   };
 
-  // --- Subtask & Goal Methods ---
   const addSubtask = (subtaskData) => {
       const id = `sub_${Date.now()}`;
       const newSubtask = { ...subtaskData, id, createdAt: Date.now(), completed: false, status: 'idea' };
@@ -358,7 +290,7 @@ export const TimeTrackerProvider = ({ children }) => {
       setTimeout(() => setLastAddedSubtaskId(null), 2000);
       triggerCloudSync();
   };
-  const updateSubtask = (subtask) => { setSubtasks(prev => prev.map(s => s.id === subtask.id ? subtask : s)); triggerCloudSync(); };
+  const updateSubtask = (s) => { setSubtasks(prev => prev.map(old => old.id === s.id ? s : old)); triggerCloudSync(); };
   const deleteSubtask = (id) => { setSubtasks(prev => prev.filter(s => s.id !== id)); triggerCloudSync(); };
   const toggleSubtaskCompletion = (id) => {
       setSubtasks(prev => prev.map(s => {
@@ -372,7 +304,7 @@ export const TimeTrackerProvider = ({ children }) => {
   const deleteGoal = (taskId, period) => { setGoals(prev => prev.filter(g => !(g.taskId === taskId && g.period === period))); triggerCloudSync(); };
   const getGoalByTaskIdAndPeriod = (taskId, period) => goals.find(g => g.taskId === taskId && g.period === period);
 
-  // --- Discipline Wrappers ---
+  // Contract Logic
   const getContractWithTodayHistory = (c) => {
       const total = c.commitments.length;
       const completed = c.commitments.filter(com => com.status === 'completed').length;
@@ -385,27 +317,63 @@ export const TimeTrackerProvider = ({ children }) => {
       if (todayIndex >= 0) newHistory[todayIndex] = entry; else newHistory.push(entry);
       return { ...c, dailyHistory: newHistory, lastCheckDate: today };
   };
-  const archiveContract = useCallback((finalContract, status) => {
-      const historyItem = { id: `hist_${Date.now()}`, startDate: finalContract.startDate, endDate: Date.now(), phaseDuration: finalContract.currentPhase, status: status, commitmentsSnapshot: finalContract.commitments.map(c => c.title), dailyHistory: finalContract.dailyHistory };
-      setPastContracts(prev => [historyItem, ...prev]);
-  }, []);
   const startContract = (commitments, duration = 1, allowedDays = [0,1,2,3,4,5,6]) => {
-      setContract({ active: true, currentPhase: duration, dayInPhase: 0, startDate: Date.now(), lastCheckDate: getTodayStr(), commitments: commitments.map((c, i) => ({ ...c, id: `c_${i}_${Date.now()}`, status: 'pending' })), history: [], dailyHistory: [], currentStreakLevel: 1, failed: false, allowedDays, dailyCompleted: false });
+      setContract({ active: true, currentPhase: duration, dayInPhase: 0, startDate: Date.now(), lastCheckDate: getTodayStr(), commitments: commitments.map((c, i) => ({ ...c, id: `c_${i}_${Date.now()}`, status: 'pending' })), dailyHistory: [], currentStreakLevel: 1, failed: false, allowedDays, dailyCompleted: false });
       triggerCloudSync();
   };
-  const updateContractState = (updater) => { setContract(prev => { if (!prev) return null; return getContractWithTodayHistory(updater(prev)); }); triggerCloudSync(); };
-  const toggleCommitment = (id) => { updateContractState(c => ({ ...c, commitments: c.commitments.map(com => com.id === id ? { ...com, status: com.status === 'completed' ? 'pending' : 'completed' } : com) })); };
-  const setCommitmentStatus = (id, status) => { updateContractState(c => ({ ...c, commitments: c.commitments.map(com => com.id === id ? { ...com, status } : com) })); };
-  const completeDay = () => { if (contract) { const updated = getContractWithTodayHistory(contract); setContract({ ...updated, dailyCompleted: true }); triggerCloudSync(); } };
-  const completeContract = () => { if (contract) { const final = getContractWithTodayHistory(contract); archiveContract(final, 'completed'); setContract(null); triggerCloudSync(); } };
-  const resetContract = useCallback(() => { if (contract) { let finalContract = getContractWithTodayHistory(contract); finalContract = { ...finalContract, dailyHistory: finalContract.dailyHistory.map(h => h.date === finalContract.lastCheckDate ? { ...h, points: 0 } : h) }; archiveContract(finalContract, 'failed'); } setContract(null); triggerCloudSync(); }, [contract, archiveContract, triggerCloudSync]);
-
-  useEffect(() => { if (!contract) return; const today = getTodayStr(); if (contract.lastCheckDate !== today) { const dayOfWeek = new Date().getDay(); const isAllowedToday = contract.allowedDays?.includes(dayOfWeek) ?? true; if (isAllowedToday) { setContract(prev => { if(!prev) return null; return { ...prev, dayInPhase: prev.dayInPhase + 1, lastCheckDate: today, dailyCompleted: false, commitments: prev.commitments.map(c => ({ ...c, status: 'pending' })) } }); } else { setContract(prev => prev ? ({ ...prev, lastCheckDate: today }) : null); } } }, [contract]);
-  const saveRoutine = (title, commitments, allowedDays = [0,1,2,3,4,5,6]) => { setSavedRoutines(prev => [...prev, { id: `routine_${Date.now()}`, title, commitments, allowedDays }]); triggerCloudSync(); };
+  const setCommitmentStatus = (id, status) => { 
+      setContract(prev => { 
+          if (!prev) return null; 
+          const updated = { ...prev, commitments: prev.commitments.map(com => com.id === id ? { ...com, status } : com) };
+          return getContractWithTodayHistory(updated);
+      }); 
+      triggerCloudSync(); 
+  };
+  const completeDay = () => { if (contract) { setContract(prev => ({ ...getContractWithTodayHistory(prev), dailyCompleted: true })); triggerCloudSync(); } };
+  const completeContract = () => { 
+      if (contract) { 
+          const final = getContractWithTodayHistory(contract); 
+          const historyItem = { id: `hist_${Date.now()}`, startDate: final.startDate, endDate: Date.now(), phaseDuration: final.currentPhase, status: 'completed', commitmentsSnapshot: final.commitments.map(c => c.title), dailyHistory: final.dailyHistory };
+          setPastContracts(prev => [historyItem, ...prev]);
+          setContract(null); 
+          triggerCloudSync(); 
+      } 
+  };
+  const resetContract = () => { 
+      if (contract) { 
+          const final = getContractWithTodayHistory(contract); 
+          const historyItem = { id: `hist_${Date.now()}`, startDate: final.startDate, endDate: Date.now(), phaseDuration: final.currentPhase, status: 'failed', commitmentsSnapshot: final.commitments.map(c => c.title), dailyHistory: final.dailyHistory };
+          setPastContracts(prev => [historyItem, ...prev]);
+      } 
+      setContract(null); 
+      triggerCloudSync(); 
+  };
+  useEffect(() => { 
+      if (!contract) return; 
+      const today = getTodayStr(); 
+      if (contract.lastCheckDate !== today) { 
+          const dayOfWeek = new Date().getDay(); 
+          if (contract.allowedDays?.includes(dayOfWeek) ?? true) { 
+              setContract(prev => prev ? ({ ...prev, dayInPhase: prev.dayInPhase + 1, lastCheckDate: today, dailyCompleted: false, commitments: prev.commitments.map(c => ({ ...c, status: 'pending' })) }) : null); 
+          } else { 
+              setContract(prev => prev ? ({ ...prev, lastCheckDate: today }) : null); 
+          } 
+      } 
+  }, [contract]);
+  
+  const saveRoutine = (title, commitments, allowedDays) => { setSavedRoutines(prev => [...prev, { id: `routine_${Date.now()}`, title, commitments, allowedDays }]); triggerCloudSync(); };
   const deleteRoutine = (id) => { setSavedRoutines(prev => prev.filter(r => r.id !== id)); triggerCloudSync(); };
 
-  // --- Notifications ---
-  const requestNotificationPermission = async () => { await requestFcmToken(); };
+  // --- Notifications (Firebase Only) ---
+  const requestNotificationPermission = async () => { 
+      if (userProfile && userProfile.id) {
+          const token = await requestFcmToken(userProfile.id);
+          if (token) setNotificationsEnabled(true);
+      } else {
+          console.warn("User ID missing for notifications");
+      }
+  };
+  
   const toggleDailyNotification = async () => { await requestNotificationPermission(); };
 
   return React.createElement(TimeTrackerContext.Provider, { value: {
@@ -413,11 +381,10 @@ export const TimeTrackerProvider = ({ children }) => {
       timeEntries, activeEntry, startTask, stopTask, updateEntry, deleteEntry, liveElapsedTime, deleteAllData,
       subtasks, addSubtask, updateSubtask, deleteSubtask, toggleSubtaskCompletion, moveSubtaskStatus, lastAddedSubtaskId,
       goals, setGoal, deleteGoal, getGoalByTaskIdAndPeriod,
-      contract, pastContracts, startContract, toggleCommitment, setCommitmentStatus, resetContract, completeContract, completeDay,
+      contract, pastContracts, startContract, setCommitmentStatus, resetContract, completeContract, completeDay,
       savedRoutines, saveRoutine, deleteRoutine,
       cloudStatus, connectToCloud, triggerCloudSync, lastSyncTime, exportData, importData,
       notificationsEnabled, requestNotificationPermission, toggleDailyNotification,
-      // Leaderboard Exports
       userProfile, updateUsername, addFriend, removeFriend, leaderboard, calculateTotalScore, rankingError
     }},
     children
