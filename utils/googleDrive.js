@@ -1,6 +1,6 @@
 
 // Helper to interact with Google Drive API
-const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile';
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
 const BACKUP_FILE_NAME = 'chronohabit_backup.json';
 
@@ -91,6 +91,21 @@ export const signInToGoogle = () => {
         // Use 'consent' to force token refresh and ensure user actually sees it working
         tokenClient.requestAccessToken({ prompt: 'consent' });
     });
+};
+
+export const getUserInfo = async (accessToken) => {
+    try {
+        const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        });
+        if (!response.ok) throw new Error('Failed to fetch user info');
+        return await response.json();
+    } catch (e) {
+        console.error("Error getting user info", e);
+        return null;
+    }
 };
 
 export const findBackupFile = async () => {

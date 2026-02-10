@@ -21,16 +21,29 @@ let analytics;
 
 try {
     app = initializeApp(firebaseConfig);
-    analytics = getAnalytics(app);
-    messaging = getMessaging(app);
-    console.log("Firebase inicializado correctamente");
+    console.log("Firebase App inicializada");
+
+    try {
+        analytics = getAnalytics(app);
+        console.log("Analytics activo");
+    } catch (e) {
+        console.warn("Error iniciando Analytics (puede ser bloqueador de anuncios o entorno no soportado):", e);
+    }
+
+    try {
+        messaging = getMessaging(app);
+        console.log("Messaging activo");
+    } catch (e) {
+        console.warn("Error iniciando Messaging:", e);
+    }
+
 } catch (error) {
-    console.error("Error al inicializar Firebase:", error);
+    console.error("Error CRÍTICO al inicializar Firebase:", error);
 }
 
 // --- SISTEMA DE RANKING GLOBAL (PANTRY CLOUD) ---
 const PANTRY_BASE_URL = "https://getpantry.cloud/apiv1/pantry";
-const BASKET_NAME = "chronohabit_ranking_v1";
+const BASKET_NAME = "Ranking_ChronoHabit"; // Nombre actualizado para coincidir con tu prueba
 
 // 1. Notificaciones
 export const requestFcmToken = async () => {
@@ -42,19 +55,14 @@ export const requestFcmToken = async () => {
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-            // Nota: getToken normalmente requiere una 'vapidKey' generada en la consola de Firebase
-            // (Project Settings -> Cloud Messaging -> Web Configuration).
-            // Sin ella, esto puede fallar en algunos navegadores.
             try {
-                // Intenta obtener el token por defecto
                 const token = await getToken(messaging);
                 if (token) {
                     console.log("FCM Token:", token);
                     return token;
                 }
             } catch (tokenError) {
-                console.warn("No se pudo obtener el token FCM (posible falta de VAPID Key):", tokenError);
-                // Retornamos un valor 'dummy' para que la UI muestre que las notificaciones están activas (permiso concedido)
+                console.warn("No se pudo obtener el token FCM:", tokenError);
                 return "permission-granted-no-token";
             }
         } else {
@@ -95,12 +103,14 @@ export const syncUserScore = async (userProfile, score, pantryId) => {
     };
 
     try {
+        // IMPORTANTE: Usamos POST para hacer MERGE de los datos. 
+        // PUT reemplazaría toda la cesta borrando a otros usuarios.
         await fetch(url, {
-            method: 'PUT',
+            method: 'POST', 
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        console.log(`Puntos sincronizados en la nube: ${score}`);
+        console.log(`Puntos sincronizados en la nube (${score}) para ${userProfile.name}`);
     } catch (error) {
         console.error("Error sincronizando ranking:", error);
     }
@@ -110,19 +120,23 @@ export const syncUserScore = async (userProfile, score, pantryId) => {
 export const getLeaderboardData = async (pantryId) => {
     if (!pantryId) return [];
 
-    const url = `${PANTRY_BASE_URL}/${pantryId}/basket/${BASKET_NAME}`;
+    // Añadimos un timestamp para evitar caché agresivo del navegador/API
+    const url = `${PANTRY_BASE_URL}/${pantryId}/basket/${BASKET_NAME}?_t=${Date.now()}`;
 
     try {
         const response = await fetch(url);
         if (!response.ok) {
-            console.warn("Ranking vacío o ID incorrecto");
+            console.warn("Ranking aún no creado o ID incorrecto (404 es normal al inicio)");
             return [];
         }
         
         const data = await response.json();
         const playersArray = Object.values(data);
         
-        return playersArray.sort((a, b) => b.points - a.points);
+        // Filtrar datos corruptos si los hubiera y ordenar
+        return playersArray
+            .filter(p => p && typeof p.points === 'number')
+            .sort((a, b) => b.points - a.points);
     } catch (error) {
         console.error("Error obteniendo ranking:", error);
         return [];

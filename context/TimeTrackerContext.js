@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { uploadBackupFile, signInToGoogle } from '../utils/googleDrive.js';
+import { uploadBackupFile, signInToGoogle, getUserInfo } from '../utils/googleDrive.js';
 import { requestFcmToken, onMessageListener, syncUserScore, getLeaderboardData } from '../utils/firebaseConfig.js';
 
 const TimeTrackerContext = createContext(undefined);
@@ -16,13 +16,40 @@ export const useTimeTracker = () => {
 // Helper to get ISO date string YYYY-MM-DD
 const getTodayStr = () => new Date().toISOString().split('T')[0];
 
-const generateId = () => `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+// ID Corto y legible: 6 caracteres alfanuméricos mayúsculas
+const generateId = () => {
+    return Math.random().toString(36).substring(2, 8).toUpperCase();
+};
+
+// Generador de Nombres (Una sola palabra curiosa)
+const FUN_ALIASES = [
+    "Axolote", "Capibara", "Ornitorrinco", "Cactus", "Tostada", "Ninja", 
+    "Samurái", "Vikingo", "Robot", "Fantasma", "Llama", "Yeti", "Kraken", 
+    "Dragón", "Fénix", "Espectro", "Gárgola", "Quimera", "Hidra", "Cíclope",
+    "Minotauro", "Centauro", "Grifo", "Banshee", "Basilisco", "Mandrágora",
+    "Narval", "Tejón", "Mapache", "Chupacabra", "Glitch", "Pixel", "Vórtice"
+];
+
+const generateFunName = () => {
+    return FUN_ALIASES[Math.floor(Math.random() * FUN_ALIASES.length)];
+};
+
+// ID Global por defecto para conectar a todos los usuarios automáticamente
+const DEFAULT_PANTRY_ID = "0382bbea-fde0-4545-bbff-429b1dea890f";
+
+const DEFAULT_TASKS = [
+    { id: 't1', name: 'Trabajo', color: '#3b82f6', icon: '💼', difficulty: 5 },
+    { id: 't2', name: 'Descanso', color: '#f97316', icon: '😴', difficulty: 1 },
+    { id: 't3', name: 'Deporte', color: '#22c55e', icon: '💪', difficulty: 8 },
+    { id: 't4', name: 'Estudio', color: '#eab308', icon: '📚', difficulty: 7 },
+    { id: 't5', name: 'Ocio', color: '#8b5cf6', icon: '🎮', difficulty: 2 }
+];
 
 export const TimeTrackerProvider = ({ children }) => {
   // State definitions with lazy initialization
   const [tasks, setTasks] = useState(() => {
       const saved = localStorage.getItem('tasks');
-      return saved ? JSON.parse(saved) : [];
+      return saved ? JSON.parse(saved) : DEFAULT_TASKS;
   });
   const [timeEntries, setTimeEntries] = useState(() => {
       const saved = localStorage.getItem('timeEntries');
@@ -58,10 +85,19 @@ export const TimeTrackerProvider = ({ children }) => {
   // User Identity & Ranking
   const [userProfile, setUserProfile] = useState(() => {
       const saved = localStorage.getItem('userProfile');
-      return saved ? JSON.parse(saved) : { id: generateId(), name: `ChronoUser`, friends: [] };
+      // Migrate old IDs if necessary or just load
+      if (saved) {
+          const parsed = JSON.parse(saved);
+          if (!parsed.friends) parsed.friends = []; // Ensure friends array exists
+          return parsed;
+      }
+      // Generate new profile with Fun Name (One word)
+      return { id: generateId(), name: generateFunName(), friends: [] };
   });
+  
+  // Inicializar Ranking con el ID por defecto si no existe uno personalizado
   const [globalRankingId, setGlobalRankingId] = useState(() => {
-      return localStorage.getItem('globalRankingId') || '';
+      return localStorage.getItem('globalRankingId') || DEFAULT_PANTRY_ID;
   });
   const [leaderboard, setLeaderboard] = useState([]);
 
@@ -137,13 +173,13 @@ export const TimeTrackerProvider = ({ children }) => {
       if (!globalRankingId) return;
       
       const score = calculateTotalScore();
+      // Sync immediately on mount/change
+      syncUserScore(userProfile, score, globalRankingId);
+
       const interval = setInterval(() => {
           syncUserScore(userProfile, score, globalRankingId);
       }, 60000); // Cada minuto
       
-      // Initial Sync when ID changes or component mounts
-      syncUserScore(userProfile, score, globalRankingId);
-
       return () => clearInterval(interval);
   }, [userProfile, calculateTotalScore, globalRankingId]);
 
@@ -167,14 +203,20 @@ export const TimeTrackerProvider = ({ children }) => {
       setGlobalRankingId(id);
   };
 
-  const addFriend = (friendName) => {
-      if (!userProfile.friends.includes(friendName)) {
-          setUserProfile(prev => ({ ...prev, friends: [...prev.friends, friendName] }));
+  const addFriend = (friendId) => {
+      if (!friendId) return;
+      // Basic check to avoid self-add
+      if (friendId === userProfile.id) {
+          alert("No puedes añadirte a ti mismo.");
+          return;
+      }
+      if (!userProfile.friends.includes(friendId)) {
+          setUserProfile(prev => ({ ...prev, friends: [...prev.friends, friendId] }));
       }
   };
 
-  const removeFriend = (friendName) => {
-      setUserProfile(prev => ({ ...prev, friends: prev.friends.filter(f => f !== friendName) }));
+  const removeFriend = (friendId) => {
+      setUserProfile(prev => ({ ...prev, friends: prev.friends.filter(f => f !== friendId) }));
   };
 
   // Cloud Export/Import (Backup logic)
@@ -213,8 +255,21 @@ export const TimeTrackerProvider = ({ children }) => {
 
   const connectToCloud = async () => {
       try {
-          await signInToGoogle();
+          const tokenResponse = await signInToGoogle();
           setCloudStatus('connected');
+          
+          // Fetch Google Name and update user profile if available
+          if (tokenResponse && tokenResponse.access_token) {
+              try {
+                  const userInfo = await getUserInfo(tokenResponse.access_token);
+                  if (userInfo && userInfo.name) {
+                      console.log("Updating username from Google:", userInfo.name);
+                      updateUsername(userInfo.name);
+                  }
+              } catch (e) {
+                  console.warn("Could not fetch Google User Info:", e);
+              }
+          }
       } catch (error) {
           console.error("Google Connect failed", error);
           setCloudStatus('error');

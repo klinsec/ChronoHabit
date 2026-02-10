@@ -3,7 +3,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext.js';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, LabelList, CartesianGrid } from 'recharts';
 import { formatDuration } from '../../utils/helpers.js';
-import { CogIcon, EditIcon, StarIcon, PlusIcon, TrashIcon } from '../Icons.js';
+import { CogIcon, EditIcon, StarIcon, PlusIcon, TrashIcon, CopyIcon, UsersIcon } from '../Icons.js';
 import GoalModal from '../modals/GoalModal.js';
 
 const DateNavigator = ({ period, currentDate, setCurrentDate, dateRangeDisplay }) => {
@@ -68,16 +68,20 @@ const RankBadge = ({ rank }) => {
     );
 };
 
-const RankingTable = ({ data, currentUserId, title, showFooterSelf = false }) => {
-    const selfIndex = data.findIndex(u => u.id === currentUserId);
-    const selfData = selfIndex >= 0 ? { ...data[selfIndex], rank: selfIndex + 1 } : null;
-    const isSelfInTop = selfIndex >= 0 && selfIndex < data.length;
+const RankingTable = ({ data, currentUserId, title, icon, showFooterSelf = false, onRemoveItem }) => {
+    // Filter users with 0 points
+    const activeUsers = data.filter(u => u.points > 0);
+    
+    // Find self index in the filtered list
+    const selfIndex = activeUsers.findIndex(u => u.id === currentUserId);
+    const selfData = selfIndex >= 0 ? { ...activeUsers[selfIndex], rank: selfIndex + 1 } : null;
+    const isSelfInTop = selfIndex >= 0 && selfIndex < activeUsers.length;
 
     return (
         React.createElement('div', { className: "bg-surface rounded-2xl overflow-hidden border border-gray-800 shadow-lg mb-6" },
             React.createElement('div', { className: "p-4 border-b border-gray-800 bg-gray-900/50" },
                 React.createElement('h3', { className: "text-lg font-bold text-white flex items-center gap-2" },
-                    React.createElement(StarIcon, null),
+                    icon,
                     title
                 )
             ),
@@ -87,16 +91,21 @@ const RankingTable = ({ data, currentUserId, title, showFooterSelf = false }) =>
                         React.createElement('tr', null,
                             React.createElement('th', { className: "px-4 py-3 w-16" }, "Pos"),
                             React.createElement('th', { className: "px-4 py-3" }, "Usuario"),
-                            React.createElement('th', { className: "px-4 py-3 text-right" }, "Puntos")
+                            React.createElement('th', { className: "px-4 py-3 text-right" }, "Puntos"),
+                            onRemoveItem && React.createElement('th', { className: "px-2 py-3 w-8" }, "")
                         )
                     ),
                     React.createElement('tbody', null,
-                        data.length === 0 ? (
+                        activeUsers.length === 0 ? (
                             React.createElement('tr', null,
-                                React.createElement('td', { colSpan: 3, className: "px-4 py-6 text-center text-gray-500" }, "Conecta el Ranking Global para ver datos.")
+                                React.createElement('td', { colSpan: onRemoveItem ? 4 : 3, className: "px-4 py-6 text-center text-gray-500" }, 
+                                    React.createElement('div', { className: "flex flex-col items-center gap-2" },
+                                        React.createElement('span', null, "😴 Nadie ha puntuado aún")
+                                    )
+                                )
                             )
                         ) : (
-                            data.map((user, index) => (
+                            activeUsers.map((user, index) => (
                                 React.createElement('tr', { 
                                     key: user.id || index, 
                                     className: `border-b border-gray-800 transition-colors ${user.id === currentUserId ? 'bg-primary/10 hover:bg-primary/20' : 'hover:bg-gray-800/50'}`
@@ -109,6 +118,13 @@ const RankingTable = ({ data, currentUserId, title, showFooterSelf = false }) =>
                                     ),
                                     React.createElement('td', { className: "px-4 py-3 text-right font-mono font-bold text-white" }, 
                                         user.points.toLocaleString()
+                                    ),
+                                    onRemoveItem && React.createElement('td', { className: "px-2 py-3 text-center" }, 
+                                        user.id !== currentUserId && (
+                                            React.createElement('button', { onClick: () => onRemoveItem(user.id), className: "text-gray-600 hover:text-red-500" },
+                                                React.createElement(TrashIcon, null)
+                                            )
+                                        )
                                     )
                                 )
                             ))
@@ -130,9 +146,10 @@ const RankingTable = ({ data, currentUserId, title, showFooterSelf = false }) =>
 };
 
 const RankingView = () => {
-    const { userProfile, updateUsername, globalRankingId, leaderboard, refreshLeaderboard, calculateTotalScore } = useTimeTracker();
+    const { userProfile, updateUsername, globalRankingId, leaderboard, refreshLeaderboard, calculateTotalScore, addFriend, removeFriend } = useTimeTracker();
     const [isEditingName, setIsEditingName] = useState(false);
     const [newName, setNewName] = useState(userProfile.name);
+    const [friendInput, setFriendInput] = useState('');
 
     useEffect(() => {
         refreshLeaderboard();
@@ -147,7 +164,24 @@ const RankingView = () => {
         }
     };
 
+    const handleAddFriend = () => {
+        if (friendInput.trim()) {
+            addFriend(friendInput.trim());
+            setFriendInput('');
+        }
+    };
+
+    const copyUserId = () => {
+        navigator.clipboard.writeText(userProfile.id).then(() => {
+            alert("ID copiado al portapapeles: " + userProfile.id);
+        });
+    };
+
     const myScore = calculateTotalScore();
+
+    // Filter logic: Friends are those in local friends list AND existing in leaderboard, OR self
+    const friendsData = leaderboard.filter(u => userProfile.friends.includes(u.id) || u.id === userProfile.id);
+    const globalData = leaderboard; // Full list
 
     if (!globalRankingId) {
         return (
@@ -165,36 +199,66 @@ const RankingView = () => {
         React.createElement('div', { className: "space-y-6 animate-in fade-in duration-300" },
             
             /* Profile Card */
-            React.createElement('div', { className: "bg-gradient-to-r from-gray-800 to-gray-900 p-4 rounded-2xl border border-gray-700 flex justify-between items-center" },
-                React.createElement('div', null,
-                    React.createElement('p', { className: "text-xs text-gray-400 uppercase" }, "Tu Perfil"),
-                    isEditingName ? (
-                        React.createElement('div', { className: "flex gap-2 mt-1" },
-                            React.createElement('input', { 
-                                type: "text", 
-                                value: newName, 
-                                onChange: (e) => setNewName(e.target.value),
-                                className: "bg-black/30 border border-gray-600 rounded px-2 py-1 text-white text-sm"
-                            }),
-                            React.createElement('button', { onClick: handleSaveName, className: "bg-primary text-black px-2 rounded font-bold text-xs" }, "OK")
+            React.createElement('div', { className: "bg-gradient-to-r from-gray-800 to-gray-900 p-4 rounded-2xl border border-gray-700" },
+                React.createElement('div', { className: "flex justify-between items-start mb-2" },
+                    React.createElement('div', null,
+                        React.createElement('p', { className: "text-[10px] text-gray-400 uppercase tracking-widest mb-1" }, "TU PERFIL"),
+                        isEditingName ? (
+                            React.createElement('div', { className: "flex gap-2" },
+                                React.createElement('input', { 
+                                    type: "text", 
+                                    value: newName, 
+                                    onChange: (e) => setNewName(e.target.value),
+                                    className: "bg-black/30 border border-gray-600 rounded px-2 py-1 text-white text-sm w-32"
+                                }),
+                                React.createElement('button', { onClick: handleSaveName, className: "bg-primary text-black px-2 rounded font-bold text-xs" }, "OK")
+                            )
+                        ) : (
+                            React.createElement('h2', { className: "text-xl font-bold text-white flex items-center gap-2" },
+                                userProfile.name,
+                                React.createElement('button', { onClick: () => setIsEditingName(true), className: "text-gray-500 hover:text-white" }, React.createElement(EditIcon, null))
+                            )
+                        ),
+                        React.createElement('div', { onClick: copyUserId, className: "flex items-center gap-1 text-xs text-gray-500 mt-2 cursor-pointer hover:text-primary transition-colors bg-black/20 w-fit px-2 py-1 rounded" },
+                            React.createElement('span', null, `ID: ${userProfile.id}`),
+                            React.createElement(CopyIcon, null)
                         )
-                    ) : (
-                        React.createElement('h2', { className: "text-xl font-bold text-white flex items-center gap-2" },
-                            userProfile.name,
-                            React.createElement('button', { onClick: () => setIsEditingName(true), className: "text-gray-500 hover:text-white" }, React.createElement(EditIcon, null))
-                        )
+                    ),
+                    React.createElement('div', { className: "text-right" },
+                        React.createElement('p', { className: "text-[10px] text-gray-400 uppercase tracking-widest mb-1" }, "PUNTUACIÓN"),
+                        React.createElement('p', { className: "text-2xl font-mono font-bold text-primary" }, myScore.toLocaleString())
+                    )
+                )
+            ),
+
+            /* Friends Section */
+            React.createElement('div', null,
+                React.createElement('div', { className: "flex gap-2 mb-3" },
+                    React.createElement('input', {
+                        type: "text",
+                        value: friendInput,
+                        onChange: (e) => setFriendInput(e.target.value),
+                        placeholder: "Añadir amigo por ID...",
+                        className: "flex-grow bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:ring-primary focus:border-primary placeholder-gray-500"
+                    }),
+                    React.createElement('button', { onClick: handleAddFriend, className: "bg-gray-700 hover:bg-primary hover:text-bkg text-white px-3 rounded-lg transition-colors" },
+                        React.createElement(PlusIcon, null)
                     )
                 ),
-                React.createElement('div', { className: "text-right" },
-                    React.createElement('p', { className: "text-xs text-gray-400 uppercase" }, "Puntuación"),
-                    React.createElement('p', { className: "text-2xl font-mono font-bold text-primary" }, myScore.toLocaleString())
-                )
+                React.createElement(RankingTable, { 
+                    title: "Ranking de Amigos", 
+                    icon: React.createElement(UsersIcon, null),
+                    data: friendsData, 
+                    currentUserId: userProfile.id,
+                    onRemoveItem: removeFriend
+                })
             ),
 
             /* Global Section */
             React.createElement(RankingTable, { 
-                title: "Ranking Global Compartido", 
-                data: leaderboard, 
+                title: "Ranking Global", 
+                icon: React.createElement(StarIcon, null),
+                data: globalData, 
                 currentUserId: userProfile.id,
                 showFooterSelf: true
             })
