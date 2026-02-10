@@ -12,7 +12,7 @@ import { ClockIcon, ChartIcon, ChecklistIcon, RoutineIcon, ContractIcon } from '
 import { View } from './types';
 import ErrorBoundary from './components/ErrorBoundary';
 
-const APP_VERSION = '1.4.7';
+const APP_VERSION = '1.4.8';
 
 const CloudIconIndicator = () => {
     const { cloudStatus } = useTimeTracker();

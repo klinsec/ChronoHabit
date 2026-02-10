@@ -11,7 +11,7 @@ import BottomNav from './components/BottomNav.js';
 import { ClockIcon, ChartIcon, ChecklistIcon, RoutineIcon, ContractIcon } from './components/Icons.js';
 import ErrorBoundary from './components/ErrorBoundary.js';
 
-const APP_VERSION = '1.4.7';
+const APP_VERSION = '1.4.8';
 
 const CloudIconIndicator = () => {
     const { cloudStatus } = useTimeTracker();

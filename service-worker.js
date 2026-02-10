@@ -26,7 +26,7 @@ messaging.onBackgroundMessage((payload) => {
 });
 
 // --- 2. App Caching Logic ---
-const CACHE_NAME = 'chronohabit-v1.4.7'; 
+const CACHE_NAME = 'chronohabit-v1.4.8'; 
 // Only cache LOCAL files during install to avoid CORS errors with external CDNs.
 // External resources will be cached at runtime by the fetch handler below.
 const urlsToCache = [
