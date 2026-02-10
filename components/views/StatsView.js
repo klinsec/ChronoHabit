@@ -56,19 +56,20 @@ const DateNavigator = ({ period, currentDate, setCurrentDate, dateRangeDisplay }
 
 const RankBadge = ({ rank }) => {
     let colorClass = "bg-gray-700 text-gray-300";
-    let icon = null;
-    if (rank === 1) { colorClass = "bg-yellow-500/20 text-yellow-500"; icon = "🥇"; }
-    else if (rank === 2) { colorClass = "bg-gray-400/20 text-gray-300"; icon = "🥈"; }
-    else if (rank === 3) { colorClass = "bg-orange-600/20 text-orange-500"; icon = "🥉"; }
+    
+    // Mantenemos colores para destacar, pero usamos números en lugar de iconos
+    if (rank === 1) { colorClass = "bg-yellow-500/20 text-yellow-500"; }
+    else if (rank === 2) { colorClass = "bg-gray-400/20 text-gray-300"; }
+    else if (rank === 3) { colorClass = "bg-orange-600/20 text-orange-500"; }
 
     return (
         React.createElement('div', { className: `w-8 h-8 rounded-full flex items-center justify-center font-bold ${colorClass} text-sm` },
-            icon || rank
+            rank
         )
     );
 };
 
-const RankingTable = ({ data, localUser, title, icon, showFooterSelf = false, onRemoveItem }) => {
+const RankingTable = ({ data, localUser, title, icon, showFooterSelf = false, onRemoveItem, filterZero = false, limit }) => {
     // 1. Crear una copia de los datos remotos o usar array vacío
     let activeUsers = data ? [...data] : [];
 
@@ -83,14 +84,24 @@ const RankingTable = ({ data, localUser, title, icon, showFooterSelf = false, on
         }
     }
 
-    // 3. Ordenar por puntos descendente
+    // 3. Filtrar usuarios con 0 puntos si se solicita (excepto el usuario local)
+    if (filterZero) {
+        activeUsers = activeUsers.filter(u => u.points > 0 || (localUser && u.id === localUser.id));
+    }
+
+    // 4. Ordenar por puntos descendente
     activeUsers.sort((a, b) => b.points - a.points);
     
-    // Find self index
+    // Find self index in the FULL list
     const currentUserId = localUser?.id;
     const selfIndex = activeUsers.findIndex(u => u.id === currentUserId);
     const selfData = selfIndex >= 0 ? { ...activeUsers[selfIndex], rank: selfIndex + 1 } : null;
-    const isSelfInTop = selfIndex >= 0 && selfIndex < activeUsers.length; // Siempre true si la lista muestra todo
+    
+    // 5. Apply Limit (Mostrar solo los top N)
+    const displayUsers = limit ? activeUsers.slice(0, limit) : activeUsers;
+    
+    // Check if self is in the visible list
+    const isSelfInTop = selfIndex >= 0 && selfIndex < displayUsers.length;
 
     return (
         React.createElement('div', { className: "bg-surface rounded-2xl overflow-hidden border border-gray-800 shadow-lg mb-6" },
@@ -111,7 +122,7 @@ const RankingTable = ({ data, localUser, title, icon, showFooterSelf = false, on
                         )
                     ),
                     React.createElement('tbody', null,
-                        activeUsers.length === 0 ? (
+                        displayUsers.length === 0 ? (
                             React.createElement('tr', null,
                                 React.createElement('td', { colSpan: onRemoveItem ? 4 : 3, className: "px-4 py-6 text-center text-gray-500" }, 
                                     React.createElement('div', { className: "flex flex-col items-center gap-2" },
@@ -120,7 +131,7 @@ const RankingTable = ({ data, localUser, title, icon, showFooterSelf = false, on
                                 )
                             )
                         ) : (
-                            activeUsers.map((user, index) => (
+                            displayUsers.map((user, index) => (
                                 React.createElement('tr', { 
                                     key: user.id || index, 
                                     className: `border-b border-gray-800 transition-colors ${user.id === currentUserId ? 'bg-primary/10 hover:bg-primary/20' : 'hover:bg-gray-800/50'}`
@@ -150,6 +161,11 @@ const RankingTable = ({ data, localUser, title, icon, showFooterSelf = false, on
                     )
                 )
             ),
+            // Footer separator for cutoff
+            limit && activeUsers.length > limit && (
+                 React.createElement('div', { className: "px-4 py-2 bg-gray-900/30 text-center text-xs text-gray-500 font-mono tracking-widest" }, "...")
+            ),
+            // Self Row at bottom if not in top list
             showFooterSelf && !isSelfInTop && selfData && (
                 React.createElement('div', { className: "border-t border-gray-700 bg-gray-800 p-3 flex justify-between items-center" },
                     React.createElement('div', { className: "flex items-center gap-3" },
@@ -164,7 +180,7 @@ const RankingTable = ({ data, localUser, title, icon, showFooterSelf = false, on
 };
 
 const RankingView = () => {
-    const { userProfile, updateUsername, leaderboard, calculateTotalScore, addFriend, removeFriend } = useTimeTracker();
+    const { userProfile, updateUsername, leaderboard, calculateTotalScore, addFriend, removeFriend, rankingError } = useTimeTracker();
     const [isEditingName, setIsEditingName] = useState(false);
     const [newName, setNewName] = useState(userProfile.name);
     const [friendInput, setFriendInput] = useState('');
@@ -197,13 +213,29 @@ const RankingView = () => {
     };
 
     // Filter logic: Friends are those in local friends list AND existing in leaderboard, OR self
-    // If friends data hasn't loaded yet from cloud, at least show self.
     const friendsData = (leaderboard || []).filter(u => userProfile.friends.includes(u.id));
     const globalData = leaderboard || []; 
 
     return (
         React.createElement('div', { className: "space-y-6 animate-in fade-in duration-300" },
             
+            /* Error Warning */
+            rankingError && (
+                React.createElement('div', { className: "bg-red-900/50 border border-red-500/50 text-red-200 p-3 rounded-lg text-xs break-words" },
+                    React.createElement('p', { className: "font-bold mb-1" }, "⚠️ Error de Conexión"),
+                    React.createElement('p', { className: "font-mono bg-black/20 p-1 rounded mb-2" }, 
+                        typeof rankingError === 'object' ? JSON.stringify(rankingError) : String(rankingError)
+                    ),
+                    React.createElement('p', null, "Posibles causas:"),
+                    React.createElement('ul', { className: "list-disc pl-4 space-y-1 mt-1 text-[10px]" },
+                        React.createElement('li', null, "Reglas de base de datos (comprueba que .read y .write sean true)"),
+                        React.createElement('li', null, "API Key restringida en Google Cloud Console"),
+                        React.createElement('li', null, "API 'Realtime Database' inhabilitada"),
+                        React.createElement('li', null, "Conexión a internet inestable")
+                    )
+                )
+            ),
+
             /* Profile Card */
             React.createElement('div', { className: "bg-gradient-to-r from-gray-800 to-gray-900 p-4 rounded-2xl border border-gray-700" },
                 React.createElement('div', { className: "flex justify-between items-start mb-2" },
@@ -237,7 +269,7 @@ const RankingView = () => {
                 )
             ),
 
-            /* Friends Section */
+            /* Friends Section - Muestra a todos, incluso con 0 puntos */
             React.createElement('div', null,
                 React.createElement('div', { className: "flex gap-2 mb-3" },
                     React.createElement('input', {
@@ -256,17 +288,20 @@ const RankingView = () => {
                     icon: React.createElement(UsersIcon, null),
                     data: friendsData, 
                     localUser: localUserObj,
-                    onRemoveItem: removeFriend
+                    onRemoveItem: removeFriend,
+                    filterZero: false // Amigos siempre visibles
                 })
             ),
 
-            /* Global Section */
+            /* Global Section - Oculta ceros excepto tú */
             React.createElement(RankingTable, { 
                 title: "Ranking Global", 
                 icon: React.createElement(StarIcon, null),
                 data: globalData, 
                 localUser: localUserObj,
-                showFooterSelf: true
+                showFooterSelf: true,
+                filterZero: true, // Ocultar extraños con 0 puntos
+                limit: 10 // Mostrar solo los 10 primeros
             })
         )
     );

@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'chronohabit-v1.3.0'; 
+const CACHE_NAME = 'chronohabit-v1.3.6'; 
 const urlsToCache = [
   './',
   './index.html',
