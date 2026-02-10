@@ -89,7 +89,14 @@ export const TimeTrackerProvider = ({ children }) => {
   // Cloud & Settings
   const [cloudStatus, setCloudStatus] = useState('disconnected');
   const [lastSyncTime, setLastSyncTime] = useState(null);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  
+  // Initialize notification state based on browser permission
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+      if (typeof Notification !== 'undefined') {
+          return Notification.permission === 'granted';
+      }
+      return false;
+  });
 
   // Persistence Effects
   useEffect(() => localStorage.setItem('tasks', JSON.stringify(tasks)), [tasks]);
@@ -366,11 +373,29 @@ export const TimeTrackerProvider = ({ children }) => {
 
   // --- Notifications (Firebase Only) ---
   const requestNotificationPermission = async () => { 
-      if (userProfile && userProfile.id) {
-          const token = await requestFcmToken(userProfile.id);
-          if (token) setNotificationsEnabled(true);
-      } else {
+      if (!userProfile || !userProfile.id) {
           console.warn("User ID missing for notifications");
+          return;
+      }
+      
+      try {
+          // Force UI update immediately if granted
+          if (Notification.permission === 'granted') setNotificationsEnabled(true);
+          
+          const token = await requestFcmToken(userProfile.id);
+          if (token) {
+              setNotificationsEnabled(true);
+              alert("Notificaciones activadas correctamente.");
+          } else {
+              setNotificationsEnabled(false);
+              // Handle denied state
+              if (Notification.permission === 'denied') {
+                  alert("Has bloqueado las notificaciones. Habilítalas en la configuración de tu navegador.");
+              }
+          }
+      } catch (e) {
+          console.error("Permission request failed", e);
+          setNotificationsEnabled(false);
       }
   };
   

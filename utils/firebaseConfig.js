@@ -32,30 +32,47 @@ try {
         } catch (e2) {}
     }
     try { getAnalytics(app); } catch (e) {}
-    try { messaging = getMessaging(app); } catch (e) {}
+    try { messaging = getMessaging(app); } catch (e) {
+        console.error("Firebase Messaging failed to init (likely non-https or private mode):", e);
+    }
 } catch (error) {
     console.error("Firebase Init Error:", error);
 }
 
 // 1. Notificaciones Push
 export const requestFcmToken = async (userId) => {
-    if (!messaging) return null;
+    if (!messaging) {
+        console.error("Messaging not initialized.");
+        return null;
+    }
     
     try {
+        console.log("Requesting notification permission...");
         const permission = await Notification.requestPermission();
         
         if (permission === 'granted') {
-            // FIX: No registramos un nuevo SW aquí. Usamos el existente (service-worker.js)
-            // que ahora incluye la lógica de Firebase. Esto evita conflictos de control.
-            const swRegistration = await navigator.serviceWorker.ready;
+            console.log("Permission granted. Getting Service Worker...");
+            
+            // Try to get existing registration or wait for ready
+            let swRegistration = await navigator.serviceWorker.getRegistration();
+            if (!swRegistration) {
+                console.log("No SW registration found, waiting for ready...");
+                // Fallback: This might hang if SW failed to install, so we use a race or simple await
+                swRegistration = await navigator.serviceWorker.ready;
+            }
 
+            if (!swRegistration) {
+                 throw new Error("Service Worker not found.");
+            }
+
+            console.log("Getting token from Firebase...");
             const token = await getToken(messaging, { 
                 vapidKey: VAPID_KEY,
                 serviceWorkerRegistration: swRegistration
             });
             
             if (token) {
-                console.log("FCM Token:", token);
+                console.log("FCM Token success:", token);
                 if (db && userId) {
                     await set(ref(db, 'tokens_notificaciones/' + userId), {
                         token: token,
@@ -65,6 +82,8 @@ export const requestFcmToken = async (userId) => {
                 }
                 return token;
             }
+        } else {
+            console.warn("Permission denied.");
         }
     } catch (error) {
         console.error("Error requesting FCM token:", error);

@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { 
   Task, TimeEntry, Subtask, DisciplineContract, ContractHistoryItem, 
   SavedRoutine, Goal, View, GoalPeriod, Commitment, CommitmentStatus, SubtaskStatus
 } from '../types';
 import { uploadBackupFile } from '../utils/googleDrive';
+import { requestFcmToken, syncUserScore, subscribeToLeaderboard } from '../utils/firebaseConfig';
 
 interface TimeTrackerContextType {
   tasks: Task[];
@@ -82,7 +84,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       const saved = localStorage.getItem('timeEntries');
       return saved ? JSON.parse(saved) : [];
   });
-  const [activeEntry, setActiveEntry] = useState<TimeEntry | null>(null); // Re-hydrated in effect
+  const [activeEntry, setActiveEntry] = useState<TimeEntry | null>(null);
   const [liveElapsedTime, setLiveElapsedTime] = useState(0);
   
   const [subtasks, setSubtasks] = useState<Subtask[]>(() => {
@@ -112,7 +114,12 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   // Cloud & Settings
   const [cloudStatus, setCloudStatus] = useState<'disconnected' | 'connected' | 'syncing' | 'error'>('disconnected');
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+      if (typeof Notification !== 'undefined') {
+          return Notification.permission === 'granted';
+      }
+      return false;
+  });
 
   // Persistence Effects
   useEffect(() => localStorage.setItem('tasks', JSON.stringify(tasks)), [tasks]);
@@ -210,12 +217,11 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
           id,
           createdAt: Date.now(),
           completed: false,
-          status: 'idea' // Default, caller should override if needed or update immediately
+          status: 'idea'
       };
-      // Override status if implicit in logic (e.g. deadline)
       if (newSubtask.deadline) {
           const today = new Date().setHours(0,0,0,0);
-          if (newSubtask.deadline <= today + 86400000) newSubtask.status = 'today'; // Today or tomorrow close
+          if (newSubtask.deadline <= today + 86400000) newSubtask.status = 'today'; 
           else newSubtask.status = 'pending';
       }
       
@@ -268,7 +274,6 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   // --- Discipline Contract Logic ---
   
   const getContractWithTodayHistory = (c: DisciplineContract): DisciplineContract => {
-      // Calculate points for today based on completion
       const total = c.commitments.length;
       const completed = c.commitments.filter(com => com.status === 'completed').length;
       const ratio = total > 0 ? completed / total : 0;
@@ -316,7 +321,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
           startDate: Date.now(),
           lastCheckDate: getTodayStr(),
           commitments: commitments.map((c, i) => ({ ...c, id: `c_${i}_${Date.now()}`, status: 'pending' })),
-          history: [], // Legacy
+          history: [], 
           dailyHistory: [],
           currentStreakLevel: 1,
           failed: false,
@@ -329,7 +334,6 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   const updateContractState = (updater: (c: DisciplineContract) => DisciplineContract) => {
       if (contract) {
           const updated = updater(contract);
-          // Auto-calculate history if changed
           const withHistory = getContractWithTodayHistory(updated);
           setContract(withHistory);
       }
@@ -370,8 +374,6 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   const resetContract = useCallback(() => {
       if (contract) {
           let finalContract = getContractWithTodayHistory(contract);
-          
-          // CRITICAL CHANGE: If contract is broken (reset), today's points for this specific contract become 0.
           finalContract = {
               ...finalContract,
               dailyHistory: finalContract.dailyHistory.map(h => 
@@ -380,21 +382,16 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
                       : h
               )
           };
-
           archiveContract(finalContract, 'failed');
       }
       setContract(null);
       triggerCloudSync();
   }, [contract, archiveContract]);
 
-  // Check for day rollover or status updates
   useEffect(() => {
       if (!contract) return;
       const today = getTodayStr();
       if (contract.lastCheckDate !== today) {
-          // New day detected
-          // If previous day wasn't completed properly?
-          // For simplicity, we just advance day count if it was valid day
           const dayOfWeek = new Date().getDay();
           const isAllowedToday = contract.allowedDays?.includes(dayOfWeek) ?? true;
           
@@ -403,14 +400,13 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
                   if(!prev) return null;
                   return {
                       ...prev,
-                      dayInPhase: prev.dayInPhase + 1, // Advance day
+                      dayInPhase: prev.dayInPhase + 1, 
                       lastCheckDate: today,
                       dailyCompleted: false,
-                      commitments: prev.commitments.map(c => ({ ...c, status: 'pending' })) // Reset commitments
+                      commitments: prev.commitments.map(c => ({ ...c, status: 'pending' })) 
                   }
               });
           } else {
-             // Rest day, just update check date
              setContract(prev => prev ? ({ ...prev, lastCheckDate: today }) : null);
           }
       }
@@ -450,9 +446,6 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       try {
           const data = JSON.parse(json);
           if (merge) {
-              // Simple merge strategy: ID conflict -> keep existing or overwrite? 
-              // For now, overwrite arrays completely is safer to avoid duplicates if IDs match
-              // But requirements might differ. Let's do partial replace.
               if (data.tasks) setTasks(data.tasks);
               if (data.timeEntries) setTimeEntries(data.timeEntries);
               if (data.subtasks) setSubtasks(data.subtasks);
@@ -477,7 +470,6 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   };
 
   const connectToCloud = async () => {
-      // Logic handled in GoogleDrive utils, here we just set state
       setCloudStatus('connected');
   };
 
@@ -486,7 +478,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       setCloudStatus('syncing');
       try {
           const data = exportData();
-          await uploadBackupFile(data); // Assuming utils handle file ID logic or always create new
+          await uploadBackupFile(data); 
           setLastSyncTime(Date.now());
           setCloudStatus('connected');
       } catch (e) {
@@ -497,19 +489,23 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // --- Notifications ---
   const requestNotificationPermission = async () => {
-      if ("Notification" in window) {
-          const permission = await Notification.requestPermission();
-          setNotificationsEnabled(permission === 'granted');
+      try {
+          if ("Notification" in window) {
+              const permission = await Notification.requestPermission();
+              const granted = permission === 'granted';
+              setNotificationsEnabled(granted);
+              if(granted) {
+                  const token = await requestFcmToken("USER_ID_PLACEHOLDER"); // Needs real User ID integration
+                  if(token) console.log("Token obtained:", token);
+              }
+          }
+      } catch (e) {
+          console.error(e);
       }
   };
 
   const toggleDailyNotification = async () => {
-      if (notificationsEnabled) {
-          setNotificationsEnabled(false);
-          // logic to unsubscribe if using FCM
-      } else {
-          await requestNotificationPermission();
-      }
+      await requestNotificationPermission();
   };
 
   return (

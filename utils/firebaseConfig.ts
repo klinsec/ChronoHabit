@@ -31,18 +31,27 @@ try {
         console.error("DB Connect error", e);
     }
     try { getAnalytics(app); } catch (e) {}
-    try { messaging = getMessaging(app); } catch (e) {}
+    try { messaging = getMessaging(app); } catch (e) { console.error("Messaging Init Failed", e); }
 } catch (error) {
     console.error("Firebase initialization error:", error);
 }
 
 export const requestFcmToken = async (userId?: string): Promise<string | null> => {
-    if (!messaging) return null;
+    if (!messaging) {
+        console.error("Messaging not supported or failed to init");
+        return null;
+    }
     try {
+        console.log("Requesting permission...");
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-            // FIX: Use existing registration
-            const swRegistration = await navigator.serviceWorker.ready;
+            console.log("Granted. Getting SW...");
+            let swRegistration = await navigator.serviceWorker.getRegistration();
+            if (!swRegistration) {
+                 swRegistration = await navigator.serviceWorker.ready;
+            }
+            
+            if(!swRegistration) throw new Error("No Service Worker found.");
 
             const token = await getToken(messaging, { 
                 vapidKey: VAPID_KEY,
