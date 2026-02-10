@@ -577,8 +577,8 @@ const ContractSetup = ({ commitments, setCommitments, duration, setDuration, all
 
 const ActiveContractView = ({ contract, onStatusChange, onNext, onReset, onComplete, onCompleteDay }) => {
     
-    // Day 0 Handling OR Manually Completed Day
-    if (contract.dayInPhase === 0 || contract.dailyCompleted) {
+    // Check ONLY for manually completed status. dayInPhase check removed to allow day 0 interaction.
+    if (contract.dailyCompleted) {
         return (
             React.createElement('div', { className: "flex flex-col h-full mt-8 items-center p-6 space-y-6 overflow-y-auto animate-in fade-in duration-500" },
                 React.createElement('div', { className: "text-center" },

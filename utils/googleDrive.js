@@ -18,7 +18,7 @@ const waitForGoogleScripts = () => {
                 resolve();
             }
             attempts++;
-            if (attempts > 50) { // 5 seconds timeout
+            if (attempts > 100) { // 10 seconds timeout
                 clearInterval(interval);
                 reject(new Error("Los servicios de Google no han cargado. Revisa tu conexión."));
             }
@@ -31,22 +31,24 @@ export const initGoogleDrive = async (clientId) => {
         await waitForGoogleScripts();
 
         // 1. Init GAPI (for API calls)
-        await new Promise((resolve, reject) => {
-            window.gapi.load('client', {
-                callback: resolve,
-                onerror: reject,
-                timeout: 5000,
-                ontimeout: reject
+        if (!gapiInited) {
+            await new Promise((resolve, reject) => {
+                window.gapi.load('client', {
+                    callback: resolve,
+                    onerror: reject,
+                    timeout: 5000,
+                    ontimeout: reject
+                });
             });
-        });
 
-        await window.gapi.client.init({
-            discoveryDocs: [DISCOVERY_DOC],
-        });
-        gapiInited = true;
+            await window.gapi.client.init({
+                discoveryDocs: [DISCOVERY_DOC],
+            });
+            gapiInited = true;
+        }
 
         // 2. Init GIS (for Auth Popup)
-        if (window.google && window.google.accounts && window.google.accounts.oauth2) {
+        if (!gisInited && window.google && window.google.accounts && window.google.accounts.oauth2) {
              tokenClient = window.google.accounts.oauth2.initTokenClient({
                 client_id: clientId,
                 scope: SCOPES,
@@ -72,23 +74,30 @@ export const signInToGoogle = () => {
         // Override the callback to capture the token response
         tokenClient.callback = (resp) => {
             if (resp.error) {
+                console.warn("Auth error or closed:", resp);
                 reject(resp);
                 return;
             }
-            // Important: Set the token for gapi calls
-            if (window.gapi.client) window.gapi.client.setToken(resp);
-            resolve(resp);
+            // Important: Set the token for gapi calls safely
+            if (window.gapi && window.gapi.client) {
+                window.gapi.client.setToken(resp);
+                resolve(resp);
+            } else {
+                reject(new Error("GAPI Client lost during sign in."));
+            }
         };
 
         // Trigger the popup
-        // If we already have a token, don't prompt (unless expired, but library handles refresh mostly)
-        // Actually, for explicit Connect button, 'consent' is safer to ensure we get a fresh token if needed
+        // Use 'consent' to force token refresh and ensure user actually sees it working
         tokenClient.requestAccessToken({ prompt: 'consent' });
     });
 };
 
 export const findBackupFile = async () => {
     try {
+        if (!window.gapi || !window.gapi.client || !window.gapi.client.drive) {
+             throw new Error("Drive API not loaded");
+        }
         const response = await window.gapi.client.drive.files.list({
             q: `name = '${BACKUP_FILE_NAME}' and trashed = false`,
             fields: 'files(id, name, modifiedTime)',
@@ -114,7 +123,7 @@ export const uploadBackupFile = async (data, fileId) => {
     };
 
     const tokenObj = window.gapi.client.getToken();
-    if (!tokenObj) throw new Error("No Google Token found");
+    if (!tokenObj) throw new Error("No Google Token found. Please sign in.");
     const accessToken = tokenObj.access_token;
     
     const form = new FormData();
@@ -134,6 +143,8 @@ export const uploadBackupFile = async (data, fileId) => {
         headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
         body: form
     });
+    
+    if (!response.ok) throw new Error("Upload failed: " + response.statusText);
     
     return await response.json();
 };

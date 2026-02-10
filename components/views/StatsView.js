@@ -69,7 +69,6 @@ const RankBadge = ({ rank }) => {
 };
 
 const RankingTable = ({ data, currentUserId, title, showFooterSelf = false }) => {
-    // Find current user rank index
     const selfIndex = data.findIndex(u => u.id === currentUserId);
     const selfData = selfIndex >= 0 ? { ...data[selfIndex], rank: selfIndex + 1 } : null;
     const isSelfInTop = selfIndex >= 0 && selfIndex < data.length;
@@ -94,7 +93,7 @@ const RankingTable = ({ data, currentUserId, title, showFooterSelf = false }) =>
                     React.createElement('tbody', null,
                         data.length === 0 ? (
                             React.createElement('tr', null,
-                                React.createElement('td', { colSpan: 3, className: "px-4 py-6 text-center text-gray-500" }, "No hay datos disponibles")
+                                React.createElement('td', { colSpan: 3, className: "px-4 py-6 text-center text-gray-500" }, "Conecta el Ranking Global para ver datos.")
                             )
                         ) : (
                             data.map((user, index) => (
@@ -117,7 +116,6 @@ const RankingTable = ({ data, currentUserId, title, showFooterSelf = false }) =>
                     )
                 )
             ),
-            // Sticky footer for self if not in view (optional logic, showing simple "Your Rank" bar)
             showFooterSelf && !isSelfInTop && selfData && (
                 React.createElement('div', { className: "border-t border-gray-700 bg-gray-800 p-3 flex justify-between items-center" },
                     React.createElement('div', { className: "flex items-center gap-3" },
@@ -132,15 +130,13 @@ const RankingTable = ({ data, currentUserId, title, showFooterSelf = false }) =>
 };
 
 const RankingView = () => {
-    const { userProfile, updateUsername, addFriend, removeFriend, leaderboard, refreshLeaderboard, calculateTotalScore } = useTimeTracker();
+    const { userProfile, updateUsername, globalRankingId, leaderboard, refreshLeaderboard, calculateTotalScore } = useTimeTracker();
     const [isEditingName, setIsEditingName] = useState(false);
     const [newName, setNewName] = useState(userProfile.name);
-    const [friendInput, setFriendInput] = useState('');
 
     useEffect(() => {
         refreshLeaderboard();
-        // Set interval to refresh
-        const interval = setInterval(refreshLeaderboard, 30000);
+        const interval = setInterval(refreshLeaderboard, 30000); // 30s auto refresh
         return () => clearInterval(interval);
     }, [refreshLeaderboard]);
 
@@ -151,30 +147,18 @@ const RankingView = () => {
         }
     };
 
-    const handleAddFriend = () => {
-        if (friendInput.trim()) {
-            addFriend(friendInput.trim());
-            setFriendInput('');
-        }
-    };
-
     const myScore = calculateTotalScore();
 
-    // Global Top 10
-    const topGlobal = leaderboard.slice(0, 10);
-
-    // Friends Leaderboard (Me + Friends found in global list or mocked)
-    // In a real app we'd query by IDs. Here we filter the leaderboard by name match for simplicity
-    const friendsData = leaderboard.filter(u => 
-        userProfile.friends.includes(u.username) || u.id === userProfile.id
-    );
-    // Sort friends list
-    friendsData.sort((a, b) => b.points - a.points);
-
-    // If I'm not in leaderboard yet (e.g. new sync), show me locally
-    if (!friendsData.some(u => u.id === userProfile.id)) {
-        friendsData.push({ id: userProfile.id, username: userProfile.name, points: myScore });
-        friendsData.sort((a, b) => b.points - a.points);
+    if (!globalRankingId) {
+        return (
+            React.createElement('div', { className: "flex flex-col items-center justify-center p-8 text-center space-y-4 h-64 border border-dashed border-gray-700 rounded-2xl bg-surface/50" },
+                React.createElement('div', { className: "text-4xl" }, "☁️"),
+                React.createElement('h3', { className: "text-xl font-bold text-white" }, "Ranking Desconectado"),
+                React.createElement('p', { className: "text-gray-400 text-sm max-w-xs" }, 
+                    "Para competir en tiempo real, necesitas introducir un ID de Ranking Global (Pantry Cloud) en la configuración."
+                )
+            )
+        );
     }
 
     return (
@@ -207,41 +191,10 @@ const RankingView = () => {
                 )
             ),
 
-            /* Friends Section */
-            React.createElement('div', null,
-                React.createElement(RankingTable, { 
-                    title: "Competición con Amigos", 
-                    data: friendsData, 
-                    currentUserId: userProfile.id 
-                }),
-                
-                /* Add Friend Input */
-                React.createElement('div', { className: "flex gap-2 mt-2 bg-surface p-2 rounded-xl border border-gray-700" },
-                    React.createElement('input', {
-                        type: "text",
-                        placeholder: "Añadir amigo (Nombre exacto)",
-                        value: friendInput,
-                        onChange: (e) => setFriendInput(e.target.value),
-                        className: "bg-transparent flex-grow px-2 text-sm text-white outline-none"
-                    }),
-                    React.createElement('button', { onClick: handleAddFriend, className: "bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-lg" },
-                        React.createElement(PlusIcon, null)
-                    )
-                ),
-                React.createElement('div', { className: "flex flex-wrap gap-2 mt-2" },
-                    userProfile.friends.map(friend => (
-                        React.createElement('span', { key: friend, className: "bg-gray-800 text-gray-300 text-xs px-2 py-1 rounded-full flex items-center gap-1" },
-                            friend,
-                            React.createElement('button', { onClick: () => removeFriend(friend), className: "text-red-400 hover:text-red-300 font-bold ml-1" }, "×")
-                        )
-                    ))
-                )
-            ),
-
             /* Global Section */
             React.createElement(RankingTable, { 
-                title: "Top Global", 
-                data: topGlobal, 
+                title: "Ranking Global Compartido", 
+                data: leaderboard, 
                 currentUserId: userProfile.id,
                 showFooterSelf: true
             })
@@ -485,8 +438,6 @@ const StatsView = () => {
       });
 
   }, [filteredEntries, subtasks, contract, pastContracts, period, dateRange, getTaskById]);
-
-  // --- Render Functions ---
 
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {

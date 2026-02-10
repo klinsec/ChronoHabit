@@ -15,11 +15,14 @@ const SettingsModal = ({ onClose }) => {
     triggerCloudSync,
     connectToCloud,
     notificationsEnabled,
-    toggleDailyNotification
+    toggleDailyNotification,
+    globalRankingId,
+    setRankingId
   } = useTimeTracker();
   
   const [statusMsg, setStatusMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [inputRankingId, setInputRankingId] = useState(globalRankingId);
 
   useEffect(() => {
     // Try to init immediately
@@ -79,10 +82,37 @@ const SettingsModal = ({ onClose }) => {
         
         React.createElement('div', { className: "space-y-6" },
             
+            /* Global Leaderboard Section */
+            React.createElement('div', { className: "bg-gray-800/80 p-4 rounded-xl border border-gray-700" },
+                React.createElement('h3', { className: "text-sm font-bold uppercase tracking-widest text-primary mb-2" }, "Ranking Global (Compartido)"),
+                React.createElement('p', { className: "text-xs text-gray-400 mb-3" }, 
+                    "Para ver el ranking real sin bots, crea una 'Pantry' gratuita en getpantry.cloud y pega el ID aquí para compartirlo con amigos."
+                ),
+                React.createElement('div', { className: "flex gap-2" },
+                    React.createElement('input', {
+                        type: "text",
+                        value: inputRankingId,
+                        onChange: (e) => setInputRankingId(e.target.value),
+                        placeholder: "Pega tu Pantry ID aquí",
+                        className: "flex-grow bg-black/50 border border-gray-600 rounded px-2 py-1 text-sm text-white"
+                    }),
+                    React.createElement('button', {
+                        onClick: () => {
+                            setRankingId(inputRankingId.trim());
+                            alert("ID Guardado. Ve a estadísticas para ver el ranking.");
+                        },
+                        className: "bg-primary text-bkg font-bold px-3 py-1 rounded text-xs"
+                    }, "Guardar")
+                ),
+                React.createElement('a', { href: "https://getpantry.cloud/", target: "_blank", rel: "noopener noreferrer", className: "text-[10px] text-blue-400 underline mt-2 block" }, 
+                    "Conseguir ID gratuito"
+                )
+            ),
+
             /* Cloud Sync Section */
             React.createElement('div', { className: "bg-gray-800/80 p-4 rounded-xl border border-gray-700" },
                 React.createElement('div', { className: "flex items-center justify-between mb-4" },
-                    React.createElement('h3', { className: "text-sm font-bold uppercase tracking-widest text-gray-400" }, "Nube Personal"),
+                    React.createElement('h3', { className: "text-sm font-bold uppercase tracking-widest text-gray-400" }, "Copia de Seguridad (Drive)"),
                     React.createElement('span', { className: `text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${cloudStatus === 'connected' ? 'bg-green-900 text-green-400' : cloudStatus === 'error' ? 'bg-red-900 text-red-400' : 'bg-gray-700 text-gray-400'}` },
                         cloudStatus === 'connected' ? 'Activa' : cloudStatus
                     )

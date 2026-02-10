@@ -1,94 +1,130 @@
 
-// --- ALTERNATIVA NATIVA (SIN FIREBASE) ---
+import { initializeApp } from 'firebase/app';
+import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+import { getAnalytics } from 'firebase/analytics';
 
-// 1. Notificaciones Nativas del Navegador
+// Configuración de Firebase proporcionada
+const firebaseConfig = {
+  apiKey: "AIzaSyDHmV3KCrZPym4Vep2dlwAbrgOegQAEQ8M",
+  authDomain: "chronohabit-486817-2d6f3.firebaseapp.com",
+  projectId: "chronohabit-486817-2d6f3",
+  storageBucket: "chronohabit-486817-2d6f3.firebasestorage.app",
+  messagingSenderId: "818201828266",
+  appId: "1:818201828266:web:de6e5d9f452f48554529d3",
+  measurementId: "G-CWY1BEGH6V"
+};
+
+// Inicializar Firebase
+let app;
+let messaging;
+let analytics;
+
+try {
+    app = initializeApp(firebaseConfig);
+    analytics = getAnalytics(app);
+    messaging = getMessaging(app);
+    console.log("Firebase inicializado correctamente");
+} catch (error) {
+    console.error("Error al inicializar Firebase:", error);
+}
+
+// --- SISTEMA DE RANKING GLOBAL (PANTRY CLOUD) ---
+const PANTRY_BASE_URL = "https://getpantry.cloud/apiv1/pantry";
+const BASKET_NAME = "chronohabit_ranking_v1";
+
+// 1. Notificaciones
 export const requestFcmToken = async () => {
-    if (!('Notification' in window)) {
-        console.log('Este navegador no soporta notificaciones de escritorio');
+    if (!messaging) {
+        console.warn("Firebase Messaging no está activo.");
         return null;
     }
-
+    
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-            console.log('Permiso de notificaciones concedido localmente.');
-            // Enviar una notificación de prueba inmediata
-            new Notification("ChronoHabit", {
-                body: "¡Notificaciones activadas! Te avisaremos por aquí.",
-                icon: "./icon-192.png"
-            });
-            return "local-token-granted";
+            // Nota: getToken normalmente requiere una 'vapidKey' generada en la consola de Firebase
+            // (Project Settings -> Cloud Messaging -> Web Configuration).
+            // Sin ella, esto puede fallar en algunos navegadores.
+            try {
+                // Intenta obtener el token por defecto
+                const token = await getToken(messaging);
+                if (token) {
+                    console.log("FCM Token:", token);
+                    return token;
+                }
+            } catch (tokenError) {
+                console.warn("No se pudo obtener el token FCM (posible falta de VAPID Key):", tokenError);
+                // Retornamos un valor 'dummy' para que la UI muestre que las notificaciones están activas (permiso concedido)
+                return "permission-granted-no-token";
+            }
         } else {
-            console.warn('Permiso de notificaciones denegado');
-            return null;
+            console.warn("Permiso de notificación denegado");
         }
+        return null;
     } catch (error) {
-        console.error("Error solicitando notificaciones:", error);
+        console.error("Error solicitando token:", error);
         return null;
     }
 };
 
-// Como no usamos Cloud Messaging, este listener no hace nada, pero lo mantenemos
-// para no romper el código que lo llama en el Contexto.
 export const onMessageListener = () => {
+    if (!messaging) return new Promise(() => {});
     return new Promise((resolve) => {
-        // Podríamos usar esto para eventos internos si fuera necesario
+        onMessage(messaging, (payload) => {
+            console.log("Mensaje recibido en primer plano:", payload);
+            resolve(payload);
+        });
     });
 };
 
-// --- 2. Leaderboard Simulado (Local Storage) ---
+// --- 2. Funciones de Ranking Real (Pantry) ---
 
-// Generamos nombres aleatorios para "competidores"
-const botNames = ["ChronosMaster", "TimeWizard", "HabitHero", "FocusNinja", "DailyGrind", "SpeedRunner", "ZenMaster", "ProductivityPro"];
+// Guardar/Actualizar puntuación en la nube
+export const syncUserScore = async (userProfile, score, pantryId) => {
+    if (!pantryId || !userProfile.id) return;
 
-const getBots = () => {
-    const stored = localStorage.getItem('leaderboard_bots');
-    if (stored) return JSON.parse(stored);
-
-    // Generar bots iniciales con puntuaciones aleatorias
-    const bots = botNames.map((name, i) => ({
-        id: `bot_${i}`,
-        username: name,
-        points: Math.floor(Math.random() * 500) + 100, // Puntos base
-        isBot: true
-    }));
-    localStorage.setItem('leaderboard_bots', JSON.stringify(bots));
-    return bots;
-};
-
-export const syncUserScore = async (userProfile, score) => {
-    // En modo local, solo guardamos nuestra puntuación en el array local si es necesario
-    // Realmente el Contexto ya maneja el perfil de usuario, aquí simulamos que enviamos los datos
-    console.log(`Sincronizando puntuación local para ${userProfile.name}: ${score}`);
+    const url = `${PANTRY_BASE_URL}/${pantryId}/basket/${BASKET_NAME}`;
     
-    // Actualizar bots ligeramente para que el ranking se sienta vivo
-    const bots = getBots();
-    const updatedBots = bots.map(bot => {
-        // 30% de probabilidad de que un bot gane puntos
-        if (Math.random() > 0.7) {
-            return { ...bot, points: bot.points + Math.floor(Math.random() * 50) };
+    const payload = {
+        [userProfile.id]: {
+            id: userProfile.id,
+            username: userProfile.name,
+            points: score,
+            updatedAt: Date.now()
         }
-        return bot;
-    });
-    localStorage.setItem('leaderboard_bots', JSON.stringify(updatedBots));
+    };
+
+    try {
+        await fetch(url, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        console.log(`Puntos sincronizados en la nube: ${score}`);
+    } catch (error) {
+        console.error("Error sincronizando ranking:", error);
+    }
 };
 
-export const getLeaderboardData = async () => {
-    // Obtener bots
-    const bots = getBots();
-    
-    // Obtener usuario actual (esto normalmente viene del contexto, pero aquí lo simulamos leyendo localStorage para componer la lista completa)
-    const userProfileStr = localStorage.getItem('userProfile');
-    const tasksStr = localStorage.getItem('timeEntries'); // Solo para calcular algo real si fuera necesario, pero usaremos el score pasado
-    
-    let currentUser = null;
-    if (userProfileStr) {
-        // Necesitamos calcular el score real del usuario para mostrarlo en la tabla mezclada
-        // Como esta función es asíncrona y desacoplada, asumimos que syncUserScore ya se llamó o
-        // simplemente devolvemos los bots y dejamos que la UI inyecte al usuario (como ya hace RankingView).
-        // Para simplificar: devolvemos solo los bots, la UI de React ya añade al usuario actual a la lista.
-    }
+// Obtener la tabla completa
+export const getLeaderboardData = async (pantryId) => {
+    if (!pantryId) return [];
 
-    // Devolvemos los bots ordenados
-    return bots.sort((a, b) => b.points - a.points);
+    const url = `${PANTRY_BASE_URL}/${pantryId}/basket/${BASKET_NAME}`;
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.warn("Ranking vacío o ID incorrecto");
+            return [];
+        }
+        
+        const data = await response.json();
+        const playersArray = Object.values(data);
+        
+        return playersArray.sort((a, b) => b.points - a.points);
+    } catch (error) {
+        console.error("Error obteniendo ranking:", error);
+        return [];
+    }
 };

@@ -58,7 +58,10 @@ export const TimeTrackerProvider = ({ children }) => {
   // User Identity & Ranking
   const [userProfile, setUserProfile] = useState(() => {
       const saved = localStorage.getItem('userProfile');
-      return saved ? JSON.parse(saved) : { id: generateId(), name: `Usuario ${Math.floor(Math.random()*1000)}`, friends: [] };
+      return saved ? JSON.parse(saved) : { id: generateId(), name: `ChronoUser`, friends: [] };
+  });
+  const [globalRankingId, setGlobalRankingId] = useState(() => {
+      return localStorage.getItem('globalRankingId') || '';
   });
   const [leaderboard, setLeaderboard] = useState([]);
 
@@ -66,7 +69,6 @@ export const TimeTrackerProvider = ({ children }) => {
   const [cloudStatus, setCloudStatus] = useState('disconnected');
   const [lastSyncTime, setLastSyncTime] = useState(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [fcmToken, setFcmToken] = useState(null);
 
   // Persistence Effects
   useEffect(() => localStorage.setItem('tasks', JSON.stringify(tasks)), [tasks]);
@@ -80,36 +82,11 @@ export const TimeTrackerProvider = ({ children }) => {
   useEffect(() => localStorage.setItem('pastContracts', JSON.stringify(pastContracts)), [pastContracts]);
   useEffect(() => localStorage.setItem('savedRoutines', JSON.stringify(savedRoutines)), [savedRoutines]);
   useEffect(() => localStorage.setItem('userProfile', JSON.stringify(userProfile)), [userProfile]);
-
-  // Handle FCM Token from local storage
+  
+  // Save Ranking ID
   useEffect(() => {
-      const storedToken = localStorage.getItem('chrono_fcm_token');
-      if (storedToken) {
-          setFcmToken(storedToken);
-          setNotificationsEnabled(true);
-      }
-  }, []);
-
-  // Handle Foreground Messages
-  useEffect(() => {
-      onMessageListener()
-        .then((payload) => {
-            if(payload) {
-                console.log("Notificación foreground:", payload);
-                if ('Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker.controller) {
-                    navigator.serviceWorker.controller.postMessage({ 
-                        type: 'SHOW_NOTIFICATION', 
-                        title: payload.notification?.title || 'ChronoHabit', 
-                        options: { 
-                            body: payload.notification?.body, 
-                            icon: './icon-192.png' 
-                        } 
-                    });
-                }
-            }
-        })
-        .catch(err => console.log('Error FCM Listener:', err));
-  }, []);
+      localStorage.setItem('globalRankingId', globalRankingId);
+  }, [globalRankingId]);
 
   // Active Entry Restoration
   useEffect(() => {
@@ -121,7 +98,6 @@ export const TimeTrackerProvider = ({ children }) => {
   useEffect(() => {
     let interval = null;
     if (activeEntry) {
-      // Immediate update
       setLiveElapsedTime(Date.now() - activeEntry.startTime);
       interval = setInterval(() => {
         setLiveElapsedTime(Date.now() - activeEntry.startTime);
@@ -135,8 +111,7 @@ export const TimeTrackerProvider = ({ children }) => {
   // --- Score Calculation & Sync ---
   const calculateTotalScore = useCallback(() => {
       let total = 0;
-
-      // 1. Timer Points: (Hours * Difficulty) * 10
+      // 1. Timer Points
       timeEntries.forEach(entry => {
           if (entry.endTime) {
               const task = tasks.find(t => t.id === entry.taskId);
@@ -146,45 +121,50 @@ export const TimeTrackerProvider = ({ children }) => {
               }
           }
       });
-
-      // 2. Subtask Points: Sum of difficulty
+      // 2. Subtask Points
       subtasks.forEach(s => {
-          if (s.completed && s.difficulty) {
-              total += s.difficulty;
-          }
+          if (s.completed && s.difficulty) total += s.difficulty;
       });
-
-      // 3. Routine Points: History + Current
+      // 3. Routine Points
       const allHistory = [...pastContracts.flatMap(c => c.dailyHistory), ...(contract ? contract.dailyHistory : [])];
-      allHistory.forEach(h => {
-          total += (h.points || 0);
-      });
+      allHistory.forEach(h => total += (h.points || 0));
       
       return Math.floor(total);
   }, [timeEntries, subtasks, pastContracts, contract, tasks]);
 
-  // Periodic Score Sync (Debounced ideally, but here interval is simple)
+  // Periodic Score Sync (Only if ID is set)
   useEffect(() => {
+      if (!globalRankingId) return;
+      
       const score = calculateTotalScore();
       const interval = setInterval(() => {
-          syncUserScore(userProfile, score);
-      }, 60000);
+          syncUserScore(userProfile, score, globalRankingId);
+      }, 60000); // Cada minuto
       
-      // Initial Sync
-      syncUserScore(userProfile, score);
+      // Initial Sync when ID changes or component mounts
+      syncUserScore(userProfile, score, globalRankingId);
 
       return () => clearInterval(interval);
-  }, [userProfile, calculateTotalScore]);
+  }, [userProfile, calculateTotalScore, globalRankingId]);
 
   const refreshLeaderboard = useCallback(async () => {
-      const data = await getLeaderboardData();
+      if (!globalRankingId) {
+          setLeaderboard([]);
+          return;
+      }
+      const data = await getLeaderboardData(globalRankingId);
       setLeaderboard(data);
-  }, []);
+  }, [globalRankingId]);
 
   const updateUsername = (name) => {
       setUserProfile(prev => ({ ...prev, name }));
+      // Trigger sync immediately with new name
       const score = calculateTotalScore();
-      syncUserScore({ ...userProfile, name }, score);
+      if(globalRankingId) syncUserScore({ ...userProfile, name }, score, globalRankingId);
+  };
+  
+  const setRankingId = (id) => {
+      setGlobalRankingId(id);
   };
 
   const addFriend = (friendName) => {
@@ -197,46 +177,33 @@ export const TimeTrackerProvider = ({ children }) => {
       setUserProfile(prev => ({ ...prev, friends: prev.friends.filter(f => f !== friendName) }));
   };
 
-  // Cloud Export/Import
+  // Cloud Export/Import (Backup logic)
   const exportData = useCallback(() => {
       const data = {
           version: 1,
           timestamp: Date.now(),
-          tasks,
-          timeEntries,
-          subtasks,
-          goals,
-          contract,
-          pastContracts,
-          savedRoutines,
-          settings: { notificationsEnabled },
-          userProfile // Export profile too
+          tasks, timeEntries, subtasks, goals, contract, pastContracts, savedRoutines,
+          settings: { notificationsEnabled, globalRankingId },
+          userProfile
       };
       return JSON.stringify(data, null, 2);
-  }, [tasks, timeEntries, subtasks, goals, contract, pastContracts, savedRoutines, notificationsEnabled, userProfile]);
+  }, [tasks, timeEntries, subtasks, goals, contract, pastContracts, savedRoutines, notificationsEnabled, userProfile, globalRankingId]);
 
   const importData = useCallback((json, merge = false) => {
       try {
           const data = JSON.parse(json);
-          if (merge) {
-              if (data.tasks) setTasks(data.tasks);
-              if (data.timeEntries) setTimeEntries(data.timeEntries);
-              if (data.subtasks) setSubtasks(data.subtasks);
-              if (data.goals) setGoals(data.goals);
-              if (data.contract) setContract(data.contract);
-              if (data.pastContracts) setPastContracts(data.pastContracts);
-              if (data.savedRoutines) setSavedRoutines(data.savedRoutines);
-              if (data.userProfile) setUserProfile(data.userProfile);
-          } else {
-              if (data.tasks) setTasks(data.tasks);
-              if (data.timeEntries) setTimeEntries(data.timeEntries);
-              if (data.subtasks) setSubtasks(data.subtasks);
-              if (data.goals) setGoals(data.goals);
-              if (data.contract) setContract(data.contract);
-              if (data.pastContracts) setPastContracts(data.pastContracts);
-              if (data.savedRoutines) setSavedRoutines(data.savedRoutines);
-              if (data.userProfile) setUserProfile(data.userProfile);
-          }
+          const update = (key, setter) => {
+              if (data[key]) setter(data[key]);
+          };
+          update('tasks', setTasks);
+          update('timeEntries', setTimeEntries);
+          update('subtasks', setSubtasks);
+          update('goals', setGoals);
+          update('contract', setContract);
+          update('pastContracts', setPastContracts);
+          update('savedRoutines', setSavedRoutines);
+          update('userProfile', setUserProfile);
+          if (data.settings && data.settings.globalRankingId) setGlobalRankingId(data.settings.globalRankingId);
           return true;
       } catch (e) {
           console.error("Import error", e);
@@ -269,7 +236,7 @@ export const TimeTrackerProvider = ({ children }) => {
       }
   }, [cloudStatus, exportData]);
 
-  // --- Task Methods ---
+  // --- Task Methods Wrappers to trigger sync ---
   const addTask = (task) => { setTasks(prev => [...prev, task]); triggerCloudSync(); };
   const updateTask = (task) => { setTasks(prev => prev.map(t => t.id === task.id ? task : t)); triggerCloudSync(); };
   const deleteTask = (taskId) => {
@@ -283,12 +250,7 @@ export const TimeTrackerProvider = ({ children }) => {
   // --- Time Entry Methods ---
   const startTask = (taskId) => {
     if (activeEntry) stopTask();
-    const newEntry = {
-      id: `entry_${Date.now()}`,
-      taskId,
-      startTime: Date.now(),
-      endTime: null
-    };
+    const newEntry = { id: `entry_${Date.now()}`, taskId, startTime: Date.now(), endTime: null };
     setTimeEntries(prev => [...prev, newEntry]);
     setActiveEntry(newEntry);
     triggerCloudSync();
@@ -305,9 +267,7 @@ export const TimeTrackerProvider = ({ children }) => {
 
   const updateEntry = (entry) => {
       setTimeEntries(prev => prev.map(e => e.id === entry.id ? entry : e));
-      if (activeEntry && activeEntry.id === entry.id) {
-          setActiveEntry(entry.endTime ? null : entry);
-      }
+      if (activeEntry && activeEntry.id === entry.id) setActiveEntry(entry.endTime ? null : entry);
       triggerCloudSync();
   };
 
@@ -324,246 +284,69 @@ export const TimeTrackerProvider = ({ children }) => {
       }
   };
 
-  // --- Subtask Methods ---
+  // --- Subtask & Goal Methods ---
   const addSubtask = (subtaskData) => {
       const id = `sub_${Date.now()}`;
-      const newSubtask = {
-          ...subtaskData,
-          id,
-          createdAt: Date.now(),
-          completed: false,
-          status: 'idea' 
-      };
-      
+      const newSubtask = { ...subtaskData, id, createdAt: Date.now(), completed: false, status: 'idea' };
       if (newSubtask.deadline) {
           const today = new Date().setHours(0,0,0,0);
           if (newSubtask.deadline <= today + 86400000) newSubtask.status = 'today'; 
           else newSubtask.status = 'pending';
       }
-      
       setSubtasks(prev => [...prev, newSubtask]);
       setLastAddedSubtaskId(id);
       setTimeout(() => setLastAddedSubtaskId(null), 2000);
       triggerCloudSync();
   };
-
-  const updateSubtask = (subtask) => {
-      setSubtasks(prev => prev.map(s => s.id === subtask.id ? subtask : s));
-      triggerCloudSync();
-  };
-
+  const updateSubtask = (subtask) => { setSubtasks(prev => prev.map(s => s.id === subtask.id ? subtask : s)); triggerCloudSync(); };
   const deleteSubtask = (id) => { setSubtasks(prev => prev.filter(s => s.id !== id)); triggerCloudSync(); };
-
   const toggleSubtaskCompletion = (id) => {
       setSubtasks(prev => prev.map(s => {
-          if (s.id === id) {
-              const completed = !s.completed;
-              return { 
-                  ...s, 
-                  completed, 
-                  completedAt: completed ? Date.now() : undefined,
-                  status: completed ? 'log' : (s.status === 'log' ? 'today' : s.status) 
-              };
-          }
+          if (s.id === id) return { ...s, completed: !s.completed, completedAt: !s.completed ? Date.now() : undefined, status: !s.completed ? 'log' : (s.status === 'log' ? 'today' : s.status) };
           return s;
       }));
       triggerCloudSync();
   };
+  const moveSubtaskStatus = (id, status) => { setSubtasks(prev => prev.map(s => s.id === id ? { ...s, status } : s)); triggerCloudSync(); };
+  const setGoal = (goal) => { setGoals(prev => { const others = prev.filter(g => !(g.taskId === goal.taskId && g.period === goal.period)); return [...others, goal]; }); triggerCloudSync(); };
+  const deleteGoal = (taskId, period) => { setGoals(prev => prev.filter(g => !(g.taskId === taskId && g.period === period))); triggerCloudSync(); };
+  const getGoalByTaskIdAndPeriod = (taskId, period) => goals.find(g => g.taskId === taskId && g.period === period);
 
-  const moveSubtaskStatus = (id, status) => {
-      setSubtasks(prev => prev.map(s => s.id === id ? { ...s, status } : s));
-      triggerCloudSync();
-  };
-
-  // --- Goal Methods ---
-  const setGoal = (goal) => {
-      setGoals(prev => {
-          const others = prev.filter(g => !(g.taskId === goal.taskId && g.period === goal.period));
-          return [...others, goal];
-      });
-      triggerCloudSync();
-  };
-
-  const deleteGoal = (taskId, period) => {
-      setGoals(prev => prev.filter(g => !(g.taskId === taskId && g.period === period)));
-      triggerCloudSync();
-  };
-
-  const getGoalByTaskIdAndPeriod = (taskId, period) => {
-      return goals.find(g => g.taskId === taskId && g.period === period);
-  };
-
-  // --- Discipline Contract Logic ---
+  // --- Discipline Wrappers ---
   const getContractWithTodayHistory = (c) => {
       const total = c.commitments.length;
       const completed = c.commitments.filter(com => com.status === 'completed').length;
       const ratio = total > 0 ? completed / total : 0;
       const points = parseFloat((c.currentStreakLevel * ratio).toFixed(1));
-
       const today = getTodayStr();
       const newHistory = [...c.dailyHistory];
       const todayIndex = newHistory.findIndex(h => h.date === today);
-
-      const entry = {
-          date: today,
-          points,
-          streakLevel: c.currentStreakLevel,
-          totalCommitments: total,
-          completedCommitments: completed
-      };
-
-      if (todayIndex >= 0) {
-          newHistory[todayIndex] = entry;
-      } else {
-          newHistory.push(entry);
-      }
-      
+      const entry = { date: today, points, streakLevel: c.currentStreakLevel, totalCommitments: total, completedCommitments: completed };
+      if (todayIndex >= 0) newHistory[todayIndex] = entry; else newHistory.push(entry);
       return { ...c, dailyHistory: newHistory, lastCheckDate: today };
   };
-
   const archiveContract = useCallback((finalContract, status) => {
-      const historyItem = {
-          id: `hist_${Date.now()}`,
-          startDate: finalContract.startDate,
-          endDate: Date.now(),
-          phaseDuration: finalContract.currentPhase,
-          status: status,
-          commitmentsSnapshot: finalContract.commitments.map(c => c.title),
-          dailyHistory: finalContract.dailyHistory
-      };
+      const historyItem = { id: `hist_${Date.now()}`, startDate: finalContract.startDate, endDate: Date.now(), phaseDuration: finalContract.currentPhase, status: status, commitmentsSnapshot: finalContract.commitments.map(c => c.title), dailyHistory: finalContract.dailyHistory };
       setPastContracts(prev => [historyItem, ...prev]);
   }, []);
-
   const startContract = (commitments, duration = 1, allowedDays = [0,1,2,3,4,5,6]) => {
-      const newContract = {
-          active: true,
-          currentPhase: duration,
-          dayInPhase: 0,
-          startDate: Date.now(),
-          lastCheckDate: getTodayStr(),
-          commitments: commitments.map((c, i) => ({ ...c, id: `c_${i}_${Date.now()}`, status: 'pending' })),
-          history: [], 
-          dailyHistory: [],
-          currentStreakLevel: 1,
-          failed: false,
-          allowedDays,
-          dailyCompleted: false
-      };
-      setContract(newContract);
+      setContract({ active: true, currentPhase: duration, dayInPhase: 0, startDate: Date.now(), lastCheckDate: getTodayStr(), commitments: commitments.map((c, i) => ({ ...c, id: `c_${i}_${Date.now()}`, status: 'pending' })), history: [], dailyHistory: [], currentStreakLevel: 1, failed: false, allowedDays, dailyCompleted: false });
       triggerCloudSync();
   };
+  const updateContractState = (updater) => { setContract(prev => { if (!prev) return null; return getContractWithTodayHistory(updater(prev)); }); triggerCloudSync(); };
+  const toggleCommitment = (id) => { updateContractState(c => ({ ...c, commitments: c.commitments.map(com => com.id === id ? { ...com, status: com.status === 'completed' ? 'pending' : 'completed' } : com) })); };
+  const setCommitmentStatus = (id, status) => { updateContractState(c => ({ ...c, commitments: c.commitments.map(com => com.id === id ? { ...com, status } : com) })); };
+  const completeDay = () => { if (contract) { const updated = getContractWithTodayHistory(contract); setContract({ ...updated, dailyCompleted: true }); triggerCloudSync(); } };
+  const completeContract = () => { if (contract) { const final = getContractWithTodayHistory(contract); archiveContract(final, 'completed'); setContract(null); triggerCloudSync(); } };
+  const resetContract = useCallback(() => { if (contract) { let finalContract = getContractWithTodayHistory(contract); finalContract = { ...finalContract, dailyHistory: finalContract.dailyHistory.map(h => h.date === finalContract.lastCheckDate ? { ...h, points: 0 } : h) }; archiveContract(finalContract, 'failed'); } setContract(null); triggerCloudSync(); }, [contract, archiveContract, triggerCloudSync]);
 
-  const updateContractState = (updater) => {
-      setContract(prev => {
-          if (!prev) return null;
-          const updated = updater(prev);
-          const withHistory = getContractWithTodayHistory(updated);
-          return withHistory;
-      });
-      triggerCloudSync();
-  };
-
-  const toggleCommitment = (id) => {
-      updateContractState(c => ({
-          ...c,
-          commitments: c.commitments.map(com => com.id === id ? { 
-              ...com, 
-              status: com.status === 'completed' ? 'pending' : 'completed' 
-          } : com)
-      }));
-  };
-
-  const setCommitmentStatus = (id, status) => {
-      updateContractState(c => ({
-          ...c,
-          commitments: c.commitments.map(com => com.id === id ? { ...com, status } : com)
-      }));
-  };
-
-  const completeDay = () => {
-      if (contract) {
-          const updated = getContractWithTodayHistory(contract);
-          setContract({ ...updated, dailyCompleted: true });
-          triggerCloudSync();
-      }
-  };
-
-  const completeContract = () => {
-      if (contract) {
-         const final = getContractWithTodayHistory(contract);
-         archiveContract(final, 'completed');
-         setContract(null);
-         triggerCloudSync();
-      }
-  };
-
-  const resetContract = useCallback(() => {
-      if (contract) {
-          let finalContract = getContractWithTodayHistory(contract);
-          
-          // CRITICAL CHANGE: Zero out points for today if reset
-          finalContract = {
-              ...finalContract,
-              dailyHistory: finalContract.dailyHistory.map(h => 
-                  h.date === finalContract.lastCheckDate 
-                      ? { ...h, points: 0 } 
-                      : h
-              )
-          };
-
-          archiveContract(finalContract, 'failed');
-      }
-      setContract(null);
-      triggerCloudSync();
-  }, [contract, archiveContract, triggerCloudSync]);
-
-  // Check for day rollover
-  useEffect(() => {
-      if (!contract) return;
-      const today = getTodayStr();
-      if (contract.lastCheckDate !== today) {
-          const dayOfWeek = new Date().getDay();
-          const isAllowedToday = contract.allowedDays?.includes(dayOfWeek) ?? true;
-          
-          if (isAllowedToday) {
-              setContract(prev => {
-                  if(!prev) return null;
-                  return {
-                      ...prev,
-                      dayInPhase: prev.dayInPhase + 1, 
-                      lastCheckDate: today,
-                      dailyCompleted: false,
-                      commitments: prev.commitments.map(c => ({ ...c, status: 'pending' }))
-                  }
-              });
-          } else {
-             setContract(prev => prev ? ({ ...prev, lastCheckDate: today }) : null);
-          }
-      }
-  }, [contract]);
-
-  // --- Saved Routines ---
-  const saveRoutine = (title, commitments, allowedDays = [0,1,2,3,4,5,6]) => {
-      const newRoutine = {
-          id: `routine_${Date.now()}`,
-          title,
-          commitments,
-          allowedDays
-      };
-      setSavedRoutines(prev => [...prev, newRoutine]);
-      triggerCloudSync();
-  };
-
+  useEffect(() => { if (!contract) return; const today = getTodayStr(); if (contract.lastCheckDate !== today) { const dayOfWeek = new Date().getDay(); const isAllowedToday = contract.allowedDays?.includes(dayOfWeek) ?? true; if (isAllowedToday) { setContract(prev => { if(!prev) return null; return { ...prev, dayInPhase: prev.dayInPhase + 1, lastCheckDate: today, dailyCompleted: false, commitments: prev.commitments.map(c => ({ ...c, status: 'pending' })) } }); } else { setContract(prev => prev ? ({ ...prev, lastCheckDate: today }) : null); } } }, [contract]);
+  const saveRoutine = (title, commitments, allowedDays = [0,1,2,3,4,5,6]) => { setSavedRoutines(prev => [...prev, { id: `routine_${Date.now()}`, title, commitments, allowedDays }]); triggerCloudSync(); };
   const deleteRoutine = (id) => { setSavedRoutines(prev => prev.filter(r => r.id !== id)); triggerCloudSync(); };
 
   // --- Notifications ---
-  const requestNotificationPermission = async () => {
-      await requestFcmToken();
-  };
-
-  const toggleDailyNotification = async () => {
-      await requestNotificationPermission();
-  };
+  const requestNotificationPermission = async () => { await requestFcmToken(); };
+  const toggleDailyNotification = async () => { await requestNotificationPermission(); };
 
   return React.createElement(TimeTrackerContext.Provider, { value: {
       tasks, addTask, updateTask, deleteTask, getTaskById,
@@ -575,7 +358,8 @@ export const TimeTrackerProvider = ({ children }) => {
       cloudStatus, connectToCloud, triggerCloudSync, lastSyncTime, exportData, importData,
       notificationsEnabled, requestNotificationPermission, toggleDailyNotification,
       // Leaderboard Exports
-      userProfile, updateUsername, addFriend, removeFriend, leaderboard, refreshLeaderboard, calculateTotalScore
+      userProfile, updateUsername, addFriend, removeFriend, leaderboard, refreshLeaderboard, calculateTotalScore,
+      globalRankingId, setRankingId
     }},
     children
   );
