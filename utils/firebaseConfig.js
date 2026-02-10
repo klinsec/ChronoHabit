@@ -20,14 +20,33 @@ let db = null;
 
 try {
     const app = initializeApp(firebaseConfig);
-    messaging = getMessaging(app);
-    db = getFirestore(app);
+    
+    // Initialize Firestore (Database)
+    try {
+        db = getFirestore(app);
+    } catch (dbError) {
+        console.error("Firestore init failed:", dbError);
+    }
+
+    // Initialize Messaging (Optional - requires HTTPS and supported browser)
+    try {
+        if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+            messaging = getMessaging(app);
+        }
+    } catch (msgError) {
+        // Just log warning, don't crash app
+        console.log("Firebase Messaging not supported/enabled:", msgError.message);
+    }
+
 } catch (error) {
-    console.error("Firebase init failed:", error);
+    console.error("Firebase App init failed:", error);
 }
 
 export const requestFcmToken = async () => {
-    if (!messaging) return null;
+    if (!messaging) {
+        console.log("Messaging not initialized, skipping token request.");
+        return null;
+    }
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {

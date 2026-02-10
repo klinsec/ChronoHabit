@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { uploadBackupFile } from '../utils/googleDrive.js';
+import { uploadBackupFile, signInToGoogle } from '../utils/googleDrive.js';
 import { requestFcmToken, onMessageListener, syncUserScore, getLeaderboardData } from '../utils/firebaseConfig.js';
 
 const TimeTrackerContext = createContext(undefined);
@@ -159,7 +159,6 @@ export const TimeTrackerProvider = ({ children }) => {
       allHistory.forEach(h => {
           total += (h.points || 0);
       });
-      // Add current day potential progress? No, stick to history for consistency + today completed
       
       return Math.floor(total);
   }, [timeEntries, subtasks, pastContracts, contract, tasks]);
@@ -167,9 +166,6 @@ export const TimeTrackerProvider = ({ children }) => {
   // Periodic Score Sync (Debounced ideally, but here interval is simple)
   useEffect(() => {
       const score = calculateTotalScore();
-      // Sync to cloud every time profile changes or specific events trigger it? 
-      // Let's do it on significant data changes or manual trigger. 
-      // For now, auto-sync every 60s if score changed
       const interval = setInterval(() => {
           syncUserScore(userProfile, score);
       }, 60000);
@@ -249,7 +245,14 @@ export const TimeTrackerProvider = ({ children }) => {
   }, []);
 
   const connectToCloud = async () => {
-      setCloudStatus('connected');
+      try {
+          await signInToGoogle();
+          setCloudStatus('connected');
+      } catch (error) {
+          console.error("Google Connect failed", error);
+          setCloudStatus('error');
+          throw error;
+      }
   };
 
   const triggerCloudSync = useCallback(async () => {
