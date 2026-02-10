@@ -256,7 +256,8 @@ const StatsView = () => {
                   let earnedPoints = 0;
                   if (totalCommitments > 0) {
                       const ratio = completedCommitments / totalCommitments;
-                      earnedPoints = Math.floor(potentialPoints * ratio);
+                      // Calculate potential earned today proportionally with decimals
+                      earnedPoints = parseFloat((potentialPoints * ratio).toFixed(1));
                   }
                   
                   const current = dataMap.get(key);

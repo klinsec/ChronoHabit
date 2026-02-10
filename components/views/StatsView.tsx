@@ -255,7 +255,6 @@ const StatsView: React.FC = () => {
       });
 
       // 4. Routine Points (TODAY - ACTIVE CONTRACT)
-      // This is the critical part to show real-time progress for the current day
       if (contract && contract.active) {
           const todayStr = new Date().toISOString().split('T')[0];
           const todayDate = new Date();
@@ -275,14 +274,11 @@ const StatsView: React.FC = () => {
                   let earnedPoints = 0;
                   if (totalCommitments > 0) {
                       const ratio = completedCommitments / totalCommitments;
-                      // Formula: floor(potential * ratio)
-                      earnedPoints = Math.floor(potentialPoints * ratio);
+                      // Calculate potential earned today proportionally with decimals
+                      earnedPoints = parseFloat((potentialPoints * ratio).toFixed(1));
                   }
                   
                   const current = dataMap.get(key)!;
-                  // If we are in monthly view, we add to existing history of the month.
-                  // If daily/weekly, key is unique to today, so usually starts at 0 routine points (unless history had bug).
-                  // But to be safe, we just add it. Note: 'dailyHistory' does NOT contain today usually.
                   current.routine += earnedPoints;
               }
           }

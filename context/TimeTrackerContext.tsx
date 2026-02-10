@@ -78,16 +78,22 @@ const determineStatusFromDeadline = (deadline: number | undefined, currentStatus
     return 'idea';
 };
 
+// Helper to calculate points and append to history before archiving
 const getContractWithTodayHistory = (c: DisciplineContract): DisciplineContract => {
     const total = c.commitments.length;
     const completed = c.commitments.filter(comm => comm.status === 'completed').length;
     const potential = c.currentStreakLevel || 1;
     let earned = 0;
+    
+    // Rule: Points = potential * ratio (with 1 decimal)
     if (total > 0) {
         earned = parseFloat((potential * (completed / total)).toFixed(1));
     }
+
+    // Check if today is already in history to avoid duplicates
     const hasToday = c.dailyHistory.some(h => h.date === c.lastCheckDate);
     if (hasToday) return c;
+
     return {
         ...c,
         dailyHistory: [
@@ -153,13 +159,15 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       const storedBriefing = localStorage.getItem('chrono_briefing_time');
       const storedReview = localStorage.getItem('chrono_review_time');
       
-      // Auto-connect cloud logic
+      // Auto-connect to cloud if previously connected
       const wasCloudConnected = localStorage.getItem('chrono_cloud_connected') === 'true';
       if (wasCloudConnected) {
           setCloudStatus('connected');
-          // Silent init to prepare GAPI
+          // Attempt silent init to be ready for sync
           initGoogleDrive(CLIENT_ID).catch(err => {
               console.warn("Auto-connect init failed:", err);
+              // Don't set error state immediately to avoid red icon on startup if offline, 
+              // sync attempt will handle it.
           });
       }
 
@@ -187,15 +195,20 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (storedContract) {
           const parsedContract: DisciplineContract = JSON.parse(storedContract);
           
+          // Data Migration
           parsedContract.commitments = parsedContract.commitments.map(c => {
               if ((c as any).completedToday !== undefined) {
-                  return { ...c, status: (c as any).completedToday ? 'completed' : 'pending' } as Commitment;
+                  return { 
+                      ...c, 
+                      status: (c as any).completedToday ? 'completed' : 'pending' 
+                  } as Commitment;
               }
               return c;
           });
           if (!parsedContract.dailyHistory) parsedContract.dailyHistory = [];
           if (!parsedContract.currentStreakLevel) parsedContract.currentStreakLevel = 1;
 
+          // Contract Daily Reset Logic with Points
           if (parsedContract.active && parsedContract.lastCheckDate !== todayString) {
               const now = new Date();
               const hour = now.getHours();
@@ -204,34 +217,51 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
                   const lastDateStr = parsedContract.lastCheckDate;
                   const lastDate = new Date(lastDateStr);
                   
+                  // Only calculate points if day > 0 (Day 0 is "waiting for tomorrow")
                   if (parsedContract.dayInPhase > 0) {
+                      // 1. Calculate Points for Previous Day
                       const wasLastDateAllowed = !parsedContract.allowedDays || parsedContract.allowedDays.includes(lastDate.getDay());
+                      
                       if (wasLastDateAllowed) {
-                          const total = parsedContract.commitments.length;
-                          const completed = parsedContract.commitments.filter(c => c.status === 'completed').length;
-                          const potential = parsedContract.currentStreakLevel;
-                          let earned = 0;
-                          if (total > 0) {
-                              earned = parseFloat((potential * (completed / total)).toFixed(1));
+                          const totalCommitments = parsedContract.commitments.length;
+                          const completedCommitments = parsedContract.commitments.filter(c => c.status === 'completed').length;
+                          
+                          const potentialPoints = parsedContract.currentStreakLevel;
+                          let earnedPoints = 0;
+                          if (totalCommitments > 0) {
+                              const ratio = completedCommitments / totalCommitments;
+                              // New Decimal Calculation
+                              earnedPoints = parseFloat((potentialPoints * ratio).toFixed(1));
                           }
+
+                          // Save History
                           parsedContract.dailyHistory.push({
                               date: lastDateStr,
-                              points: earned,
-                              streakLevel: potential,
-                              totalCommitments: total,
-                              completedCommitments: completed
+                              points: earnedPoints,
+                              streakLevel: potentialPoints,
+                              totalCommitments,
+                              completedCommitments
                           });
-                          let nextStreak = Math.floor(earned) + 1; 
+
+                          // 2. Calculate Next Day's Streak Level
+                          // Rule: If level 10, failed 3/6 -> Earned 5. Next level = 5 + 1 = 6.
+                          // Rule: If level 1, 9/10 -> Earned 0.9. Next level = 0 + 1 = 1.
+                          // Formula: floor(earned) + 1
+                          let nextStreak = Math.floor(earnedPoints) + 1; 
                           if (nextStreak > 10) nextStreak = 10;
                           if (nextStreak < 1) nextStreak = 1; 
+                          
                           parsedContract.currentStreakLevel = nextStreak;
                       }
                   }
 
+                  // 3. Setup Today
                   parsedContract.lastCheckDate = todayString;
-                  parsedContract.dailyCompleted = false; // Reset for new day
+                  // IMPORTANT: Reset the daily finished flag for the new day
+                  parsedContract.dailyCompleted = false; 
                   
                   const isTodayAllowed = !parsedContract.allowedDays || parsedContract.allowedDays.includes(currentDayOfWeek);
+
                   if (isTodayAllowed) {
                       parsedContract.dayInPhase += 1;
                       parsedContract.commitments = parsedContract.commitments.map(c => ({...c, status: 'pending'}));
@@ -246,8 +276,13 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
           }
       }
       
-      if (storedHistory) setPastContracts(JSON.parse(storedHistory));
-      if (storedRoutines) setSavedRoutines(JSON.parse(storedRoutines));
+      if (storedHistory) {
+          setPastContracts(JSON.parse(storedHistory));
+      }
+
+      if (storedRoutines) {
+          setSavedRoutines(JSON.parse(storedRoutines));
+      }
 
       if(storedSubtasks) {
         let parsedSubtasks: Subtask[] = JSON.parse(storedSubtasks);
@@ -274,7 +309,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   }, []);
 
-  // Effects for persistence (condensed)
+  // Persistence Effects (omitted for brevity, assume same)
   useEffect(() => { localStorage.setItem('chrono_tasks', JSON.stringify(tasks)); }, [tasks]);
   useEffect(() => { localStorage.setItem('chrono_entries', JSON.stringify(timeEntries)); }, [timeEntries]);
   useEffect(() => { localStorage.setItem('chrono_goals', JSON.stringify(goals)); }, [goals]);
@@ -286,10 +321,19 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   useEffect(() => { localStorage.setItem('chrono_contract_history', JSON.stringify(pastContracts)); }, [pastContracts]);
   useEffect(() => { localStorage.setItem('chrono_saved_routines', JSON.stringify(savedRoutines)); }, [savedRoutines]);
 
+  // Exports & Sync (Unchanged)
   const exportData = useCallback(() => {
     const backup: BackupData = { 
-        tasks, timeEntries, goals, subtasks, contract: contract || undefined, contractHistory: pastContracts, savedRoutines,
-        settings: { dailyNotificationEnabled, briefingTime, reviewTime }, timestamp: Date.now(), version: 1 
+        tasks, 
+        timeEntries, 
+        goals, 
+        subtasks, 
+        contract: contract || undefined,
+        contractHistory: pastContracts,
+        savedRoutines: savedRoutines,
+        settings: { dailyNotificationEnabled, briefingTime, reviewTime },
+        timestamp: Date.now(), 
+        version: 1 
     };
     return JSON.stringify(backup);
   }, [tasks, timeEntries, goals, subtasks, contract, pastContracts, savedRoutines, dailyNotificationEnabled, briefingTime, reviewTime]);
@@ -341,7 +385,10 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
         const now = new Date();
         const currentTimeStr = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false });
         const todayStr = now.toDateString();
+        const hour = now.getHours();
+
         if (!('Notification' in window) || Notification.permission !== 'granted' || !navigator.serviceWorker.controller) return;
+
         if (currentTimeStr === briefingTime) {
              const lastNotifKey = `notif_briefing_${todayStr}`;
              if (!localStorage.getItem(lastNotifKey)) {
@@ -413,18 +460,24 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   const startContract = useCallback((commitmentsData: Omit<Commitment, 'id' | 'status'>[], duration: number, allowedDays: number[] = [0,1,2,3,4,5,6]) => {
       let startDay = 1;
       const todayStr = new Date().toDateString();
+
+      // Check if we are finishing an existing contract today
       if (contract) {
+          // IMPORTANT: Calculate today's stats before archiving!
           const finalContract = getContractWithTodayHistory(contract);
           archiveContract(finalContract, 'completed');
+          
           if (new Date(contract.lastCheckDate).toDateString() === todayStr) {
               startDay = 0;
           }
       } else {
+          // Check history if starting from scratch
           const completedToday = pastContracts.some(c => 
               (c.status === 'completed' || c.status === 'finished') && new Date(c.endDate).toDateString() === todayStr
           );
           if (completedToday) startDay = 0;
       }
+
       const newContract: DisciplineContract = {
           active: true,
           currentPhase: duration, 
@@ -454,6 +507,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const resetContract = useCallback(() => {
       if (contract) {
+          // Even if failed, record progress made today
           const finalContract = getContractWithTodayHistory(contract);
           archiveContract(finalContract, 'failed');
       }
@@ -464,6 +518,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   const completeContract = useCallback(() => {
       if (contract) {
           const finalContract = getContractWithTodayHistory(contract);
+          // Check for perfection on the final state
           const allPerfect = finalContract.commitments.every(c => c.status === 'completed');
           const status = allPerfect ? 'completed' : 'finished';
           archiveContract(finalContract, status);
@@ -509,7 +564,13 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const addSubtask = useCallback((subtask: Omit<Subtask, 'id' | 'completed' | 'createdAt' | 'status'>) => {
       const id = `subtask_${Date.now()}`;
-      const newS: Subtask = { ...subtask, id, completed: false, createdAt: Date.now(), status: subtask.deadline ? determineStatusFromDeadline(subtask.deadline, 'idea') : 'idea' };
+      const newS: Subtask = { 
+          ...subtask, 
+          id, 
+          completed: false, 
+          createdAt: Date.now(), 
+          status: subtask.deadline ? determineStatusFromDeadline(subtask.deadline, 'idea') : 'idea' 
+      };
       setSubtasks(prev => [newS, ...prev]);
       setLastAddedSubtaskId(id);
       if(cloudStatus==='connected') triggerCloudSync();
@@ -529,7 +590,11 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       setSubtasks(prev => prev.map(s => {
           if (s.id === id) {
               const newCompleted = !s.completed;
-              return { ...s, completed: newCompleted, completedAt: newCompleted ? Date.now() : undefined };
+              return { 
+                  ...s, 
+                  completed: newCompleted, 
+                  completedAt: newCompleted ? Date.now() : undefined 
+              };
           }
           return s;
       }));

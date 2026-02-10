@@ -32,11 +32,15 @@ const getContractWithTodayHistory = (c) => {
     const completed = c.commitments.filter(comm => comm.status === 'completed').length;
     const potential = c.currentStreakLevel || 1;
     let earned = 0;
+    
     if (total > 0) {
+        // Decimal Calculation: Potential * Ratio
         earned = parseFloat((potential * (completed / total)).toFixed(1));
     }
+
     const hasToday = c.dailyHistory.some(h => h.date === c.lastCheckDate);
     if (hasToday) return c;
+
     return {
         ...c,
         dailyHistory: [
@@ -156,21 +160,29 @@ export const TimeTrackerProvider = ({ children }) => {
                       if (wasLastDateAllowed) {
                           const total = parsedContract.commitments.length;
                           const completed = parsedContract.commitments.filter(c => c.status === 'completed').length;
-                          const potential = parsedContract.currentStreakLevel || 1;
-                          let earned = 0;
+                          
+                          const potentialPoints = parsedContract.currentStreakLevel || 1;
+                          let earnedPoints = 0;
                           if (total > 0) {
-                              earned = parseFloat((potential * (completed / total)).toFixed(1));
+                              // Decimal Calculation
+                              const ratio = completed / total;
+                              earnedPoints = parseFloat((potentialPoints * ratio).toFixed(1));
                           }
+
                           parsedContract.dailyHistory.push({
                               date: lastDateStr,
-                              points: earned,
-                              streakLevel: potential,
+                              points: earnedPoints,
+                              streakLevel: potentialPoints,
                               totalCommitments: total,
                               completedCommitments: completed
                           });
-                          let nextStreak = Math.floor(earned) + 1;
+
+                          // Rule: Next Level = Floor(Earned Points) + 1
+                          // Capped at 10, min 1
+                          let nextStreak = Math.floor(earnedPoints) + 1;
                           if (nextStreak > 10) nextStreak = 10;
                           if (nextStreak < 1) nextStreak = 1;
+                          
                           parsedContract.currentStreakLevel = nextStreak;
                       }
                   }
