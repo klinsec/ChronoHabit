@@ -93,7 +93,6 @@ export const TimeTrackerProvider = ({ children }) => {
   });
   
   const [leaderboard, setLeaderboard] = useState([]);
-  const [rankingError, setRankingError] = useState(null);
 
   // Cloud & Settings
   const [cloudStatus, setCloudStatus] = useState('disconnected');
@@ -194,15 +193,9 @@ export const TimeTrackerProvider = ({ children }) => {
 
   // 2. Subscribe to Leaderboard (Pull Real-Time)
   useEffect(() => {
-      const unsubscribe = subscribeToLeaderboard(
-          (data) => {
-              setLeaderboard(data);
-              setRankingError(null);
-          },
-          (error) => {
-              setRankingError(error.message);
-          }
-      );
+      const unsubscribe = subscribeToLeaderboard((data) => {
+          setLeaderboard(data);
+      });
       return () => unsubscribe();
   }, []);
 
@@ -418,7 +411,7 @@ export const TimeTrackerProvider = ({ children }) => {
       cloudStatus, connectToCloud, triggerCloudSync, lastSyncTime, exportData, importData,
       notificationsEnabled, requestNotificationPermission, toggleDailyNotification,
       // Leaderboard Exports
-      userProfile, updateUsername, addFriend, removeFriend, leaderboard, calculateTotalScore, rankingError
+      userProfile, updateUsername, addFriend, removeFriend, leaderboard, calculateTotalScore
     }},
     children
   );
