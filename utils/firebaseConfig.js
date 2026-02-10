@@ -1,103 +1,94 @@
 
-import { initializeApp } from 'firebase/app';
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
-import { getFirestore, doc, setDoc, getDocs, collection, query, orderBy, limit } from 'firebase/firestore';
+// --- ALTERNATIVA NATIVA (SIN FIREBASE) ---
 
-// ¡IMPORTANTE! Reemplaza con tus datos de Firebase Console
-const firebaseConfig = {
-  apiKey: "TU_API_KEY_AQUI",
-  authDomain: "tu-proyecto.firebaseapp.com",
-  projectId: "tu-proyecto",
-  storageBucket: "tu-proyecto.appspot.com",
-  messagingSenderId: "TU_SENDER_ID",
-  appId: "TU_APP_ID"
-};
-
-const VAPID_KEY = "TU_VAPID_KEY_AQUI";
-
-let messaging = null;
-let db = null;
-
-try {
-    const app = initializeApp(firebaseConfig);
-    
-    // Initialize Firestore (Database)
-    try {
-        db = getFirestore(app);
-    } catch (dbError) {
-        console.error("Firestore init failed:", dbError);
-    }
-
-    // Initialize Messaging (Optional - requires HTTPS and supported browser)
-    try {
-        if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-            messaging = getMessaging(app);
-        }
-    } catch (msgError) {
-        // Just log warning, don't crash app
-        console.log("Firebase Messaging not supported/enabled:", msgError.message);
-    }
-
-} catch (error) {
-    console.error("Firebase App init failed:", error);
-}
-
+// 1. Notificaciones Nativas del Navegador
 export const requestFcmToken = async () => {
-    if (!messaging) {
-        console.log("Messaging not initialized, skipping token request.");
+    if (!('Notification' in window)) {
+        console.log('Este navegador no soporta notificaciones de escritorio');
         return null;
     }
+
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-            const token = await getToken(messaging, { vapidKey: VAPID_KEY });
-            console.log("FCM Token:", token);
-            return token;
+            console.log('Permiso de notificaciones concedido localmente.');
+            // Enviar una notificación de prueba inmediata
+            new Notification("ChronoHabit", {
+                body: "¡Notificaciones activadas! Te avisaremos por aquí.",
+                icon: "./icon-192.png"
+            });
+            return "local-token-granted";
+        } else {
+            console.warn('Permiso de notificaciones denegado');
+            return null;
         }
-        return null;
     } catch (error) {
-        console.error("Error getting token:", error);
+        console.error("Error solicitando notificaciones:", error);
         return null;
     }
 };
 
+// Como no usamos Cloud Messaging, este listener no hace nada, pero lo mantenemos
+// para no romper el código que lo llama en el Contexto.
 export const onMessageListener = () => {
-    if (!messaging) return new Promise(() => {});
     return new Promise((resolve) => {
-        onMessage(messaging, (payload) => {
-            resolve(payload);
-        });
+        // Podríamos usar esto para eventos internos si fuera necesario
     });
 };
 
-// --- Firestore Leaderboard Logic ---
+// --- 2. Leaderboard Simulado (Local Storage) ---
+
+// Generamos nombres aleatorios para "competidores"
+const botNames = ["ChronosMaster", "TimeWizard", "HabitHero", "FocusNinja", "DailyGrind", "SpeedRunner", "ZenMaster", "ProductivityPro"];
+
+const getBots = () => {
+    const stored = localStorage.getItem('leaderboard_bots');
+    if (stored) return JSON.parse(stored);
+
+    // Generar bots iniciales con puntuaciones aleatorias
+    const bots = botNames.map((name, i) => ({
+        id: `bot_${i}`,
+        username: name,
+        points: Math.floor(Math.random() * 500) + 100, // Puntos base
+        isBot: true
+    }));
+    localStorage.setItem('leaderboard_bots', JSON.stringify(bots));
+    return bots;
+};
 
 export const syncUserScore = async (userProfile, score) => {
-    if (!db || !userProfile.id) return;
-    try {
-        await setDoc(doc(db, "leaderboard", userProfile.id), {
-            username: userProfile.name,
-            points: score,
-            lastUpdated: Date.now()
-        });
-    } catch (e) {
-        console.error("Error syncing score:", e);
-    }
+    // En modo local, solo guardamos nuestra puntuación en el array local si es necesario
+    // Realmente el Contexto ya maneja el perfil de usuario, aquí simulamos que enviamos los datos
+    console.log(`Sincronizando puntuación local para ${userProfile.name}: ${score}`);
+    
+    // Actualizar bots ligeramente para que el ranking se sienta vivo
+    const bots = getBots();
+    const updatedBots = bots.map(bot => {
+        // 30% de probabilidad de que un bot gane puntos
+        if (Math.random() > 0.7) {
+            return { ...bot, points: bot.points + Math.floor(Math.random() * 50) };
+        }
+        return bot;
+    });
+    localStorage.setItem('leaderboard_bots', JSON.stringify(updatedBots));
 };
 
 export const getLeaderboardData = async () => {
-    if (!db) return [];
-    try {
-        // Get top 100 to allow finding friends/self easily in reasonably sized app
-        const q = query(collection(db, "leaderboard"), orderBy("points", "desc"), limit(100));
-        const querySnapshot = await getDocs(q);
-        const data = [];
-        querySnapshot.forEach((doc) => {
-            data.push({ id: doc.id, ...doc.data() });
-        });
-        return data;
-    } catch (e) {
-        console.error("Error fetching leaderboard:", e);
-        return [];
+    // Obtener bots
+    const bots = getBots();
+    
+    // Obtener usuario actual (esto normalmente viene del contexto, pero aquí lo simulamos leyendo localStorage para componer la lista completa)
+    const userProfileStr = localStorage.getItem('userProfile');
+    const tasksStr = localStorage.getItem('timeEntries'); // Solo para calcular algo real si fuera necesario, pero usaremos el score pasado
+    
+    let currentUser = null;
+    if (userProfileStr) {
+        // Necesitamos calcular el score real del usuario para mostrarlo en la tabla mezclada
+        // Como esta función es asíncrona y desacoplada, asumimos que syncUserScore ya se llamó o
+        // simplemente devolvemos los bots y dejamos que la UI inyecte al usuario (como ya hace RankingView).
+        // Para simplificar: devolvemos solo los bots, la UI de React ya añade al usuario actual a la lista.
     }
+
+    // Devolvemos los bots ordenados
+    return bots.sort((a, b) => b.points - a.points);
 };

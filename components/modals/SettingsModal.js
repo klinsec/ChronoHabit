@@ -137,10 +137,10 @@ const SettingsModal = ({ onClose }) => {
 
             /* Notification Section */
             React.createElement('div', { className: "space-y-3 pt-4 border-t border-gray-800" },
-                React.createElement('h3', { className: "text-xs font-bold text-gray-500 uppercase tracking-widest" }, "Notificaciones (FCM)"),
+                React.createElement('h3', { className: "text-xs font-bold text-gray-500 uppercase tracking-widest" }, "Notificaciones Locales"),
                 
                 React.createElement('div', { className: "flex items-center justify-between bg-gray-800 p-3 rounded-xl border border-gray-700" },
-                    React.createElement('span', { className: "text-sm font-semibold" }, "Alertas Push"),
+                    React.createElement('span', { className: "text-sm font-semibold" }, "Activar Alertas"),
                     React.createElement('button', 
                         {
                             onClick: toggleDailyNotification,
@@ -150,7 +150,7 @@ const SettingsModal = ({ onClose }) => {
                     )
                 ),
                 React.createElement('p', { className: "text-[10px] text-gray-500 px-1" },
-                    "*Requiere configuración de Firebase y Cloud Functions en el backend."
+                    "Permite que la app te envíe recordatorios cuando tengas tareas pendientes."
                 )
             ),
 

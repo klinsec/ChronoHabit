@@ -1,40 +1,5 @@
 
-// Add Firebase Messaging Service Worker logic
-importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
-
-// Configuración de Firebase para el Service Worker (Segundo plano)
-// REEMPLAZA CON TUS DATOS REALES
-const firebaseConfig = {
-  apiKey: "TU_API_KEY_AQUI",
-  authDomain: "tu-proyecto.firebaseapp.com",
-  projectId: "tu-proyecto",
-  storageBucket: "tu-proyecto.appspot.com",
-  messagingSenderId: "TU_SENDER_ID",
-  appId: "TU_APP_ID"
-};
-
-try {
-    firebase.initializeApp(firebaseConfig);
-    const messaging = firebase.messaging();
-
-    // Este manejador se activa cuando la app está en SEGUNDO PLANO o CERRADA
-    messaging.onBackgroundMessage((payload) => {
-      console.log('[firebase-messaging-sw.js] Received background message ', payload);
-      // Personaliza la notificación aquí
-      const notificationTitle = payload.notification.title;
-      const notificationOptions = {
-        body: payload.notification.body,
-        icon: '/icon-192.png'
-      };
-
-      self.registration.showNotification(notificationTitle, notificationOptions);
-    });
-} catch (e) {
-    console.log("Firebase SW init skipped (config missing)");
-}
-
-const CACHE_NAME = 'chronohabit-v1.2.7'; 
+const CACHE_NAME = 'chronohabit-v1.3.0'; 
 const urlsToCache = [
   './',
   './index.html',
@@ -138,16 +103,10 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
   
+  // Local Notification Handler triggered from the app logic
   if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
       const { title, options } = event.data;
       self.registration.showNotification(title, options);
-  }
-
-  if (event.data && event.data.type === 'CANCEL_NOTIFICATION') {
-      const { tag } = event.data;
-      self.registration.getNotifications({ tag }).then(notifications => {
-          notifications.forEach(notification => notification.close());
-      });
   }
 });
 
