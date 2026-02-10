@@ -146,16 +146,10 @@ const RankingTable = ({ data, currentUserId, title, icon, showFooterSelf = false
 };
 
 const RankingView = () => {
-    const { userProfile, updateUsername, globalRankingId, leaderboard, refreshLeaderboard, calculateTotalScore, addFriend, removeFriend } = useTimeTracker();
+    const { userProfile, updateUsername, leaderboard, calculateTotalScore, addFriend, removeFriend } = useTimeTracker();
     const [isEditingName, setIsEditingName] = useState(false);
     const [newName, setNewName] = useState(userProfile.name);
     const [friendInput, setFriendInput] = useState('');
-
-    useEffect(() => {
-        refreshLeaderboard();
-        const interval = setInterval(refreshLeaderboard, 30000); // 30s auto refresh
-        return () => clearInterval(interval);
-    }, [refreshLeaderboard]);
 
     const handleSaveName = () => {
         if (newName.trim()) {
@@ -182,18 +176,6 @@ const RankingView = () => {
     // Filter logic: Friends are those in local friends list AND existing in leaderboard, OR self
     const friendsData = leaderboard.filter(u => userProfile.friends.includes(u.id) || u.id === userProfile.id);
     const globalData = leaderboard; // Full list
-
-    if (!globalRankingId) {
-        return (
-            React.createElement('div', { className: "flex flex-col items-center justify-center p-8 text-center space-y-4 h-64 border border-dashed border-gray-700 rounded-2xl bg-surface/50" },
-                React.createElement('div', { className: "text-4xl" }, "☁️"),
-                React.createElement('h3', { className: "text-xl font-bold text-white" }, "Ranking Desconectado"),
-                React.createElement('p', { className: "text-gray-400 text-sm max-w-xs" }, 
-                    "Para competir en tiempo real, necesitas introducir un ID de Ranking Global (Pantry Cloud) en la configuración."
-                )
-            )
-        );
-    }
 
     return (
         React.createElement('div', { className: "space-y-6 animate-in fade-in duration-300" },

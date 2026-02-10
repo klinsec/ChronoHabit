@@ -2,6 +2,7 @@
 import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { getAnalytics } from 'firebase/analytics';
+import { getFirestore, doc, setDoc, onSnapshot, collection, query, orderBy, limit } from 'firebase/firestore';
 
 // Configuración de Firebase proporcionada
 const firebaseConfig = {
@@ -18,21 +19,27 @@ const firebaseConfig = {
 let app;
 let messaging;
 let analytics;
+let db;
 
 try {
     app = initializeApp(firebaseConfig);
     console.log("Firebase App inicializada");
 
     try {
-        analytics = getAnalytics(app);
-        console.log("Analytics activo");
+        db = getFirestore(app);
+        console.log("Firestore (Base de datos) activo");
     } catch (e) {
-        console.warn("Error iniciando Analytics (puede ser bloqueador de anuncios o entorno no soportado):", e);
+        console.warn("Error iniciando Firestore:", e);
+    }
+
+    try {
+        analytics = getAnalytics(app);
+    } catch (e) {
+        // Ignorar errores de analytics (común en bloqueadores)
     }
 
     try {
         messaging = getMessaging(app);
-        console.log("Messaging activo");
     } catch (e) {
         console.warn("Error iniciando Messaging:", e);
     }
@@ -41,32 +48,18 @@ try {
     console.error("Error CRÍTICO al inicializar Firebase:", error);
 }
 
-// --- SISTEMA DE RANKING GLOBAL (PANTRY CLOUD) ---
-const PANTRY_BASE_URL = "https://getpantry.cloud/apiv1/pantry";
-const BASKET_NAME = "Ranking_ChronoHabit"; // Nombre actualizado para coincidir con tu prueba
-
 // 1. Notificaciones
 export const requestFcmToken = async () => {
-    if (!messaging) {
-        console.warn("Firebase Messaging no está activo.");
-        return null;
-    }
-    
+    if (!messaging) return null;
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
             try {
                 const token = await getToken(messaging);
-                if (token) {
-                    console.log("FCM Token:", token);
-                    return token;
-                }
+                if (token) return token;
             } catch (tokenError) {
-                console.warn("No se pudo obtener el token FCM:", tokenError);
-                return "permission-granted-no-token";
+                console.warn("No se pudo obtener token FCM:", tokenError);
             }
-        } else {
-            console.warn("Permiso de notificación denegado");
         }
         return null;
     } catch (error) {
@@ -78,67 +71,51 @@ export const requestFcmToken = async () => {
 export const onMessageListener = () => {
     if (!messaging) return new Promise(() => {});
     return new Promise((resolve) => {
-        onMessage(messaging, (payload) => {
-            console.log("Mensaje recibido en primer plano:", payload);
-            resolve(payload);
-        });
+        onMessage(messaging, (payload) => resolve(payload));
     });
 };
 
-// --- 2. Funciones de Ranking Real (Pantry) ---
+// --- 2. SISTEMA DE RANKING REAL (FIRESTORE) ---
 
-// Guardar/Actualizar puntuación en la nube
-export const syncUserScore = async (userProfile, score, pantryId) => {
-    if (!pantryId || !userProfile.id) return;
+// Sincronizar puntuación del usuario actual
+export const syncUserScore = async (userProfile, score) => {
+    if (!db || !userProfile.id) return;
 
-    const url = `${PANTRY_BASE_URL}/${pantryId}/basket/${BASKET_NAME}`;
-    
-    const payload = {
-        [userProfile.id]: {
+    try {
+        // Referencia al documento único del usuario en la colección 'leaderboard'
+        const userRef = doc(db, "leaderboard", userProfile.id);
+        
+        // setDoc con merge: true actualiza campos sin borrar el resto
+        await setDoc(userRef, {
             id: userProfile.id,
             username: userProfile.name,
             points: score,
             updatedAt: Date.now()
-        }
-    };
-
-    try {
-        // IMPORTANTE: Usamos POST para hacer MERGE de los datos. 
-        // PUT reemplazaría toda la cesta borrando a otros usuarios.
-        await fetch(url, {
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        console.log(`Puntos sincronizados en la nube (${score}) para ${userProfile.name}`);
+        }, { merge: true });
+        
+        // console.log("Puntos sincronizados en Firestore:", score);
     } catch (error) {
-        console.error("Error sincronizando ranking:", error);
+        console.error("Error sincronizando ranking en Firestore:", error);
     }
 };
 
-// Obtener la tabla completa
-export const getLeaderboardData = async (pantryId) => {
-    if (!pantryId) return [];
+// Suscribirse a cambios en tiempo real del ranking
+export const subscribeToLeaderboard = (callback) => {
+    if (!db) return () => {};
 
-    // Añadimos un timestamp para evitar caché agresivo del navegador/API
-    const url = `${PANTRY_BASE_URL}/${pantryId}/basket/${BASKET_NAME}?_t=${Date.now()}`;
+    // Consulta: Top 100 usuarios ordenados por puntos descendente
+    const q = query(collection(db, "leaderboard"), orderBy("points", "desc"), limit(100));
 
-    try {
-        const response = await fetch(url);
-        if (!response.ok) {
-            console.warn("Ranking aún no creado o ID incorrecto (404 es normal al inicio)");
-            return [];
-        }
-        
-        const data = await response.json();
-        const playersArray = Object.values(data);
-        
-        // Filtrar datos corruptos si los hubiera y ordenar
-        return playersArray
-            .filter(p => p && typeof p.points === 'number')
-            .sort((a, b) => b.points - a.points);
-    } catch (error) {
-        console.error("Error obteniendo ranking:", error);
-        return [];
-    }
+    // onSnapshot escucha cambios en tiempo real
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const leaderboardData = [];
+        querySnapshot.forEach((doc) => {
+            leaderboardData.push(doc.data());
+        });
+        callback(leaderboardData);
+    }, (error) => {
+        console.error("Error escuchando ranking:", error);
+    });
+
+    return unsubscribe;
 };

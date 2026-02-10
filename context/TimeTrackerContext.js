@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { uploadBackupFile, signInToGoogle, getUserInfo, initGoogleDrive, checkTokenAndRestore } from '../utils/googleDrive.js';
-import { requestFcmToken, onMessageListener, syncUserScore, getLeaderboardData } from '../utils/firebaseConfig.js';
+import { requestFcmToken, onMessageListener, syncUserScore, subscribeToLeaderboard } from '../utils/firebaseConfig.js';
 
 const TimeTrackerContext = createContext(undefined);
 
@@ -34,8 +34,6 @@ const generateFunName = () => {
     return FUN_ALIASES[Math.floor(Math.random() * FUN_ALIASES.length)];
 };
 
-// ID Global por defecto para conectar a todos los usuarios automáticamente
-const DEFAULT_PANTRY_ID = "0382bbea-fde0-4545-bbff-429b1dea890f";
 const GOOGLE_CLIENT_ID = '347833746217-of5l8r31t5csaqtqce7130raeisgidlv.apps.googleusercontent.com';
 
 const DEFAULT_TASKS = [
@@ -86,20 +84,14 @@ export const TimeTrackerProvider = ({ children }) => {
   // User Identity & Ranking
   const [userProfile, setUserProfile] = useState(() => {
       const saved = localStorage.getItem('userProfile');
-      // Migrate old IDs if necessary or just load
       if (saved) {
           const parsed = JSON.parse(saved);
-          if (!parsed.friends) parsed.friends = []; // Ensure friends array exists
+          if (!parsed.friends) parsed.friends = []; 
           return parsed;
       }
-      // Generate new profile with Fun Name (One word)
       return { id: generateId(), name: generateFunName(), friends: [] };
   });
   
-  // Inicializar Ranking con el ID por defecto si no existe uno personalizado
-  const [globalRankingId, setGlobalRankingId] = useState(() => {
-      return localStorage.getItem('globalRankingId') || DEFAULT_PANTRY_ID;
-  });
   const [leaderboard, setLeaderboard] = useState([]);
 
   // Cloud & Settings
@@ -107,7 +99,7 @@ export const TimeTrackerProvider = ({ children }) => {
   const [lastSyncTime, setLastSyncTime] = useState(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
-  // Auto-Init Google Drive and Restore Session
+  // Auto-Init Google Drive
   useEffect(() => {
       const initCloud = async () => {
           try {
@@ -115,19 +107,15 @@ export const TimeTrackerProvider = ({ children }) => {
               const restoredToken = checkTokenAndRestore();
               if (restoredToken) {
                   setCloudStatus('connected');
-                  console.log("Sesión de Drive restaurada.");
-                  // Opcional: Refrescar nombre de usuario si es necesario
                   try {
                       const userInfo = await getUserInfo(restoredToken);
                       if (userInfo && userInfo.name) {
                           updateUsername(userInfo.name);
                       }
-                  } catch(e) {
-                      console.warn("No se pudo actualizar info de usuario en segundo plano", e);
-                  }
+                  } catch(e) { console.warn("Background user info fetch failed", e); }
               }
           } catch (e) {
-              console.warn("Auto-init de Google Drive falló (normal si no hay internet o scripts bloqueados)", e);
+              console.warn("Google Drive init failed", e);
           }
       };
       initCloud();
@@ -146,11 +134,6 @@ export const TimeTrackerProvider = ({ children }) => {
   useEffect(() => localStorage.setItem('savedRoutines', JSON.stringify(savedRoutines)), [savedRoutines]);
   useEffect(() => localStorage.setItem('userProfile', JSON.stringify(userProfile)), [userProfile]);
   
-  // Save Ranking ID
-  useEffect(() => {
-      localStorage.setItem('globalRankingId', globalRankingId);
-  }, [globalRankingId]);
-
   // Active Entry Restoration
   useEffect(() => {
     const active = timeEntries.find(e => e.endTime === null);
@@ -174,7 +157,6 @@ export const TimeTrackerProvider = ({ children }) => {
   // --- Score Calculation & Sync ---
   const calculateTotalScore = useCallback(() => {
       let total = 0;
-      // 1. Timer Points
       timeEntries.forEach(entry => {
           if (entry.endTime) {
               const task = tasks.find(t => t.id === entry.taskId);
@@ -184,56 +166,50 @@ export const TimeTrackerProvider = ({ children }) => {
               }
           }
       });
-      // 2. Subtask Points
       subtasks.forEach(s => {
           if (s.completed && s.difficulty) total += s.difficulty;
       });
-      // 3. Routine Points
       const allHistory = [...pastContracts.flatMap(c => c.dailyHistory), ...(contract ? contract.dailyHistory : [])];
       allHistory.forEach(h => total += (h.points || 0));
       
       return Math.floor(total);
   }, [timeEntries, subtasks, pastContracts, contract, tasks]);
 
-  // Periodic Score Sync (Only if ID is set)
+  // --- FIRESTORE REALTIME SYNC ---
+  
+  // 1. Sync User Score to Firestore (Push)
   useEffect(() => {
-      if (!globalRankingId) return;
-      
       const score = calculateTotalScore();
-      // Sync immediately on mount/change
-      syncUserScore(userProfile, score, globalRankingId);
+      // Sync immediately on score change
+      syncUserScore(userProfile, score);
 
+      // Debounce/Periodic sync backup
       const interval = setInterval(() => {
-          syncUserScore(userProfile, score, globalRankingId);
-      }, 60000); // Cada minuto
+          syncUserScore(userProfile, score);
+      }, 60000); // 1 minute
       
       return () => clearInterval(interval);
-  }, [userProfile, calculateTotalScore, globalRankingId]);
+  }, [userProfile, calculateTotalScore]);
 
-  const refreshLeaderboard = useCallback(async () => {
-      if (!globalRankingId) {
-          setLeaderboard([]);
-          return;
-      }
-      const data = await getLeaderboardData(globalRankingId);
-      setLeaderboard(data);
-  }, [globalRankingId]);
+  // 2. Subscribe to Leaderboard (Pull Real-Time)
+  useEffect(() => {
+      const unsubscribe = subscribeToLeaderboard((data) => {
+          setLeaderboard(data);
+      });
+      return () => unsubscribe();
+  }, []);
+
+  // ---
 
   const updateUsername = (name) => {
-      if (name === userProfile.name) return; // Avoid loops
-      setUserProfile(prev => ({ ...prev, name }));
-      // Trigger sync immediately with new name
-      const score = calculateTotalScore();
-      if(globalRankingId) syncUserScore({ ...userProfile, name }, score, globalRankingId);
+      if (name === userProfile.name) return;
+      const newProfile = { ...userProfile, name };
+      setUserProfile(newProfile);
+      syncUserScore(newProfile, calculateTotalScore());
   };
   
-  const setRankingId = (id) => {
-      setGlobalRankingId(id);
-  };
-
   const addFriend = (friendId) => {
       if (!friendId) return;
-      // Basic check to avoid self-add
       if (friendId === userProfile.id) {
           alert("No puedes añadirte a ti mismo.");
           return;
@@ -253,11 +229,11 @@ export const TimeTrackerProvider = ({ children }) => {
           version: 1,
           timestamp: Date.now(),
           tasks, timeEntries, subtasks, goals, contract, pastContracts, savedRoutines,
-          settings: { notificationsEnabled, globalRankingId },
+          settings: { notificationsEnabled },
           userProfile
       };
       return JSON.stringify(data, null, 2);
-  }, [tasks, timeEntries, subtasks, goals, contract, pastContracts, savedRoutines, notificationsEnabled, userProfile, globalRankingId]);
+  }, [tasks, timeEntries, subtasks, goals, contract, pastContracts, savedRoutines, notificationsEnabled, userProfile]);
 
   const importData = useCallback((json, merge = false) => {
       try {
@@ -273,7 +249,6 @@ export const TimeTrackerProvider = ({ children }) => {
           update('pastContracts', setPastContracts);
           update('savedRoutines', setSavedRoutines);
           update('userProfile', setUserProfile);
-          if (data.settings && data.settings.globalRankingId) setGlobalRankingId(data.settings.globalRankingId);
           return true;
       } catch (e) {
           console.error("Import error", e);
@@ -285,18 +260,13 @@ export const TimeTrackerProvider = ({ children }) => {
       try {
           const tokenResponse = await signInToGoogle();
           setCloudStatus('connected');
-          
-          // Fetch Google Name and update user profile if available
           if (tokenResponse && tokenResponse.access_token) {
               try {
                   const userInfo = await getUserInfo(tokenResponse.access_token);
                   if (userInfo && userInfo.name) {
-                      console.log("Updating username from Google:", userInfo.name);
                       updateUsername(userInfo.name);
                   }
-              } catch (e) {
-                  console.warn("Could not fetch Google User Info:", e);
-              }
+              } catch (e) { console.warn(e); }
           }
       } catch (error) {
           console.error("Google Connect failed", error);
@@ -441,8 +411,7 @@ export const TimeTrackerProvider = ({ children }) => {
       cloudStatus, connectToCloud, triggerCloudSync, lastSyncTime, exportData, importData,
       notificationsEnabled, requestNotificationPermission, toggleDailyNotification,
       // Leaderboard Exports
-      userProfile, updateUsername, addFriend, removeFriend, leaderboard, refreshLeaderboard, calculateTotalScore,
-      globalRankingId, setRankingId
+      userProfile, updateUsername, addFriend, removeFriend, leaderboard, calculateTotalScore
     }},
     children
   );
