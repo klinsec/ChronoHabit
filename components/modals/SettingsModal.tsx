@@ -10,13 +10,10 @@ interface SettingsModalProps {
 const GOOGLE_CLIENT_ID = '347833746217-of5l8r31t5csaqtqce7130raeisgidlv.apps.googleusercontent.com';
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
-  const { requestNotificationPermission, exportData, importData, connectToCloud, triggerCloudSync, cloudStatus, lastSyncTime, dailyNotificationEnabled, toggleDailyNotification, briefingTime, reviewTime, setNotificationTimes } = useTimeTracker();
+  const { requestNotificationPermission, exportData, importData, connectToCloud, triggerCloudSync, cloudStatus, lastSyncTime, notificationsEnabled, toggleDailyNotification } = useTimeTracker();
   
   const [statusMsg, setStatusMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
-  const [localBriefing, setLocalBriefing] = useState(briefingTime);
-  const [localReview, setLocalReview] = useState(reviewTime);
 
   useEffect(() => {
       // Try to init immediately in background
@@ -75,10 +72,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
           setIsLoading(false);
       }
   };
-  
-  const handleSaveTimes = () => {
-      setNotificationTimes(localBriefing, localReview);
-  }
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -110,49 +103,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
             {/* Notifications Section */}
             <div className="pt-4 border-t border-gray-800">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Notificaciones</h3>
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Notificaciones (FCM)</h3>
                 <div className="space-y-3">
-                    <button 
-                        onClick={requestNotificationPermission}
-                        className="w-full bg-gray-800 hover:bg-gray-700 text-on-surface font-semibold py-3 rounded-xl text-sm border border-gray-700 flex items-center justify-between px-4"
-                    >
-                        <span>🔔 Permitir Notificaciones</span>
-                    </button>
-                    
                     <div className="flex items-center justify-between bg-gray-800 p-3 rounded-xl border border-gray-700">
-                        <span className="text-sm font-semibold">Alertas Diarias</span>
+                        <span className="text-sm font-semibold">Alertas Push</span>
                          <button 
                             onClick={toggleDailyNotification}
-                            className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 ease-in-out ${dailyNotificationEnabled ? 'bg-primary' : 'bg-gray-600'}`}
+                            className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 ease-in-out ${notificationsEnabled ? 'bg-primary' : 'bg-gray-600'}`}
                         >
-                            <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${dailyNotificationEnabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                            <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${notificationsEnabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
                         </button>
                     </div>
-                    
-                    {dailyNotificationEnabled && (
-                        <div className="bg-gray-900/50 p-3 rounded-xl border border-gray-700 space-y-3">
-                            <div className="flex justify-between items-center">
-                                <label className="text-xs text-gray-400">Resumen Matutino:</label>
-                                <input 
-                                    type="time" 
-                                    value={localBriefing} 
-                                    onChange={(e) => setLocalBriefing(e.target.value)} 
-                                    onBlur={handleSaveTimes}
-                                    className="bg-gray-800 text-white rounded px-2 py-1 text-sm outline-none border border-gray-600 focus:border-primary"
-                                />
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <label className="text-xs text-gray-400">Revisión Nocturna:</label>
-                                <input 
-                                    type="time" 
-                                    value={localReview} 
-                                    onChange={(e) => setLocalReview(e.target.value)} 
-                                    onBlur={handleSaveTimes}
-                                    className="bg-gray-800 text-white rounded px-2 py-1 text-sm outline-none border border-gray-600 focus:border-primary"
-                                />
-                            </div>
-                        </div>
-                    )}
+                    <p className="text-[10px] text-gray-500 px-1">
+                        *Requiere configuración de Firebase y Cloud Functions en el backend para enviar alertas programadas.
+                    </p>
                 </div>
             </div>
 

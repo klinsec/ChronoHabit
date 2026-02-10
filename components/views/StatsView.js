@@ -3,7 +3,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext.js';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, LabelList, CartesianGrid } from 'recharts';
 import { formatDuration } from '../../utils/helpers.js';
-import { CogIcon } from '../Icons.js';
+import { CogIcon, EditIcon, StarIcon, PlusIcon, TrashIcon } from '../Icons.js';
 import GoalModal from '../modals/GoalModal.js';
 
 const DateNavigator = ({ period, currentDate, setCurrentDate, dateRangeDisplay }) => {
@@ -52,8 +52,208 @@ const DateNavigator = ({ period, currentDate, setCurrentDate, dateRangeDisplay }
     );
 };
 
+// --- LEADERBOARD COMPONENTS ---
+
+const RankBadge = ({ rank }) => {
+    let colorClass = "bg-gray-700 text-gray-300";
+    let icon = null;
+    if (rank === 1) { colorClass = "bg-yellow-500/20 text-yellow-500"; icon = "🥇"; }
+    else if (rank === 2) { colorClass = "bg-gray-400/20 text-gray-300"; icon = "🥈"; }
+    else if (rank === 3) { colorClass = "bg-orange-600/20 text-orange-500"; icon = "🥉"; }
+
+    return (
+        React.createElement('div', { className: `w-8 h-8 rounded-full flex items-center justify-center font-bold ${colorClass} text-sm` },
+            icon || rank
+        )
+    );
+};
+
+const RankingTable = ({ data, currentUserId, title, showFooterSelf = false }) => {
+    // Find current user rank index
+    const selfIndex = data.findIndex(u => u.id === currentUserId);
+    const selfData = selfIndex >= 0 ? { ...data[selfIndex], rank: selfIndex + 1 } : null;
+    const isSelfInTop = selfIndex >= 0 && selfIndex < data.length;
+
+    return (
+        React.createElement('div', { className: "bg-surface rounded-2xl overflow-hidden border border-gray-800 shadow-lg mb-6" },
+            React.createElement('div', { className: "p-4 border-b border-gray-800 bg-gray-900/50" },
+                React.createElement('h3', { className: "text-lg font-bold text-white flex items-center gap-2" },
+                    React.createElement(StarIcon, null),
+                    title
+                )
+            ),
+            React.createElement('div', { className: "overflow-x-auto" },
+                React.createElement('table', { className: "w-full text-sm text-left" },
+                    React.createElement('thead', { className: "text-xs text-gray-500 uppercase bg-gray-900" },
+                        React.createElement('tr', null,
+                            React.createElement('th', { className: "px-4 py-3 w-16" }, "Pos"),
+                            React.createElement('th', { className: "px-4 py-3" }, "Usuario"),
+                            React.createElement('th', { className: "px-4 py-3 text-right" }, "Puntos")
+                        )
+                    ),
+                    React.createElement('tbody', null,
+                        data.length === 0 ? (
+                            React.createElement('tr', null,
+                                React.createElement('td', { colSpan: 3, className: "px-4 py-6 text-center text-gray-500" }, "No hay datos disponibles")
+                            )
+                        ) : (
+                            data.map((user, index) => (
+                                React.createElement('tr', { 
+                                    key: user.id || index, 
+                                    className: `border-b border-gray-800 transition-colors ${user.id === currentUserId ? 'bg-primary/10 hover:bg-primary/20' : 'hover:bg-gray-800/50'}`
+                                },
+                                    React.createElement('td', { className: "px-4 py-3 font-medium" }, 
+                                        React.createElement(RankBadge, { rank: index + 1 })
+                                    ),
+                                    React.createElement('td', { className: `px-4 py-3 ${user.id === currentUserId ? 'font-bold text-primary' : 'text-gray-300'}` }, 
+                                        user.username || 'Anónimo'
+                                    ),
+                                    React.createElement('td', { className: "px-4 py-3 text-right font-mono font-bold text-white" }, 
+                                        user.points.toLocaleString()
+                                    )
+                                )
+                            ))
+                        )
+                    )
+                )
+            ),
+            // Sticky footer for self if not in view (optional logic, showing simple "Your Rank" bar)
+            showFooterSelf && !isSelfInTop && selfData && (
+                React.createElement('div', { className: "border-t border-gray-700 bg-gray-800 p-3 flex justify-between items-center" },
+                    React.createElement('div', { className: "flex items-center gap-3" },
+                        React.createElement('span', { className: "text-gray-400 text-xs uppercase" }, "Tu Posición:"),
+                        React.createElement('span', { className: "font-bold text-white" }, `${selfData.rank}º`)
+                    ),
+                    React.createElement('span', { className: "font-mono font-bold text-primary" }, selfData.points.toLocaleString())
+                )
+            )
+        )
+    );
+};
+
+const RankingView = () => {
+    const { userProfile, updateUsername, addFriend, removeFriend, leaderboard, refreshLeaderboard, calculateTotalScore } = useTimeTracker();
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [newName, setNewName] = useState(userProfile.name);
+    const [friendInput, setFriendInput] = useState('');
+
+    useEffect(() => {
+        refreshLeaderboard();
+        // Set interval to refresh
+        const interval = setInterval(refreshLeaderboard, 30000);
+        return () => clearInterval(interval);
+    }, [refreshLeaderboard]);
+
+    const handleSaveName = () => {
+        if (newName.trim()) {
+            updateUsername(newName.trim());
+            setIsEditingName(false);
+        }
+    };
+
+    const handleAddFriend = () => {
+        if (friendInput.trim()) {
+            addFriend(friendInput.trim());
+            setFriendInput('');
+        }
+    };
+
+    const myScore = calculateTotalScore();
+
+    // Global Top 10
+    const topGlobal = leaderboard.slice(0, 10);
+
+    // Friends Leaderboard (Me + Friends found in global list or mocked)
+    // In a real app we'd query by IDs. Here we filter the leaderboard by name match for simplicity
+    const friendsData = leaderboard.filter(u => 
+        userProfile.friends.includes(u.username) || u.id === userProfile.id
+    );
+    // Sort friends list
+    friendsData.sort((a, b) => b.points - a.points);
+
+    // If I'm not in leaderboard yet (e.g. new sync), show me locally
+    if (!friendsData.some(u => u.id === userProfile.id)) {
+        friendsData.push({ id: userProfile.id, username: userProfile.name, points: myScore });
+        friendsData.sort((a, b) => b.points - a.points);
+    }
+
+    return (
+        React.createElement('div', { className: "space-y-6 animate-in fade-in duration-300" },
+            
+            /* Profile Card */
+            React.createElement('div', { className: "bg-gradient-to-r from-gray-800 to-gray-900 p-4 rounded-2xl border border-gray-700 flex justify-between items-center" },
+                React.createElement('div', null,
+                    React.createElement('p', { className: "text-xs text-gray-400 uppercase" }, "Tu Perfil"),
+                    isEditingName ? (
+                        React.createElement('div', { className: "flex gap-2 mt-1" },
+                            React.createElement('input', { 
+                                type: "text", 
+                                value: newName, 
+                                onChange: (e) => setNewName(e.target.value),
+                                className: "bg-black/30 border border-gray-600 rounded px-2 py-1 text-white text-sm"
+                            }),
+                            React.createElement('button', { onClick: handleSaveName, className: "bg-primary text-black px-2 rounded font-bold text-xs" }, "OK")
+                        )
+                    ) : (
+                        React.createElement('h2', { className: "text-xl font-bold text-white flex items-center gap-2" },
+                            userProfile.name,
+                            React.createElement('button', { onClick: () => setIsEditingName(true), className: "text-gray-500 hover:text-white" }, React.createElement(EditIcon, null))
+                        )
+                    )
+                ),
+                React.createElement('div', { className: "text-right" },
+                    React.createElement('p', { className: "text-xs text-gray-400 uppercase" }, "Puntuación"),
+                    React.createElement('p', { className: "text-2xl font-mono font-bold text-primary" }, myScore.toLocaleString())
+                )
+            ),
+
+            /* Friends Section */
+            React.createElement('div', null,
+                React.createElement(RankingTable, { 
+                    title: "Competición con Amigos", 
+                    data: friendsData, 
+                    currentUserId: userProfile.id 
+                }),
+                
+                /* Add Friend Input */
+                React.createElement('div', { className: "flex gap-2 mt-2 bg-surface p-2 rounded-xl border border-gray-700" },
+                    React.createElement('input', {
+                        type: "text",
+                        placeholder: "Añadir amigo (Nombre exacto)",
+                        value: friendInput,
+                        onChange: (e) => setFriendInput(e.target.value),
+                        className: "bg-transparent flex-grow px-2 text-sm text-white outline-none"
+                    }),
+                    React.createElement('button', { onClick: handleAddFriend, className: "bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-lg" },
+                        React.createElement(PlusIcon, null)
+                    )
+                ),
+                React.createElement('div', { className: "flex flex-wrap gap-2 mt-2" },
+                    userProfile.friends.map(friend => (
+                        React.createElement('span', { key: friend, className: "bg-gray-800 text-gray-300 text-xs px-2 py-1 rounded-full flex items-center gap-1" },
+                            friend,
+                            React.createElement('button', { onClick: () => removeFriend(friend), className: "text-red-400 hover:text-red-300 font-bold ml-1" }, "×")
+                        )
+                    ))
+                )
+            ),
+
+            /* Global Section */
+            React.createElement(RankingTable, { 
+                title: "Top Global", 
+                data: topGlobal, 
+                currentUserId: userProfile.id,
+                showFooterSelf: true
+            })
+        )
+    );
+};
+
+// --- MAIN STATS VIEW ---
+
 const StatsView = () => {
   const { timeEntries, getTaskById, activeEntry, liveElapsedTime, getGoalByTaskIdAndPeriod, subtasks, contract, pastContracts } = useTimeTracker();
+  const [activeTab, setActiveTab] = useState('charts'); // 'charts' | 'ranking'
   const [period, setPeriod] = useState('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
@@ -158,7 +358,7 @@ const StatsView = () => {
   
   const totalDuration = useMemo(() => Object.values(taskDurations).reduce((sum, item) => sum + Number(item), 0), [taskDurations]);
 
-  // --- UNIFIED POINTS LOGIC ---
+  // --- UNIFIED POINTS LOGIC (For Charts) ---
   const unifiedPointsData = useMemo(() => {
       const bucketType = (period === 'week' || period === 'month') ? 'day' : 'month';
       const dataMap = new Map();
@@ -192,7 +392,7 @@ const StatsView = () => {
 
           if (dataMap.has(key)) {
               const durationHours = (entry.endTime - entry.startTime) / (1000 * 60 * 60);
-              const score = durationHours * task.difficulty;
+              const score = durationHours * task.difficulty * 10; // Normalized points
               const current = dataMap.get(key);
               current.timer += score;
           }
@@ -256,7 +456,6 @@ const StatsView = () => {
                   let earnedPoints = 0;
                   if (totalCommitments > 0) {
                       const ratio = completedCommitments / totalCommitments;
-                      // Calculate potential earned today proportionally with decimals
                       earnedPoints = parseFloat((potentialPoints * ratio).toFixed(1));
                   }
                   
@@ -286,6 +485,8 @@ const StatsView = () => {
       });
 
   }, [filteredEntries, subtasks, contract, pastContracts, period, dateRange, getTaskById]);
+
+  // --- Render Functions ---
 
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
@@ -352,138 +553,161 @@ const StatsView = () => {
   const periodLabels = { day: 'Día', week: 'Semana', month: 'Mes', all: 'Año' };
 
   return (
-    React.createElement('div', { className: "space-y-8" },
+    React.createElement('div', { className: "space-y-6" },
       isGoalModalOpen && React.createElement(GoalModal, { period: period, onClose: () => setIsGoalModalOpen(false) }),
-      React.createElement('div', null,
-        React.createElement('div', { className: "flex justify-center bg-surface p-1 rounded-xl mb-4" },
-            ['day', 'week', 'month', 'all'].map(p => (
-            React.createElement('button', { key: p, onClick: () => setPeriod(p), className: `w-full py-2 text-sm font-semibold rounded-lg transition-colors ${period === p ? 'bg-primary text-bkg' : 'text-gray-300 hover:bg-gray-700'}` },
-                periodLabels[p]
-            )
-            ))
-        ),
-        
-        React.createElement(DateNavigator, { period: period, currentDate: currentDate, setCurrentDate: setCurrentDate, dateRangeDisplay: dateRange.display }),
+      
+      /* Tabs */
+      React.createElement('div', { className: "flex bg-gray-800 p-1 rounded-xl mb-4" },
+          React.createElement('button', 
+              { 
+                  onClick: () => setActiveTab('charts'),
+                  className: `flex-1 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'charts' ? 'bg-surface text-primary shadow-md' : 'text-gray-400 hover:text-white'}`
+              },
+              "Gráficas"
+          ),
+          React.createElement('button', 
+              { 
+                  onClick: () => setActiveTab('ranking'),
+                  className: `flex-1 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'ranking' ? 'bg-surface text-yellow-500 shadow-md' : 'text-gray-400 hover:text-white'}`
+              },
+              "Ranking 🏆"
+          )
+      ),
 
-        chartData.length > 0 || unifiedPointsData.some(d => d.total > 0) ? (
-            React.createElement('div', { className: "space-y-10" },
-                
-                /* Pie Chart */
-                React.createElement('div', null,
-                    React.createElement('h3', { className: "text-xl font-semibold mb-2 text-center" }, "Distribución del Tiempo"),
-                    React.createElement('div', { style: { width: '100%', height: 300 } },
-                        React.createElement(ResponsiveContainer, { width: "100%", height: "100%" },
-                            React.createElement(PieChart, { margin: { top: 5, right: 20, left: 20, bottom: 5 } },
-                                React.createElement(Pie, 
-                                    {
-                                      data: chartData, 
-                                      cx: "50%",
-                                      cy: "50%",
-                                      nameKey: "name",
-                                      dataKey: "value",
-                                      innerRadius: "60%",
-                                      outerRadius: "80%",
-                                      paddingAngle: 5,
-                                      labelLine: false,
-                                      isAnimationActive: !activeEntry
-                                    },
-                                    chartData.map((entry, index) => (React.createElement(Cell, { key: `cell-${index}`, fill: entry.fill, stroke: entry.fill })))
-                                ),
-                                React.createElement(Tooltip, { content: React.createElement(CustomTooltip, null) }),
-                                React.createElement(Legend, null)
-                            )
-                        )
-                    )
-                ),
+      activeTab === 'ranking' ? (
+          React.createElement(RankingView, null)
+      ) : (
+          React.createElement('div', null,
+            React.createElement('div', { className: "flex justify-center bg-surface p-1 rounded-xl mb-4" },
+                ['day', 'week', 'month', 'all'].map(p => (
+                React.createElement('button', { key: p, onClick: () => setPeriod(p), className: `w-full py-2 text-sm font-semibold rounded-lg transition-colors ${period === p ? 'bg-primary text-bkg' : 'text-gray-300 hover:bg-gray-700'}` },
+                    periodLabels[p]
+                )
+                ))
+            ),
+            
+            React.createElement(DateNavigator, { period: period, currentDate: currentDate, setCurrentDate: setCurrentDate, dateRangeDisplay: dateRange.display }),
 
-                /* Unified Stacked Bar Chart */
-                period !== 'day' && (
-                    React.createElement('div', { className: "bg-surface/30 p-4 rounded-xl border border-gray-800" },
-                        React.createElement('div', { className: "flex items-center justify-center gap-2 mb-4" },
-                            React.createElement('h3', { className: "text-lg font-semibold text-center text-white" }, "Puntos Totales (Diario)")
-                        ),
+            chartData.length > 0 || unifiedPointsData.some(d => d.total > 0) ? (
+                React.createElement('div', { className: "space-y-10" },
+                    
+                    /* Pie Chart */
+                    React.createElement('div', null,
+                        React.createElement('h3', { className: "text-xl font-semibold mb-2 text-center" }, "Distribución del Tiempo"),
                         React.createElement('div', { style: { width: '100%', height: 300 } },
                             React.createElement(ResponsiveContainer, { width: "100%", height: "100%" },
-                                React.createElement(BarChart, { data: unifiedPointsData, margin: { top: 10, right: 10, left: -20, bottom: 0 } },
-                                    React.createElement(CartesianGrid, { strokeDasharray: "3 3", vertical: false, stroke: "#333" }),
-                                    React.createElement(XAxis, { 
-                                        dataKey: "date", 
-                                        tick: { fill: '#888', fontSize: 10 }, 
-                                        axisLine: false, 
-                                        tickLine: false,
-                                        interval: period === 'month' ? 2 : 0
-                                    }),
-                                    React.createElement(YAxis, { tick: { fill: '#888', fontSize: 10 }, axisLine: false, tickLine: false }),
-                                    React.createElement(Tooltip, { content: React.createElement(UnifiedTooltip, null), cursor: { fill: 'rgba(255, 255, 255, 0.1)' } }),
-                                    React.createElement(Legend, { iconType: "circle", wrapperStyle: { paddingTop: '10px' } }),
-                                    React.createElement(Bar, { dataKey: "timer", name: "Cronómetro", stackId: "a", fill: "#bb86fc", radius: [0,0,4,4], barSize: 20 }),
-                                    React.createElement(Bar, { dataKey: "tasks", name: "Tareas", stackId: "a", fill: "#eab308", barSize: 20 }),
-                                    React.createElement(Bar, { dataKey: "routine", name: "Rutina", stackId: "a", fill: "#3b82f6", radius: [4,4,0,0], barSize: 20 })
+                                React.createElement(PieChart, { margin: { top: 5, right: 20, left: 20, bottom: 5 } },
+                                    React.createElement(Pie, 
+                                        {
+                                        data: chartData, 
+                                        cx: "50%",
+                                        cy: "50%",
+                                        nameKey: "name",
+                                        dataKey: "value",
+                                        innerRadius: "60%",
+                                        outerRadius: "80%",
+                                        paddingAngle: 5,
+                                        labelLine: false,
+                                        isAnimationActive: !activeEntry
+                                        },
+                                        chartData.map((entry, index) => (React.createElement(Cell, { key: `cell-${index}`, fill: entry.fill, stroke: entry.fill })))
+                                    ),
+                                    React.createElement(Tooltip, { content: React.createElement(CustomTooltip, null) }),
+                                    React.createElement(Legend, null)
                                 )
                             )
                         )
-                    )
-                ),
+                    ),
 
-                /* Bar Chart */
-                React.createElement('div', null,
-                  React.createElement('div', { className: "flex items-center justify-center gap-2" },
-                    React.createElement('h3', { className: "text-xl font-semibold text-center" }, "Desglose por Tarea"),
-                    React.createElement('button', { onClick: () => setIsGoalModalOpen(true), className: "text-gray-400 hover:text-white transition-colors", 'aria-label': "Configurar objetivos" },
-                        React.createElement(CogIcon, null)
-                    )
-                  ),
-                  React.createElement('div', { style: { width: '100%', height: Math.max(chartData.length * 60 + 20, 100), marginTop: '1rem' } },
-                    React.createElement(ResponsiveContainer, { width: "100%", height: "100%" },
-                      React.createElement(BarChart,
-                        {
-                          layout: "vertical",
-                          data: chartData,
-                          margin: { top: 5, right: 60, left: 5, bottom: 5 },
-                          barCategoryGap: "35%"
-                        },
-                        React.createElement(XAxis, { type: "number", hide: true }),
-                        React.createElement(YAxis, 
-                          { 
-                            type: "category", 
-                            dataKey: "name",
-                            width: 100,
-                            tickLine: false,
-                            axisLine: false,
-                            tick: { fill: '#e0e0e0', fontSize: 14 },
-                            tickFormatter: (value, index) => `${chartData[index]?.icon || ''} ${value}`
-                          }),
-                        React.createElement(Tooltip, { content: React.createElement(CustomTooltip, null), cursor: { fill: 'rgba(255, 255, 255, 0.1)' } }),
-                        React.createElement(Bar, { dataKey: (data) => data.goal?.duration || 0, barSize: 24, radius: [4, 4, 4, 4], isAnimationActive: !activeEntry},
-                            chartData.map((entry, index) => {
-                                const { value, goal } = entry;
-                                let color = "transparent";
-                                if (goal && goal.duration > 0) {
-                                    if (goal.type === 'min') {
-                                        color = value >= goal.duration ? '#22c55e' : '#4b5563';
-                                    } else { // max
-                                        color = value > goal.duration ? '#ef4444' : '#22c55e';
-                                    }
-                                }
-                                return React.createElement(Cell, { key: `cell-goal-${index}`, fill: color });
-                            }),
-                            React.createElement(LabelList, { dataKey: "goal.duration", content: renderGoalLabel })
-                        ),
-                        React.createElement(Bar, { dataKey: "value", barSize: 12, radius: [2, 2, 2, 2], isAnimationActive: !activeEntry },
-                          chartData.map((entry, index) => (
-                            React.createElement(Cell, { key: `cell-progress-${index}`, fill: entry.fill })
-                          )),
-                           React.createElement(LabelList, { dataKey: "value", content: renderProgressLabel })
+                    /* Unified Stacked Bar Chart */
+                    period !== 'day' && (
+                        React.createElement('div', { className: "bg-surface/30 p-4 rounded-xl border border-gray-800" },
+                            React.createElement('div', { className: "flex items-center justify-center gap-2 mb-4" },
+                                React.createElement('h3', { className: "text-lg font-semibold text-center text-white" }, "Puntos Totales (Diario)")
+                            ),
+                            React.createElement('div', { style: { width: '100%', height: 300 } },
+                                React.createElement(ResponsiveContainer, { width: "100%", height: "100%" },
+                                    React.createElement(BarChart, { data: unifiedPointsData, margin: { top: 10, right: 10, left: -20, bottom: 0 } },
+                                        React.createElement(CartesianGrid, { strokeDasharray: "3 3", vertical: false, stroke: "#333" }),
+                                        React.createElement(XAxis, { 
+                                            dataKey: "date", 
+                                            tick: { fill: '#888', fontSize: 10 }, 
+                                            axisLine: false, 
+                                            tickLine: false,
+                                            interval: period === 'month' ? 2 : 0
+                                        }),
+                                        React.createElement(YAxis, { tick: { fill: '#888', fontSize: 10 }, axisLine: false, tickLine: false }),
+                                        React.createElement(Tooltip, { content: React.createElement(UnifiedTooltip, null), cursor: { fill: 'rgba(255, 255, 255, 0.1)' } }),
+                                        React.createElement(Legend, { iconType: "circle", wrapperStyle: { paddingTop: '10px' } }),
+                                        React.createElement(Bar, { dataKey: "timer", name: "Cronómetro", stackId: "a", fill: "#bb86fc", radius: [0,0,4,4], barSize: 20 }),
+                                        React.createElement(Bar, { dataKey: "tasks", name: "Tareas", stackId: "a", fill: "#eab308", barSize: 20 }),
+                                        React.createElement(Bar, { dataKey: "routine", name: "Rutina", stackId: "a", fill: "#3b82f6", radius: [4,4,0,0], barSize: 20 })
+                                    )
+                                )
+                            )
                         )
-                      )
+                    ),
+
+                    /* Bar Chart */
+                    React.createElement('div', null,
+                    React.createElement('div', { className: "flex items-center justify-center gap-2" },
+                        React.createElement('h3', { className: "text-xl font-semibold text-center" }, "Desglose por Tarea"),
+                        React.createElement('button', { onClick: () => setIsGoalModalOpen(true), className: "text-gray-400 hover:text-white transition-colors", 'aria-label': "Configurar objetivos" },
+                            React.createElement(CogIcon, null)
+                        )
+                    ),
+                    React.createElement('div', { style: { width: '100%', height: Math.max(chartData.length * 60 + 20, 100), marginTop: '1rem' } },
+                        React.createElement(ResponsiveContainer, { width: "100%", height: "100%" },
+                        React.createElement(BarChart,
+                            {
+                            layout: "vertical",
+                            data: chartData,
+                            margin: { top: 5, right: 60, left: 5, bottom: 5 },
+                            barCategoryGap: "35%"
+                            },
+                            React.createElement(XAxis, { type: "number", hide: true }),
+                            React.createElement(YAxis, 
+                            { 
+                                type: "category", 
+                                dataKey: "name",
+                                width: 100,
+                                tickLine: false,
+                                axisLine: false,
+                                tick: { fill: '#e0e0e0', fontSize: 14 },
+                                tickFormatter: (value, index) => `${chartData[index]?.icon || ''} ${value}`
+                            }),
+                            React.createElement(Tooltip, { content: React.createElement(CustomTooltip, null), cursor: { fill: 'rgba(255, 255, 255, 0.1)' } }),
+                            React.createElement(Bar, { dataKey: (data) => data.goal?.duration || 0, barSize: 24, radius: [4, 4, 4, 4], isAnimationActive: !activeEntry},
+                                chartData.map((entry, index) => {
+                                    const { value, goal } = entry;
+                                    let color = "transparent";
+                                    if (goal && goal.duration > 0) {
+                                        if (goal.type === 'min') {
+                                            color = value >= goal.duration ? '#22c55e' : '#4b5563';
+                                        } else { // max
+                                            color = value > goal.duration ? '#ef4444' : '#22c55e';
+                                        }
+                                    }
+                                    return React.createElement(Cell, { key: `cell-goal-${index}`, fill: color });
+                                }),
+                                React.createElement(LabelList, { dataKey: "goal.duration", content: renderGoalLabel })
+                            ),
+                            React.createElement(Bar, { dataKey: "value", barSize: 12, radius: [2, 2, 2, 2], isAnimationActive: !activeEntry },
+                            chartData.map((entry, index) => (
+                                React.createElement(Cell, { key: `cell-progress-${index}`, fill: entry.fill })
+                            )),
+                            React.createElement(LabelList, { dataKey: "value", content: renderProgressLabel })
+                            )
+                        )
+                        )
                     )
-                  )
+                    )
                 )
-            )
-        ) : (
-            React.createElement('div', { className: "text-center py-10" },
-            React.createElement('p', { className: "text-gray-400" }, "No hay datos para este período."),
-            React.createElement('p', { className: "text-sm text-gray-500" }, "Registra algunas actividades o completa tareas para ver tus estadísticas.")
+            ) : (
+                React.createElement('div', { className: "text-center py-10" },
+                React.createElement('p', { className: "text-gray-400" }, "No hay datos para este período."),
+                React.createElement('p', { className: "text-sm text-gray-500" }, "Registra algunas actividades o completa tareas para ver tus estadísticas.")
+                )
             )
         )
       )

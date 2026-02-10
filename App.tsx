@@ -11,6 +11,8 @@ import { ClockIcon, ListIcon, ChartIcon, ChecklistIcon, RoutineIcon } from './co
 import { View } from './types';
 import ErrorBoundary from './components/ErrorBoundary';
 
+const APP_VERSION = '1.2.7';
+
 const CloudIconIndicator = () => {
     const { cloudStatus } = useTimeTracker();
     let color = 'text-gray-600';
@@ -86,11 +88,12 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="flex flex-col min-h-screen h-[100dvh] max-w-md mx-auto bg-bkg text-on-bkg font-sans relative overflow-hidden">
-      <header className="p-4 bg-surface shadow-lg flex items-center justify-center flex-shrink-0 z-20">
+      <header className="p-4 bg-surface shadow-lg flex items-center justify-center flex-shrink-0 z-20 relative">
         <h1 className="text-2xl font-bold text-primary tracking-wider flex items-center">
             ChronoHabit
             <CloudIconIndicator />
         </h1>
+        <span className="absolute top-2 right-2 text-[10px] text-gray-600 font-mono">v{APP_VERSION}</span>
       </header>
       {showInstallBanner && (
         <div className="bg-surface p-3 flex items-center justify-between gap-4 border-b border-gray-700 flex-shrink-0 z-20">
@@ -108,7 +111,7 @@ const AppContent: React.FC = () => {
       {showUpdateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-6">
           <div className="bg-surface rounded-2xl p-6 w-full max-w-sm border border-primary/40 shadow-2xl">
-            <h2 className="text-xl font-bold mb-3 text-on-surface">¡Nueva Versión!</h2>
+            <h2 className="text-xl font-bold mb-3 text-on-surface">¡Nueva Versión {APP_VERSION}!</h2>
             <p className="text-gray-300 mb-6 text-sm">Actualiza ahora para obtener las últimas funciones.</p>
             <button onClick={() => { if(waitingWorker) waitingWorker.postMessage({ type: 'SKIP_WAITING' }); setShowUpdateModal(false); }} className="w-full bg-primary text-bkg font-bold py-3 px-4 rounded-xl">Actualizar</button>
           </div>

@@ -32,7 +32,11 @@
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.40.0"
+    "@google/genai": "https://esm.sh/@google/genai@^1.40.0",
+    "firebase/app": "https://esm.sh/firebase@10.7.1/app",
+    "firebase/messaging": "https://esm.sh/firebase@10.7.1/messaging",
+    "firebase/firestore": "https://esm.sh/firebase@10.7.1/firestore",
+    "firebase/": "https://esm.sh/firebase@^12.9.0/"
   }
 }
 </script>
@@ -50,43 +54,26 @@
           navigator.serviceWorker.register('./service-worker.js').then(registration => {
             console.log('ServiceWorker registration successful with scope: ', registration.scope);
             
-            // Force an update check immediately
-            registration.update().catch(err => console.log('SW Update failed (likely environment):', err));
-
-            // Check if there is an update waiting
+            // Check if there is already a waiting worker (update ready)
             if (registration.waiting) {
-              window.dispatchEvent(new CustomEvent('sw-update-found', { detail: registration }));
+                window.dispatchEvent(new CustomEvent('sw-update-found', { detail: registration }));
             }
 
+            // Detect new updates while the app is open
             registration.onupdatefound = () => {
-              const installingWorker = registration.installing;
-              if (installingWorker == null) {
-                return;
-              }
-              installingWorker.onstatechange = () => {
-                if (installingWorker.state === 'installed') {
-                  if (navigator.serviceWorker.controller) {
-                    // New content is available; please refresh.
-                    console.log('New content is available; please refresh.');
-                    window.dispatchEvent(new CustomEvent('sw-update-found', { detail: registration }));
-                  } else {
-                    // Content is cached for offline use.
-                    console.log('Content is cached for offline use.');
-                  }
+                const installingWorker = registration.installing;
+                if (installingWorker) {
+                    installingWorker.onstatechange = () => {
+                        if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            // New update available, notify App.js
+                            window.dispatchEvent(new CustomEvent('sw-update-found', { detail: registration }));
+                        }
+                    };
                 }
-              };
             };
           }).catch(err => {
             console.log('ServiceWorker registration failed: ', err);
           });
-        });
-
-        // Ensure refresh is only called once
-        let refreshing;
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          if (refreshing) return;
-          window.location.reload();
-          refreshing = true;
         });
       }
     </script>

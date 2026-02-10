@@ -14,18 +14,12 @@ const SettingsModal = ({ onClose }) => {
     lastSyncTime, 
     triggerCloudSync,
     connectToCloud,
-    dailyNotificationEnabled,
-    toggleDailyNotification,
-    briefingTime,
-    reviewTime,
-    setNotificationTimes
+    notificationsEnabled,
+    toggleDailyNotification
   } = useTimeTracker();
   
   const [statusMsg, setStatusMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
-  const [localBriefing, setLocalBriefing] = useState(briefingTime);
-  const [localReview, setLocalReview] = useState(reviewTime);
 
   useEffect(() => {
     // Try to init immediately
@@ -77,10 +71,6 @@ const SettingsModal = ({ onClose }) => {
           setIsLoading(false);
       }
   };
-  
-  const handleSaveTimes = () => {
-      setNotificationTimes(localBriefing, localReview);
-  }
 
   return (
     React.createElement('div', { className: "fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" },
@@ -147,45 +137,20 @@ const SettingsModal = ({ onClose }) => {
 
             /* Notification Section */
             React.createElement('div', { className: "space-y-3 pt-4 border-t border-gray-800" },
-                React.createElement('h3', { className: "text-xs font-bold text-gray-500 uppercase tracking-widest" }, "Notificaciones"),
-                React.createElement('button', 
-                    {
-                        onClick: requestNotificationPermission,
-                        className: "w-full bg-gray-800 hover:bg-gray-700 text-on-surface font-semibold py-3 rounded-xl text-sm border border-gray-700 flex items-center justify-between px-4"
-                    },
-                    React.createElement('span', null, "🔔 Permitir Notificaciones")
-                ),
+                React.createElement('h3', { className: "text-xs font-bold text-gray-500 uppercase tracking-widest" }, "Notificaciones (FCM)"),
+                
                 React.createElement('div', { className: "flex items-center justify-between bg-gray-800 p-3 rounded-xl border border-gray-700" },
-                    React.createElement('span', { className: "text-sm font-semibold" }, "Alertas Diarias"),
+                    React.createElement('span', { className: "text-sm font-semibold" }, "Alertas Push"),
                     React.createElement('button', 
                         {
                             onClick: toggleDailyNotification,
-                            className: `w-12 h-6 rounded-full p-1 transition-colors duration-200 ease-in-out ${dailyNotificationEnabled ? 'bg-primary' : 'bg-gray-600'}`
+                            className: `w-12 h-6 rounded-full p-1 transition-colors duration-200 ease-in-out ${notificationsEnabled ? 'bg-primary' : 'bg-gray-600'}`
                         },
-                        React.createElement('div', { className: `bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${dailyNotificationEnabled ? 'translate-x-6' : 'translate-x-0'}` })
+                        React.createElement('div', { className: `bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${notificationsEnabled ? 'translate-x-6' : 'translate-x-0'}` })
                     )
                 ),
-                dailyNotificationEnabled && React.createElement('div', { className: "bg-gray-900/50 p-3 rounded-xl border border-gray-700 space-y-3" },
-                    React.createElement('div', { className: "flex justify-between items-center" },
-                        React.createElement('label', { className: "text-xs text-gray-400" }, "Resumen Matutino:"),
-                        React.createElement('input', {
-                            type: "time",
-                            value: localBriefing,
-                            onChange: (e) => setLocalBriefing(e.target.value),
-                            onBlur: handleSaveTimes,
-                            className: "bg-gray-800 text-white rounded px-2 py-1 text-sm outline-none border border-gray-600 focus:border-primary"
-                        })
-                    ),
-                    React.createElement('div', { className: "flex justify-between items-center" },
-                        React.createElement('label', { className: "text-xs text-gray-400" }, "Revisión Nocturna:"),
-                        React.createElement('input', {
-                            type: "time",
-                            value: localReview,
-                            onChange: (e) => setLocalReview(e.target.value),
-                            onBlur: handleSaveTimes,
-                            className: "bg-gray-800 text-white rounded px-2 py-1 text-sm outline-none border border-gray-600 focus:border-primary"
-                        })
-                    )
+                React.createElement('p', { className: "text-[10px] text-gray-500 px-1" },
+                    "*Requiere configuración de Firebase y Cloud Functions en el backend."
                 )
             ),
 

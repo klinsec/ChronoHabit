@@ -10,6 +10,8 @@ import BottomNav from './components/BottomNav.js';
 import { ClockIcon, ListIcon, ChartIcon, ChecklistIcon, RoutineIcon } from './components/Icons.js';
 import ErrorBoundary from './components/ErrorBoundary.js';
 
+const APP_VERSION = '1.2.7';
+
 const CloudIconIndicator = () => {
     const { cloudStatus } = useTimeTracker();
     let color = 'text-gray-600';
@@ -122,7 +124,7 @@ const AppContent = () => {
   
   const updateModal = showUpdateModal && React.createElement('div', { className: "fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-6" },
     React.createElement('div', { className: "bg-surface rounded-2xl p-6 w-full max-w-sm border border-primary/40 shadow-2xl" },
-        React.createElement('h2', { className: "text-xl font-bold mb-3 text-on-surface" }, "¡Actualización Disponible!"),
+        React.createElement('h2', { className: "text-xl font-bold mb-3 text-on-surface" }, `¡Actualización ${APP_VERSION}!`),
         React.createElement('p', { className: "text-gray-300 mb-6 text-sm" },
             "Hay una nueva versión de ChronoHabit lista para usar. Actualiza ahora para obtener las últimas funciones y mejoras. Tus datos están seguros."
         ),
@@ -146,11 +148,12 @@ const AppContent = () => {
   );
 
   return React.createElement('div', { className: "flex flex-col min-h-screen h-[100dvh] max-w-md mx-auto bg-bkg text-on-bkg font-sans relative overflow-hidden" },
-    React.createElement('header', { className: "p-4 bg-surface shadow-lg flex items-center justify-center flex-shrink-0 z-20" },
+    React.createElement('header', { className: "p-4 bg-surface shadow-lg flex items-center justify-center flex-shrink-0 z-20 relative" },
       React.createElement('h1', { className: "text-2xl font-bold text-primary tracking-wider flex items-center" }, 
         "ChronoHabit",
         React.createElement(CloudIconIndicator, null)
-      )
+      ),
+      React.createElement('span', { className: "absolute top-2 right-2 text-[10px] text-gray-600 font-mono" }, `v${APP_VERSION}`)
     ),
     installBanner,
     React.createElement('main', { className: "flex-grow p-4 overflow-y-auto pb-28 relative z-0" },
