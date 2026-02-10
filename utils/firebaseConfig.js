@@ -57,7 +57,20 @@ export const requestFcmToken = async (userId) => {
         const permission = await Notification.requestPermission();
         
         if (permission === 'granted') {
-            const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+            // FIX CRÍTICO: Registrar el SW manualmente con ruta relativa
+            // Esto soluciona el error 404 en GitHub Pages (subdirectorios)
+            let swRegistration;
+            try {
+                swRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+            } catch (swError) {
+                console.error("Fallo al registrar SW de notificaciones:", swError);
+                // Intentamos continuar sin registro explícito por si acaso
+            }
+
+            const token = await getToken(messaging, { 
+                vapidKey: VAPID_KEY,
+                serviceWorkerRegistration: swRegistration
+            });
             
             if (token) {
                 console.log("FCM Token:", token);
@@ -71,6 +84,8 @@ export const requestFcmToken = async (userId) => {
                 }
                 return token;
             }
+        } else {
+            console.warn("Permiso de notificaciones denegado");
         }
     } catch (error) {
         console.error("Error requesting FCM token:", error);
