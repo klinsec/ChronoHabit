@@ -3,12 +3,20 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>ChronoHabit</title>
+    
+    <!-- Android / Standard PWA -->
     <link rel="icon" href="./icon-192.png" type="image/png">
     <link rel="manifest" href="./manifest.json" />
-    <link rel="apple-touch-icon" href="./icon-192.png">
     <meta name="theme-color" content="#1e1e1e" />
+
+    <!-- iOS / iPhone Support -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ChronoHabit">
+    <link rel="apple-touch-icon" href="./icon-192.png">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -48,14 +56,12 @@
 <script src="https://apis.google.com/js/api.js" async defer></script>
 <link rel="stylesheet" href="/index.css">
 </head>
-  <body class="bg-bkg text-on-bkg antialiased">
+  <body class="bg-bkg text-on-bkg antialiased overflow-hidden select-none">
     <div id="root"></div>
     <script type="module" src="./index.js"></script>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // Use a root-relative path to avoid issues with current directory resolution
-          // in nested preview environments.
           const swPath = './service-worker.js';
           
           navigator.serviceWorker.register(swPath)
@@ -63,14 +69,10 @@
                 console.log('SW Registered:', reg.scope);
             })
             .catch(err => {
-                console.warn('SW Registration Failed. App will run in online-only mode.', err);
-                // If it's the specific origin mismatch error, it likely means we are in a 
-                // restricted preview environment where the SW file triggers a redirect (404/Auth).
-                // Nothing to do but log warning.
+                console.warn('SW Registration Failed:', err);
             });
 
           navigator.serviceWorker.addEventListener('controllerchange', () => {
-             console.log("Controller changed, refreshing page...");
              window.location.reload();
           });
         });
