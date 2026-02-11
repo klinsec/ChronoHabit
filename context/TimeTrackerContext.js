@@ -90,8 +90,15 @@ export const TimeTrackerProvider = ({ children }) => {
   const [cloudStatus, setCloudStatus] = useState('disconnected');
   const [lastSyncTime, setLastSyncTime] = useState(null);
   
-  // Initialize notification state based on browser permission
+  // Initialize notification state
+  // We check localStorage preference first. If user explicitly turned it off, keep it off.
+  // If undefined, we check browser permission.
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+      const pref = localStorage.getItem('notifications_enabled');
+      if (pref === 'true') return true;
+      if (pref === 'false') return false;
+      
+      // Default fallback
       if (typeof Notification !== 'undefined') {
           return Notification.permission === 'granted';
       }
@@ -140,9 +147,10 @@ export const TimeTrackerProvider = ({ children }) => {
     let interval = null;
     if (activeEntry) {
       setLiveElapsedTime(Date.now() - activeEntry.startTime);
+      // Update every 30ms to show hundredths smoothly
       interval = setInterval(() => {
         setLiveElapsedTime(Date.now() - activeEntry.startTime);
-      }, 1000);
+      }, 30);
     } else {
       setLiveElapsedTime(0);
     }
@@ -153,14 +161,11 @@ export const TimeTrackerProvider = ({ children }) => {
   const calculateTotalScore = useCallback(() => {
       let total = 0;
       
-      // 1. Timer Points
+      // 1. Timer Points: 0.5 points per hour
       timeEntries.forEach(entry => {
           if (entry.endTime) {
-              const task = tasks.find(t => t.id === entry.taskId);
-              if (task && task.difficulty) {
-                  const hours = (entry.endTime - entry.startTime) / (1000 * 60 * 60);
-                  total += (hours * task.difficulty * 10);
-              }
+              const hours = (entry.endTime - entry.startTime) / (1000 * 60 * 60);
+              total += (hours * 0.5);
           }
       });
 
@@ -190,7 +195,7 @@ export const TimeTrackerProvider = ({ children }) => {
       });
 
       return parseFloat(total.toFixed(1)); 
-  }, [timeEntries, subtasks, pastContracts, contract, tasks]);
+  }, [timeEntries, subtasks, pastContracts, contract]);
 
   // Sync Score
   useEffect(() => {
@@ -484,29 +489,49 @@ export const TimeTrackerProvider = ({ children }) => {
   const requestNotificationPermission = async () => { 
       if (!userProfile || !userProfile.id) {
           console.warn("User ID missing for notifications");
-          return;
+          return false;
       }
       
       try {
-          if (Notification.permission === 'granted') setNotificationsEnabled(true);
-          
+          // If already granted in browser but we are re-requesting (e.g. to get token)
+          // or requesting for the first time.
           const token = await requestFcmToken(userProfile.id);
+          
           if (token) {
               setNotificationsEnabled(true);
-              alert("Notificaciones activadas correctamente.");
+              localStorage.setItem('notifications_enabled', 'true');
+              return true;
           } else {
-              setNotificationsEnabled(false);
               if (Notification.permission === 'denied') {
                   alert("Has bloqueado las notificaciones. Habilítalas en la configuración de tu navegador.");
               }
+              setNotificationsEnabled(false);
+              localStorage.setItem('notifications_enabled', 'false');
+              return false;
           }
       } catch (e) {
           console.error("Permission request failed", e);
           setNotificationsEnabled(false);
+          localStorage.setItem('notifications_enabled', 'false');
+          return false;
       }
   };
   
-  const toggleDailyNotification = async () => { await requestNotificationPermission(); };
+  const toggleDailyNotification = async () => { 
+      if (notificationsEnabled) {
+          // Turn OFF logic
+          setNotificationsEnabled(false);
+          localStorage.setItem('notifications_enabled', 'false');
+          // Optional: Call a function to delete token from DB if you want strict privacy,
+          // but just stopping the UI indicator and local preference is usually enough for client-side toggles.
+      } else {
+          // Turn ON logic
+          const success = await requestNotificationPermission();
+          if (success) {
+              alert("Notificaciones activadas correctamente.");
+          }
+      }
+  };
 
   return React.createElement(TimeTrackerContext.Provider, { value: {
       tasks, addTask, updateTask, deleteTask, getTaskById,

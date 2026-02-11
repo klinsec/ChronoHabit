@@ -440,11 +440,11 @@ const StatsView = () => {
           dataMap.set(key, { timer: 0, tasks: 0, routine: 0 });
       }
 
-      // 1. Timer
+      // 1. Timer: 0.5 points per hour
       filteredEntries.forEach(entry => {
           if (!entry.endTime) return;
           const task = getTaskById(entry.taskId);
-          if (!task || !task.difficulty) return;
+          if (!task) return; // Note: Difficulty check removed as timer is flat rate now
 
           const entryDate = new Date(entry.startTime);
           let key = '';
@@ -453,7 +453,7 @@ const StatsView = () => {
 
           if (dataMap.has(key)) {
               const durationHours = (entry.endTime - entry.startTime) / (1000 * 60 * 60);
-              const score = durationHours * task.difficulty * 10; // Normalized points
+              const score = durationHours * 0.5; // Flat rate 0.5 points/hour
               const current = dataMap.get(key);
               current.timer += score;
           }
@@ -650,35 +650,7 @@ const StatsView = () => {
             chartData.length > 0 || unifiedPointsData.some(d => d.total > 0) ? (
                 React.createElement('div', { className: "space-y-10" },
                     
-                    /* Pie Chart */
-                    React.createElement('div', null,
-                        React.createElement('h3', { className: "text-xl font-semibold mb-2 text-center" }, "Distribución del Tiempo"),
-                        React.createElement('div', { style: { width: '100%', height: 300 } },
-                            React.createElement(ResponsiveContainer, { width: "100%", height: "100%" },
-                                React.createElement(PieChart, { margin: { top: 5, right: 20, left: 20, bottom: 5 } },
-                                    React.createElement(Pie, 
-                                        {
-                                        data: chartData, 
-                                        cx: "50%",
-                                        cy: "50%",
-                                        nameKey: "name",
-                                        dataKey: "value",
-                                        innerRadius: "60%",
-                                        outerRadius: "80%",
-                                        paddingAngle: 5,
-                                        labelLine: false,
-                                        isAnimationActive: !activeEntry
-                                        },
-                                        chartData.map((entry, index) => (React.createElement(Cell, { key: `cell-${index}`, fill: entry.fill, stroke: entry.fill })))
-                                    ),
-                                    React.createElement(Tooltip, { content: React.createElement(CustomTooltip, null) }),
-                                    React.createElement(Legend, null)
-                                )
-                            )
-                        )
-                    ),
-
-                    /* Unified Stacked Bar Chart */
+                    /* Unified Stacked Bar Chart (NOW FIRST) */
                     period !== 'day' && (
                         React.createElement('div', { className: "bg-surface/30 p-4 rounded-xl border border-gray-800" },
                             React.createElement('div', { className: "flex items-center justify-center gap-2 mb-4" },
@@ -702,6 +674,34 @@ const StatsView = () => {
                                         React.createElement(Bar, { dataKey: "tasks", name: "Tareas", stackId: "a", fill: "#eab308", barSize: 20 }),
                                         React.createElement(Bar, { dataKey: "routine", name: "Rutina", stackId: "a", fill: "#3b82f6", radius: [4,4,0,0], barSize: 20 })
                                     )
+                                )
+                            )
+                        )
+                    ),
+
+                    /* Pie Chart (NOW SECOND) */
+                    React.createElement('div', null,
+                        React.createElement('h3', { className: "text-xl font-semibold mb-2 text-center" }, "Distribución del Tiempo"),
+                        React.createElement('div', { style: { width: '100%', height: 300 } },
+                            React.createElement(ResponsiveContainer, { width: "100%", height: "100%" },
+                                React.createElement(PieChart, { margin: { top: 5, right: 20, left: 20, bottom: 5 } },
+                                    React.createElement(Pie, 
+                                        {
+                                        data: chartData, 
+                                        cx: "50%",
+                                        cy: "50%",
+                                        nameKey: "name",
+                                        dataKey: "value",
+                                        innerRadius: "60%",
+                                        outerRadius: "80%",
+                                        paddingAngle: 5,
+                                        labelLine: false,
+                                        isAnimationActive: !activeEntry
+                                        },
+                                        chartData.map((entry, index) => (React.createElement(Cell, { key: `cell-${index}`, fill: entry.fill, stroke: entry.fill })))
+                                    ),
+                                    React.createElement(Tooltip, { content: React.createElement(CustomTooltip, null) }),
+                                    React.createElement(Legend, null)
                                 )
                             )
                         )

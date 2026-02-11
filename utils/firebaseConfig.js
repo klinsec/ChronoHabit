@@ -57,7 +57,6 @@ export const requestFcmToken = async (userId) => {
             let swRegistration = await navigator.serviceWorker.getRegistration();
             if (!swRegistration) {
                 console.log("No SW registration found, waiting for ready...");
-                // Fallback: This might hang if SW failed to install, so we use a race or simple await
                 swRegistration = await navigator.serviceWorker.ready;
             }
 
@@ -74,11 +73,14 @@ export const requestFcmToken = async (userId) => {
             if (token) {
                 console.log("FCM Token success:", token);
                 if (db && userId) {
+                    // Update user token in DB with correct User ID
                     await set(ref(db, 'tokens_notificaciones/' + userId), {
                         token: token,
                         updatedAt: Date.now(),
                         ua: navigator.userAgent
                     });
+                } else {
+                    console.warn("No user ID provided to save token.");
                 }
                 return token;
             }
