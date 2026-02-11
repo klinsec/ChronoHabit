@@ -11,7 +11,7 @@ import { ClockIcon, ChartIcon, ChecklistIcon, RoutineIcon } from './components/I
 import { View } from './types';
 import ErrorBoundary from './components/ErrorBoundary';
 
-const APP_VERSION = '1.4.11';
+const APP_VERSION = '1.4.14';
 
 const CloudIconIndicator = () => {
     const { cloudStatus } = useTimeTracker();
@@ -33,17 +33,15 @@ const CloudIconIndicator = () => {
 
 const AppContent: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('tasks');
-  const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
-  const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
 
   useEffect(() => {
+    // Prevent default install prompt silently
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
-      setInstallPrompt(e);
-      setShowInstallBanner(true);
     };
+
     const handleSWUpdateFound = (e: any) => {
       const registration = e.detail;
       if (registration && registration.waiting) {
@@ -69,14 +67,6 @@ const AppContent: React.FC = () => {
       window.removeEventListener('sw-update-found', handleSWUpdateFound);
     };
   }, []);
-
-  const handleInstallClick = async () => {
-    if (!installPrompt) return;
-    const promptEvent = installPrompt as any;
-    promptEvent.prompt();
-    setInstallPrompt(null);
-    setShowInstallBanner(false);
-  };
 
   const renderView = () => {
     switch (currentView) {
@@ -105,15 +95,7 @@ const AppContent: React.FC = () => {
         </h1>
         <span className="absolute top-2 right-2 text-[10px] text-gray-600 font-mono">v{APP_VERSION}</span>
       </header>
-      {showInstallBanner && (
-        <div className="bg-surface p-3 flex items-center justify-between gap-4 border-b border-gray-700 flex-shrink-0 z-20">
-          <p className="text-sm text-on-surface flex-grow">Instala ChronoHabit para una mejor experiencia.</p>
-          <div className="flex-shrink-0 flex gap-2">
-            <button onClick={() => setShowInstallBanner(false)} className="text-xs font-semibold text-gray-400 px-3 py-1 rounded-md">Ahora no</button>
-            <button onClick={handleInstallClick} className="text-xs font-bold bg-primary text-bkg px-3 py-1 rounded-md">Instalar</button>
-          </div>
-        </div>
-      )}
+      
       <main className="flex-grow p-4 overflow-y-auto pb-28 relative z-0">
         {renderView()}
       </main>

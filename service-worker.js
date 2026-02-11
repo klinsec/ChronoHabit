@@ -15,7 +15,7 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 // --- 2. App Caching Logic ---
-const CACHE_NAME = 'chronohabit-v1.4.12'; 
+const CACHE_NAME = 'chronohabit-v1.4.13'; 
 const urlsToCache = [
   './',
   './index.html',
@@ -102,10 +102,12 @@ self.addEventListener('message', (event) => {
   }
 });
 
+// Handler for notification clicks
 self.addEventListener('notificationclick', function(event) {
   console.log('[Service Worker] Notification click received.');
   event.notification.close();
 
+  // The specific URL requested
   const targetUrl = 'https://klinsec.github.io/ChronoHabit/';
 
   event.waitUntil(
@@ -113,15 +115,15 @@ self.addEventListener('notificationclick', function(event) {
       type: 'window',
       includeUncontrolled: true 
     }).then(function(windowClients) {
-      // 1. Check if app is already open
+      // 1. Check if the specific app URL is already open
       for (let i = 0; i < windowClients.length; i++) {
         const client = windowClients[i];
-        // Match loosely to allow dev environments or specific paths
-        if (client.url.includes('ChronoHabit') && 'focus' in client) {
+        // Check if the client URL matches the target or is a sub-path of it
+        if (client.url.startsWith(targetUrl) && 'focus' in client) {
           return client.focus();
         }
       }
-      // 2. If not open, open a new window with the specific URL
+      // 2. If not open (or different URL like localhost), open the specific target URL
       if (self.clients.openWindow) {
         return self.clients.openWindow(targetUrl);
       }

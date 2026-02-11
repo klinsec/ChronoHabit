@@ -16,20 +16,44 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Background message received:', payload);
   
-  // Prevent duplicate notifications:
-  // If the payload contains a 'notification' property, the Firebase SDK 
-  // will automatically show a notification. We should NOT show another one.
+  // Prevent duplicate notifications if Firebase SDK already handled it
   if (payload.notification) {
       return; 
   }
 
-  // Only show manual notification for Data messages (no notification field)
   const notificationTitle = payload.data?.title || 'ChronoHabit';
   const notificationOptions = {
     body: payload.data?.body || 'Tienes una nueva notificación',
     icon: './icon-192.png',
-    data: payload.data
+    data: payload.data, // Pass data along
+    tag: 'chronohabit-notification', // Replace existing notifications with same tag
+    renotify: true
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
+});
+
+// Add click listener here too, in case this SW handles the interaction
+self.addEventListener('notificationclick', function(event) {
+  console.log('[Firebase SW] Notification click received.');
+  event.notification.close();
+
+  const targetUrl = 'https://klinsec.github.io/ChronoHabit/';
+
+  event.waitUntil(
+    self.clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true 
+    }).then(function(windowClients) {
+      for (let i = 0; i < windowClients.length; i++) {
+        const client = windowClients[i];
+        if (client.url.startsWith(targetUrl) && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    })
+  );
 });

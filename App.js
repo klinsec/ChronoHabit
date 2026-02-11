@@ -10,7 +10,7 @@ import BottomNav from './components/BottomNav.js';
 import { ClockIcon, ChartIcon, ChecklistIcon, RoutineIcon } from './components/Icons.js';
 import ErrorBoundary from './components/ErrorBoundary.js';
 
-const APP_VERSION = '1.4.12';
+const APP_VERSION = '1.4.14';
 
 const CloudIconIndicator = () => {
     const { cloudStatus } = useTimeTracker();
@@ -33,8 +33,6 @@ const CloudIconIndicator = () => {
 
 const AppContent = () => {
   const [currentView, setCurrentView] = useState('tasks');
-  const [installPrompt, setInstallPrompt] = useState(null);
-  const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [waitingWorker, setWaitingWorker] = useState(null);
 
@@ -47,8 +45,6 @@ const AppContent = () => {
 
     const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
-      setInstallPrompt(e);
-      setShowInstallBanner(true);
     };
 
     const handleSWUpdateFound = (e) => {
@@ -80,14 +76,6 @@ const AppContent = () => {
       window.removeEventListener('sw-update-found', handleSWUpdateFound);
     };
   }, []);
-
-  const handleInstallClick = async () => {
-    if (!installPrompt) return;
-    installPrompt.prompt();
-    const { outcome } = await installPrompt.userChoice;
-    setInstallPrompt(null);
-    setShowInstallBanner(false);
-  };
   
   const handleUpdateApp = () => {
     if (waitingWorker) {
@@ -113,14 +101,6 @@ const AppContent = () => {
     { id: 'timer', label: 'Cronómetro', icon: React.createElement(ClockIcon, null) },
     { id: 'stats', label: 'Stats', icon: React.createElement(ChartIcon, null) },
   ];
-
-  const installBanner = showInstallBanner && React.createElement('div', { className: "bg-surface p-3 flex items-center justify-between gap-4 border-b border-gray-700 flex-shrink-0 z-20" },
-    React.createElement('p', { className: "text-sm text-on-surface flex-grow" }, "Instala ChronoHabit en tu dispositivo para una mejor experiencia."),
-    React.createElement('div', { className: "flex-shrink-0 flex gap-2" },
-      React.createElement('button', { onClick: () => setShowInstallBanner(false), className: "text-xs font-semibold text-gray-400 px-3 py-1 rounded-md hover:bg-gray-700" }, "Ahora no"),
-      React.createElement('button', { onClick: handleInstallClick, className: "text-xs font-bold bg-primary text-bkg px-3 py-1 rounded-md hover:bg-purple-500" }, "Instalar")
-    )
-  );
   
   const updateModal = showUpdateModal && React.createElement('div', { className: "fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-6" },
     React.createElement('div', { className: "bg-surface rounded-2xl p-6 w-full max-w-sm border border-primary/40 shadow-2xl" },
@@ -155,7 +135,6 @@ const AppContent = () => {
       ),
       React.createElement('span', { className: "absolute top-2 right-2 text-[10px] text-gray-600 font-mono" }, `v${APP_VERSION}`)
     ),
-    installBanner,
     React.createElement('main', { className: "flex-grow p-4 overflow-y-auto pb-28 relative z-0" },
       renderView()
     ),
