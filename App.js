@@ -10,7 +10,7 @@ import BottomNav from './components/BottomNav.js';
 import { ClockIcon, ChartIcon, ChecklistIcon, RoutineIcon } from './components/Icons.js';
 import ErrorBoundary from './components/ErrorBoundary.js';
 
-const APP_VERSION = '1.4.14';
+const APP_VERSION = '1.4.15';
 
 const CloudIconIndicator = () => {
     const { cloudStatus } = useTimeTracker();
@@ -45,6 +45,7 @@ const AppContent = () => {
 
     const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
+      // Silently ignore to prevent default banner
     };
 
     const handleSWUpdateFound = (e) => {

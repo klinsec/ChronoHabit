@@ -11,7 +11,7 @@ import { ClockIcon, ChartIcon, ChecklistIcon, RoutineIcon } from './components/I
 import { View } from './types';
 import ErrorBoundary from './components/ErrorBoundary';
 
-const APP_VERSION = '1.4.14';
+const APP_VERSION = '1.4.15';
 
 const CloudIconIndicator = () => {
     const { cloudStatus } = useTimeTracker();
@@ -37,9 +37,10 @@ const AppContent: React.FC = () => {
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
 
   useEffect(() => {
-    // Prevent default install prompt silently
+    // Strictly prevent default install prompt to avoid unwanted banners
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
+      // Do not stash the event, effectively disabling the custom install flow
     };
 
     const handleSWUpdateFound = (e: any) => {

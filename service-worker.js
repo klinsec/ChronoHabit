@@ -15,7 +15,8 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 // --- 2. App Caching Logic ---
-const CACHE_NAME = 'chronohabit-v1.4.13'; 
+// Bumped version to force clear old cache containing install banners
+const CACHE_NAME = 'chronohabit-v1.4.15'; 
 const urlsToCache = [
   './',
   './index.html',
@@ -44,6 +45,8 @@ const urlsToCache = [
 ];
 
 self.addEventListener('install', event => {
+  // Force new service worker to activate immediately
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
