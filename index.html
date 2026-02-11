@@ -67,12 +67,16 @@
           navigator.serviceWorker.register(swPath)
             .then(reg => {
                 console.log('SW Registered:', reg.scope);
+                // Check for updates every time the page loads
+                reg.update();
             })
             .catch(err => {
                 console.warn('SW Registration Failed:', err);
             });
 
+          // Reload whenever a new service worker takes control
           navigator.serviceWorker.addEventListener('controllerchange', () => {
+             console.log("New service worker activated. Reloading page...");
              window.location.reload();
           });
         });
