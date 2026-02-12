@@ -50,7 +50,7 @@ const TaskModal = ({ task, onClose }) => {
                       React.createElement('div', 
                         {
                             key: starIndex,
-                            className: "relative w-8 h-8 cursor-pointer group",
+                            className: "relative w-6 h-6 cursor-pointer group",
                             onClick: (e) => {
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 const x = e.clientX - rect.left;
@@ -108,21 +108,21 @@ const TaskModal = ({ task, onClose }) => {
                 )
             ),
             
-            React.createElement('div', null,
-                React.createElement('label', { className: "block text-xs font-medium text-gray-300 mb-1" }, "Satisfacción (Puntos)"),
-                React.createElement('div', { className: "bg-gray-800 p-2 rounded-lg flex flex-col items-center" },
-                    renderStars(),
-                    React.createElement('p', { className: "text-[10px] text-gray-400 mt-1 font-mono" }, 
-                        difficulty > 0 ? `${difficulty / 2} Estrellas (${difficulty} pts)` : 'Sin dificultad'
+            React.createElement('div', { className: "flex gap-4" },
+                React.createElement('div', { className: "flex-1" },
+                    React.createElement('label', { className: "block text-xs font-medium text-gray-300 mb-1" }, "Satisfacción"),
+                    React.createElement('div', { className: "flex items-center gap-2 bg-gray-800/50 p-2 rounded-lg border border-gray-700" },
+                        renderStars(),
+                        React.createElement('span', { className: "text-sm font-bold font-mono text-primary min-w-[1.5rem] text-center" }, difficulty)
                     )
                 )
             ),
             
             React.createElement('div', null,
                 React.createElement('label', { className: "block text-xs font-medium text-gray-300 mb-1" }, "Color"),
-                React.createElement('div', { className: "flex flex-wrap gap-2" },
+                React.createElement('div', { className: "flex flex-wrap gap-2 bg-gray-800/30 p-2 rounded-lg" },
                     colors.map(c => (
-                        React.createElement('button', { type: "button", key: c, onClick: () => setColor(c), className: `w-6 h-6 rounded-full ${color === c ? 'ring-2 ring-offset-2 ring-offset-surface ring-white' : ''}`, style: { backgroundColor: c } })
+                        React.createElement('button', { type: "button", key: c, onClick: () => setColor(c), className: `w-6 h-6 rounded-full transition-transform hover:scale-110 ${color === c ? 'ring-2 ring-offset-2 ring-offset-surface ring-white scale-110' : ''}`, style: { backgroundColor: c } })
                     ))
                 )
             )

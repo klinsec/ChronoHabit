@@ -44,7 +44,7 @@ const SubtaskModal = ({ subtask, onClose }) => {
 
   const renderStars = () => {
       return (
-          React.createElement('div', { className: "flex gap-1" },
+          React.createElement('div', { className: "flex gap-0.5 sm:gap-1" },
               [1, 2, 3, 4, 5].map((starIndex) => {
                   const filledValue = starIndex * 2;
                   const halfValue = filledValue - 1;
@@ -57,7 +57,7 @@ const SubtaskModal = ({ subtask, onClose }) => {
                       React.createElement('div', 
                         {
                             key: starIndex,
-                            className: "relative w-8 h-8 cursor-pointer group",
+                            className: "relative w-5 h-5 sm:w-6 sm:h-6 cursor-pointer group",
                             onClick: (e) => {
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 const x = e.clientX - rect.left;
@@ -79,81 +79,89 @@ const SubtaskModal = ({ subtask, onClose }) => {
   
   return (
     React.createElement('div', { className: "fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4" },
-      React.createElement('div', { className: "bg-surface rounded-2xl p-6 w-full max-w-sm" },
-        React.createElement('h2', { className: "text-xl font-bold mb-4" }, subtask ? 'Editar Tarea' : 'Nueva Tarea'),
-        React.createElement('form', { onSubmit: handleSubmit, className: "space-y-4" },
-          React.createElement('div', null,
-            React.createElement('label', { htmlFor: "subtask-title", className: "block text-sm font-medium text-gray-300 mb-1" }, "Título"),
-            React.createElement('input',
-              {
-                id: "subtask-title",
-                type: "text",
-                value: title,
-                onChange: e => setTitle(e.target.value),
-                className: "w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-primary focus:border-primary",
-                required: true
-              }
-            )
-          ),
-          
-          React.createElement('div', null,
-            React.createElement('label', { htmlFor: "subtask-desc", className: "block text-sm font-medium text-gray-300 mb-1" }, "Descripción"),
-            React.createElement('textarea',
-              {
-                id: "subtask-desc",
-                value: description,
-                onChange: e => setDescription(e.target.value),
-                className: "w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-primary focus:border-primary",
-                rows: 3
-              }
-            )
-          ),
+      React.createElement('div', { className: "bg-surface rounded-2xl w-full max-w-sm shadow-2xl border border-gray-700 flex flex-col max-h-[90vh]" },
+        
+        /* Header */
+        React.createElement('div', { className: "p-4 border-b border-gray-700 flex-shrink-0" },
+            React.createElement('h2', { className: "text-xl font-bold" }, subtask ? 'Editar Tarea' : 'Nueva Tarea')
+        ),
 
-          React.createElement('div', null,
-            React.createElement('label', { htmlFor: "subtask-parent", className: "block text-sm font-medium text-gray-300 mb-1" }, "Tarea Principal"),
-            React.createElement('select',
-              {
-                id: "subtask-parent",
-                value: taskId,
-                onChange: e => setTaskId(e.target.value),
-                className: "w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-primary focus:border-primary",
-                required: true
-              },
-              React.createElement('option', { value: "", disabled: true }, "Selecciona una tarea..."),
-              tasks.map(task => (
-                React.createElement('option', { key: task.id, value: task.id }, `${task.icon} ${task.name}`)
-              ))
+        /* Scrollable Form */
+        React.createElement('div', { className: "p-4 overflow-y-auto flex-grow" },
+            React.createElement('form', { id: "subtask-form", onSubmit: handleSubmit, className: "space-y-3" },
+                React.createElement('div', null,
+                    React.createElement('label', { htmlFor: "subtask-title", className: "block text-xs font-medium text-gray-300 mb-1" }, "Título"),
+                    React.createElement('input',
+                    {
+                        id: "subtask-title",
+                        type: "text",
+                        value: title,
+                        onChange: e => setTitle(e.target.value),
+                        className: "w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-1.5 text-white focus:ring-primary focus:border-primary text-sm",
+                        required: true
+                    })
+                ),
+                
+                React.createElement('div', null,
+                    React.createElement('label', { htmlFor: "subtask-desc", className: "block text-xs font-medium text-gray-300 mb-1" }, "Descripción"),
+                    React.createElement('textarea',
+                    {
+                        id: "subtask-desc",
+                        value: description,
+                        onChange: e => setDescription(e.target.value),
+                        className: "w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-1.5 text-white focus:ring-primary focus:border-primary text-sm",
+                        rows: 2
+                    })
+                ),
+
+                React.createElement('div', null,
+                    React.createElement('label', { htmlFor: "subtask-parent", className: "block text-xs font-medium text-gray-300 mb-1" }, "Tarea Principal"),
+                    React.createElement('select',
+                    {
+                        id: "subtask-parent",
+                        value: taskId,
+                        onChange: e => setTaskId(e.target.value),
+                        className: "w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-1.5 text-white focus:ring-primary focus:border-primary text-sm",
+                        required: true
+                    },
+                    React.createElement('option', { value: "", disabled: true }, "Selecciona una tarea..."),
+                    tasks.map(task => (
+                        React.createElement('option', { key: task.id, value: task.id }, `${task.icon} ${task.name}`)
+                    ))
+                    )
+                ),
+
+                /* Combined Row */
+                React.createElement('div', { className: "flex gap-3" },
+                    React.createElement('div', { className: "flex-1" },
+                        React.createElement('label', { className: "block text-xs font-medium text-gray-300 mb-1" }, "Dificultad"),
+                        React.createElement('div', { className: "flex items-center justify-center gap-1 bg-gray-800/50 p-1.5 rounded-lg border border-gray-700 h-[38px]" },
+                            renderStars(),
+                            React.createElement('span', { className: "text-sm font-bold font-mono text-primary ml-1 w-4 text-center" }, difficulty)
+                        )
+                    ),
+                    React.createElement('div', { className: "flex-1" },
+                        React.createElement('label', { htmlFor: "subtask-date", className: "block text-xs font-medium text-gray-300 mb-1" }, "Fecha Límite"),
+                        React.createElement('input', 
+                            {
+                                id: "subtask-date",
+                                type: "date",
+                                value: deadline,
+                                onChange: e => setDeadline(e.target.value),
+                                className: "w-full bg-gray-800 border border-gray-600 rounded-lg px-2 py-1.5 text-white focus:ring-primary focus:border-primary text-sm h-[38px]"
+                            }
+                        )
+                    )
+                ),
+                
+                React.createElement('p', { className: "text-[10px] text-gray-500 text-center leading-tight" }, "Si la fecha está cerca, se organizará automáticamente.")
             )
-          ),
-
-          React.createElement('div', null,
-             React.createElement('label', { className: "block text-sm font-medium text-gray-300 mb-1" }, "Dificultad (Puntos)"),
-             React.createElement('div', { className: "bg-gray-800 p-3 rounded-lg flex flex-col items-center" },
-                 renderStars(),
-                 React.createElement('p', { className: "text-xs text-gray-400 mt-2 font-mono" }, 
-                     `${difficulty} Puntos (${difficulty > 0 ? difficulty / 2 : 0} Estrellas)`
-                 )
-             )
-          ),
-
-          React.createElement('div', null,
-              React.createElement('label', { htmlFor: "subtask-date", className: "block text-sm font-medium text-gray-300 mb-1" }, "Fecha Límite (Opcional)"),
-              React.createElement('input', 
-                {
-                    id: "subtask-date",
-                    type: "date",
-                    value: deadline,
-                    onChange: e => setDeadline(e.target.value),
-                    className: "w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-primary focus:border-primary"
-                }
-              ),
-              React.createElement('p', { className: "text-xs text-gray-500 mt-1" }, "Si la fecha está cerca, la tarea se moverá automáticamente a Pendientes o Hoy.")
-          ),
-          
-          React.createElement('div', { className: "flex justify-end space-x-2 pt-4 border-t border-gray-700" },
-            React.createElement('button', { type: "button", onClick: onClose, className: "bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg" }, "Cancelar"),
-            React.createElement('button', { type: "submit", className: "bg-primary hover:bg-purple-500 text-bkg font-bold py-2 px-4 rounded-lg" }, subtask ? 'Guardar' : 'Crear')
-          )
+        ),
+        
+        /* Footer */
+        React.createElement('div', { className: "p-4 border-t border-gray-700 flex justify-end space-x-2 flex-shrink-0 bg-surface rounded-b-2xl" },
+            React.createElement('button', { type: "button", onClick: onClose, className: "bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg text-sm" }, "Cancelar"),
+            React.createElement('button', { type: "submit", form: "subtask-form", className: "bg-primary hover:bg-purple-500 text-bkg font-bold py-2 px-4 rounded-lg text-sm" }, subtask ? 'Guardar' : 'Crear')
         )
       )
     )

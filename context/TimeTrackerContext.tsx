@@ -6,6 +6,7 @@ import {
 } from '../types';
 import { uploadBackupFile } from '../utils/googleDrive';
 import { requestFcmToken, syncUserScore, subscribeToLeaderboard } from '../utils/firebaseConfig';
+import { User } from 'firebase/auth';
 
 interface TimeTrackerContextType {
   tasks: Task[];
@@ -59,6 +60,16 @@ interface TimeTrackerContextType {
   notificationsEnabled: boolean;
   requestNotificationPermission: () => Promise<void>;
   toggleDailyNotification: () => Promise<void>;
+
+  firebaseUser: User | null;
+  handleLoginRanking: () => Promise<void>;
+  handleLogoutRanking: () => Promise<void>;
+  addFriend: (friendId: string) => void;
+  removeFriend: (friendId: string) => void;
+  leaderboard: any[];
+  calculateTotalScore: () => number;
+  rankingError: string | null;
+  localFriends: string[];
 }
 
 const TimeTrackerContext = createContext<TimeTrackerContextType | undefined>(undefined);
@@ -111,6 +122,15 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       return saved ? JSON.parse(saved) : [];
   });
 
+  // User Identity & Ranking
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [rankingError, setRankingError] = useState<string | null>(null);
+  const [localFriends, setLocalFriends] = useState<string[]>(() => {
+      const saved = localStorage.getItem('localFriends');
+      return saved ? JSON.parse(saved) : [];
+  });
+
   // Cloud & Settings
   const [cloudStatus, setCloudStatus] = useState<'disconnected' | 'connected' | 'syncing' | 'error'>('disconnected');
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
@@ -132,6 +152,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [contract]);
   useEffect(() => localStorage.setItem('pastContracts', JSON.stringify(pastContracts)), [pastContracts]);
   useEffect(() => localStorage.setItem('savedRoutines', JSON.stringify(savedRoutines)), [savedRoutines]);
+  useEffect(() => localStorage.setItem('localFriends', JSON.stringify(localFriends)), [localFriends]);
 
   // Active Entry Restoration
   useEffect(() => {
@@ -508,6 +529,56 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       await requestNotificationPermission();
   };
 
+  // --- Firebase Ranking & Social ---
+  const handleLoginRanking = async () => { /* Implement in next pass or use JS implementation as reference */ };
+  const handleLogoutRanking = async () => { /* Implement in next pass */ };
+  const addFriend = (friendId: string) => setLocalFriends(prev => [...prev, friendId]);
+  const removeFriend = (friendId: string) => setLocalFriends(prev => prev.filter(id => id !== friendId));
+  
+  const calculateTotalScore = useCallback(() => {
+      let total = 0;
+      timeEntries.forEach(entry => {
+          if (entry.endTime) {
+              const hours = (entry.endTime - entry.startTime) / (1000 * 60 * 60);
+              total += (hours * 0.5);
+          }
+      });
+      subtasks.forEach(s => {
+          if (s.completed && s.difficulty) total += s.difficulty;
+      });
+      const contractsToCheck = [...pastContracts, ...(contract ? [contract] : [])];
+      contractsToCheck.forEach(c => {
+          if (c.dailyHistory && c.dailyHistory.length > 0) {
+              c.dailyHistory.forEach(h => {
+                  if (h.points) total += h.points; 
+              });
+          }
+      });
+      return parseFloat(total.toFixed(2)); 
+  }, [timeEntries, subtasks, pastContracts, contract]);
+
+  useEffect(() => {
+      if (firebaseUser) {
+          const score = calculateTotalScore();
+          syncUserScore(firebaseUser, score);
+          const interval = setInterval(() => syncUserScore(firebaseUser, score), 60000);
+          return () => clearInterval(interval);
+      }
+  }, [firebaseUser, calculateTotalScore]);
+
+  // FIXED: Subscribe to Leaderboard ONLY when firebaseUser changes (login/logout)
+  useEffect(() => {
+      if (!firebaseUser) {
+          setLeaderboard([]);
+          return;
+      }
+      const unsubscribe = subscribeToLeaderboard(
+          (data) => { setLeaderboard(data); setRankingError(null); },
+          (error) => setRankingError(error.message)
+      );
+      return () => unsubscribe();
+  }, [firebaseUser]);
+
   return (
     <TimeTrackerContext.Provider value={{
       tasks, addTask, updateTask, deleteTask, getTaskById,
@@ -517,7 +588,8 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       contract, pastContracts, startContract, toggleCommitment, setCommitmentStatus, resetContract, completeContract, completeDay,
       savedRoutines, saveRoutine, deleteRoutine,
       cloudStatus, connectToCloud, triggerCloudSync, lastSyncTime, exportData, importData,
-      notificationsEnabled, requestNotificationPermission, toggleDailyNotification
+      notificationsEnabled, requestNotificationPermission, toggleDailyNotification,
+      firebaseUser, handleLoginRanking, handleLogoutRanking, addFriend, removeFriend, leaderboard, calculateTotalScore, rankingError, localFriends
     }}>
       {children}
     </TimeTrackerContext.Provider>

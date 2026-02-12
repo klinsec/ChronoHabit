@@ -181,14 +181,25 @@ export const TimeTrackerProvider = ({ children }) => {
       }
   }, [firebaseUser, calculateTotalScore]);
 
-  // Subscribe Leaderboard
+  // Subscribe Leaderboard - Fixed to depend on user state
   useEffect(() => {
+      if (!firebaseUser) {
+          setLeaderboard([]);
+          return;
+      }
+
       const unsubscribe = subscribeToLeaderboard(
-          (data) => { setLeaderboard(data); setRankingError(null); },
-          (error) => setRankingError(error.message)
+          (data) => { 
+              setLeaderboard(data); 
+              setRankingError(null); 
+          },
+          (error) => {
+              console.error("Leaderboard error:", error);
+              setRankingError(error.message);
+          }
       );
       return () => unsubscribe();
-  }, []);
+  }, [firebaseUser]); // <--- Dependency Added
 
   const handleLoginRanking = async () => {
       try {
@@ -446,14 +457,10 @@ export const TimeTrackerProvider = ({ children }) => {
                   }
                   
                   // 3. Calculate TODAY's new active level
-                  // "Si ayer cumplió todo, hoy sube un nivel. Si no, se usa el nivel penalizado."
                   let nextLevel = Math.min(streakForTomorrow + 1, 10);
-                  
-                  // Formatting to avoid long floats, keep it clean (e.g. 5.5 is valid level)
                   nextLevel = parseFloat(nextLevel.toFixed(2));
                   if (nextLevel < 1) nextLevel = 1;
 
-                  // Update History for Yesterday
                   const newHistory = [...prev.dailyHistory];
                   const histIdx = newHistory.findIndex(h => h.date === prev.lastCheckDate);
                   const historyEntry = { 

@@ -56,7 +56,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
                   return (
                       <div 
                         key={starIndex} 
-                        className="relative w-8 h-8 cursor-pointer group"
+                        className="relative w-6 h-6 cursor-pointer group"
                         onClick={(e) => {
                             // Smart click: Get bounding rect to see if click was on left or right half
                             const rect = e.currentTarget.getBoundingClientRect();
@@ -96,7 +96,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
         <div className="p-4 overflow-y-auto flex-grow">
             <form id="task-form" onSubmit={handleSubmit} className="space-y-4">
             <div>
-                <label htmlFor="task-name" className="block text-sm font-medium text-gray-300 mb-1">Nombre</label>
+                <label htmlFor="task-name" className="block text-xs font-medium text-gray-300 mb-1">Nombre</label>
                 <input
                 id="task-name"
                 type="text"
@@ -109,31 +109,31 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
             </div>
 
             <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Icono</label>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Icono</label>
                 <div className="grid grid-cols-6 gap-2 bg-gray-800 p-2 rounded-lg">
                     {icons.map(i => (
-                        <button type="button" key={i} onClick={() => setIcon(i)} className={`text-2xl rounded p-1 ${icon === i ? 'bg-primary' : 'hover:bg-gray-700'}`}>
+                        <button type="button" key={i} onClick={() => setIcon(i)} className={`text-xl rounded p-1 ${icon === i ? 'bg-primary' : 'hover:bg-gray-700'}`}>
                             {i}
                         </button>
                     ))}
                 </div>
             </div>
             
-            <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Satisfacción (Puntos)</label>
-                <div className="bg-gray-800 p-3 rounded-lg flex flex-col items-center">
-                    {renderStars()}
-                    <p className="text-xs text-gray-400 mt-2 font-mono">
-                        {difficulty > 0 ? `${difficulty / 2} Estrellas (${difficulty} pts)` : 'Sin dificultad'}
-                    </p>
+            <div className="flex gap-4">
+                <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-300 mb-1">Satisfacción</label>
+                    <div className="flex items-center gap-2 bg-gray-800/50 p-2 rounded-lg border border-gray-700">
+                        {renderStars()}
+                        <span className="text-sm font-bold font-mono text-primary min-w-[1.5rem] text-center">{difficulty}</span>
+                    </div>
                 </div>
             </div>
             
             <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Color</label>
-                <div className="flex flex-wrap gap-2">
+                <label className="block text-xs font-medium text-gray-300 mb-1">Color</label>
+                <div className="flex flex-wrap gap-2 bg-gray-800/30 p-2 rounded-lg">
                     {colors.map(c => (
-                        <button type="button" key={c} onClick={() => setColor(c)} className={`w-8 h-8 rounded-full ${color === c ? 'ring-2 ring-offset-2 ring-offset-surface ring-white' : ''}`} style={{ backgroundColor: c }} />
+                        <button type="button" key={c} onClick={() => setColor(c)} className={`w-6 h-6 rounded-full transition-transform hover:scale-110 ${color === c ? 'ring-2 ring-offset-2 ring-offset-surface ring-white scale-110' : ''}`} style={{ backgroundColor: c }} />
                     ))}
                 </div>
             </div>
@@ -143,11 +143,11 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
         {/* Footer (Fixed) */}
         <div className="p-4 border-t border-gray-700 flex justify-between items-center flex-shrink-0 bg-surface rounded-b-2xl">
             <div>
-              {task && <button type="button" onClick={handleDelete} className="text-red-500 hover:text-red-400 font-semibold px-4 py-2 rounded-lg">Eliminar</button>}
+              {task && <button type="button" onClick={handleDelete} className="text-red-500 hover:text-red-400 font-semibold px-4 py-2 rounded-lg text-sm">Eliminar</button>}
             </div>
             <div className="flex space-x-2">
-              <button type="button" onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Cancelar</button>
-              <button type="submit" form="task-form" className="bg-primary hover:bg-purple-500 text-bkg font-bold py-2 px-4 rounded-lg">{task ? 'Guardar' : 'Crear'}</button>
+              <button type="button" onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg text-sm">Cancelar</button>
+              <button type="submit" form="task-form" className="bg-primary hover:bg-purple-500 text-bkg font-bold py-2 px-4 rounded-lg text-sm">{task ? 'Guardar' : 'Crear'}</button>
             </div>
         </div>
 

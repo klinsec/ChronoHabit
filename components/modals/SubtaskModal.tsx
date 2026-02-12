@@ -55,7 +55,7 @@ const SubtaskModal: React.FC<SubtaskModalProps> = ({ subtask, onClose }) => {
   // Helper for Star Rating (0-10 scale mapped to 5 stars with halves)
   const renderStars = () => {
       return (
-          <div className="flex gap-1">
+          <div className="flex gap-0.5 sm:gap-1">
               {[1, 2, 3, 4, 5].map((starIndex) => {
                   const filledValue = starIndex * 2; // 2, 4, 6, 8, 10
                   const halfValue = filledValue - 1; // 1, 3, 5, 7, 9
@@ -67,7 +67,7 @@ const SubtaskModal: React.FC<SubtaskModalProps> = ({ subtask, onClose }) => {
                   return (
                       <div 
                         key={starIndex} 
-                        className="relative w-8 h-8 cursor-pointer group"
+                        className="relative w-5 h-5 sm:w-6 sm:h-6 cursor-pointer group"
                         onClick={(e) => {
                             const rect = e.currentTarget.getBoundingClientRect();
                             const x = e.clientX - rect.left;
@@ -95,75 +95,89 @@ const SubtaskModal: React.FC<SubtaskModalProps> = ({ subtask, onClose }) => {
   
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface rounded-2xl p-6 w-full max-w-sm">
-        <h2 className="text-xl font-bold mb-4">{subtask ? 'Editar Tarea' : 'Nueva Tarea'}</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="subtask-title" className="block text-sm font-medium text-gray-300 mb-1">Título</label>
-            <input
-              id="subtask-title"
-              type="text"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-primary focus:border-primary"
-              required
-            />
-          </div>
-          
-          <div>
-            <label htmlFor="subtask-desc" className="block text-sm font-medium text-gray-300 mb-1">Descripción</label>
-            <textarea
-              id="subtask-desc"
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-primary focus:border-primary"
-              rows={3}
-            />
-          </div>
+      <div className="bg-surface rounded-2xl w-full max-w-sm shadow-2xl border border-gray-700 flex flex-col max-h-[90vh]">
+        
+        {/* Header */}
+        <div className="p-4 border-b border-gray-700 flex-shrink-0">
+            <h2 className="text-xl font-bold">{subtask ? 'Editar Tarea' : 'Nueva Tarea'}</h2>
+        </div>
 
-          <div>
-            <label htmlFor="subtask-parent" className="block text-sm font-medium text-gray-300 mb-1">Tarea Principal</label>
-            <select
-              id="subtask-parent"
-              value={taskId}
-              onChange={e => setTaskId(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-primary focus:border-primary"
-              required
-            >
-              <option value="" disabled>Selecciona una tarea...</option>
-              {tasks.map(task => (
-                <option key={task.id} value={task.id}>{task.icon} {task.name}</option>
-              ))}
-            </select>
-          </div>
+        {/* Scrollable Form */}
+        <div className="p-4 overflow-y-auto flex-grow">
+            <form id="subtask-form" onSubmit={handleSubmit} className="space-y-3">
+            <div>
+                <label htmlFor="subtask-title" className="block text-xs font-medium text-gray-300 mb-1">Título</label>
+                <input
+                id="subtask-title"
+                type="text"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-1.5 text-white focus:ring-primary focus:border-primary text-sm"
+                required
+                />
+            </div>
+            
+            <div>
+                <label htmlFor="subtask-desc" className="block text-xs font-medium text-gray-300 mb-1">Descripción</label>
+                <textarea
+                id="subtask-desc"
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-1.5 text-white focus:ring-primary focus:border-primary text-sm"
+                rows={2}
+                />
+            </div>
 
-          <div>
-             <label className="block text-sm font-medium text-gray-300 mb-1">Dificultad (Puntos)</label>
-             <div className="bg-gray-800 p-3 rounded-lg flex flex-col items-center">
-                 {renderStars()}
-                 <p className="text-xs text-gray-400 mt-2 font-mono">
-                     {difficulty} Puntos ({difficulty > 0 ? difficulty / 2 : 0} Estrellas)
-                 </p>
-             </div>
-          </div>
-          
-          <div>
-              <label htmlFor="subtask-date" className="block text-sm font-medium text-gray-300 mb-1">Fecha Límite (Opcional)</label>
-              <input 
-                id="subtask-date"
-                type="date"
-                value={deadline}
-                onChange={e => setDeadline(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-primary focus:border-primary"
-              />
-              <p className="text-xs text-gray-500 mt-1">Si la fecha está cerca, la tarea se moverá automáticamente a Pendientes o Hoy.</p>
-          </div>
-          
-          <div className="flex justify-end space-x-2 pt-4 border-t border-gray-700">
-            <button type="button" onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Cancelar</button>
-            <button type="submit" className="bg-primary hover:bg-purple-500 text-bkg font-bold py-2 px-4 rounded-lg">{subtask ? 'Guardar' : 'Crear'}</button>
-          </div>
-        </form>
+            <div>
+                <label htmlFor="subtask-parent" className="block text-xs font-medium text-gray-300 mb-1">Tarea Principal</label>
+                <select
+                id="subtask-parent"
+                value={taskId}
+                onChange={e => setTaskId(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-1.5 text-white focus:ring-primary focus:border-primary text-sm"
+                required
+                >
+                <option value="" disabled>Selecciona una tarea...</option>
+                {tasks.map(task => (
+                    <option key={task.id} value={task.id}>{task.icon} {task.name}</option>
+                ))}
+                </select>
+            </div>
+
+            {/* Row for Difficulty and Date */}
+            <div className="flex gap-3">
+                <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-300 mb-1">Dificultad</label>
+                    <div className="flex items-center justify-center gap-1 bg-gray-800/50 p-1.5 rounded-lg border border-gray-700 h-[38px]">
+                        {renderStars()}
+                        <span className="text-sm font-bold font-mono text-primary ml-1 w-4 text-center">{difficulty}</span>
+                    </div>
+                </div>
+                
+                <div className="flex-1">
+                    <label htmlFor="subtask-date" className="block text-xs font-medium text-gray-300 mb-1">Fecha Límite</label>
+                    <input 
+                        id="subtask-date"
+                        type="date"
+                        value={deadline}
+                        onChange={e => setDeadline(e.target.value)}
+                        className="w-full bg-gray-800 border border-gray-600 rounded-lg px-2 py-1.5 text-white focus:ring-primary focus:border-primary text-sm h-[38px]"
+                    />
+                </div>
+            </div>
+            
+            <p className="text-[10px] text-gray-500 text-center leading-tight">
+                Si la fecha está cerca, se organizará automáticamente.
+            </p>
+            </form>
+        </div>
+        
+        {/* Footer */}
+        <div className="p-4 border-t border-gray-700 flex justify-end space-x-2 flex-shrink-0 bg-surface rounded-b-2xl">
+            <button type="button" onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg text-sm">Cancelar</button>
+            <button type="submit" form="subtask-form" className="bg-primary hover:bg-purple-500 text-bkg font-bold py-2 px-4 rounded-lg text-sm">{subtask ? 'Guardar' : 'Crear'}</button>
+        </div>
+
       </div>
     </div>
   );
