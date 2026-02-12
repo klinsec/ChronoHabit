@@ -1,597 +1,538 @@
-
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { 
-  Task, TimeEntry, Subtask, DisciplineContract, ContractHistoryItem, 
-  SavedRoutine, Goal, View, GoalPeriod, Commitment, CommitmentStatus, SubtaskStatus
+    Task, TimeEntry, Subtask, Goal, DisciplineContract, ContractHistoryItem, 
+    SavedRoutine, BackupData, Commitment, CommitmentStatus, SubtaskStatus, GoalPeriod 
 } from '../types';
-import { uploadBackupFile } from '../utils/googleDrive';
-import { requestFcmToken, syncUserScore, subscribeToLeaderboard } from '../utils/firebaseConfig';
+import { 
+    signInWithGoogle, logoutFirebase, subscribeToAuthChanges, 
+    saveUserData, getUserData, requestFcmToken, 
+    syncUserScore, subscribeToLeaderboard 
+} from '../utils/firebaseConfig';
 import { User } from 'firebase/auth';
 
 interface TimeTrackerContextType {
-  tasks: Task[];
-  addTask: (task: Task) => void;
-  updateTask: (task: Task) => void;
-  deleteTask: (taskId: string) => void;
-  getTaskById: (taskId: string) => Task | undefined;
-
-  timeEntries: TimeEntry[];
-  activeEntry: TimeEntry | null;
-  startTask: (taskId: string) => void;
-  stopTask: () => void;
-  updateEntry: (entry: TimeEntry) => void;
-  deleteEntry: (entryId: string) => void;
-  liveElapsedTime: number;
-  deleteAllData: () => void;
-
-  subtasks: Subtask[];
-  addSubtask: (subtask: Omit<Subtask, 'id' | 'createdAt' | 'completed' | 'status'>) => void;
-  updateSubtask: (subtask: Subtask) => void;
-  deleteSubtask: (subtaskId: string) => void;
-  toggleSubtaskCompletion: (subtaskId: string) => void;
-  moveSubtaskStatus: (subtaskId: string, status: SubtaskStatus) => void;
-  lastAddedSubtaskId: string | null;
-
-  goals: Goal[];
-  setGoal: (goal: Goal) => void;
-  deleteGoal: (taskId: string, period: GoalPeriod) => void;
-  getGoalByTaskIdAndPeriod: (taskId: string, period: GoalPeriod) => Goal | undefined;
-
-  contract: DisciplineContract | null;
-  pastContracts: ContractHistoryItem[];
-  startContract: (commitments: Omit<Commitment, 'id' | 'status'>[], duration?: number, allowedDays?: number[]) => void;
-  toggleCommitment: (commitmentId: string) => void;
-  setCommitmentStatus: (commitmentId: string, status: CommitmentStatus) => void;
-  resetContract: () => void;
-  completeContract: () => void;
-  completeDay: () => void;
-  
-  savedRoutines: SavedRoutine[];
-  saveRoutine: (title: string, commitments: Omit<Commitment, 'id' | 'status'>[], allowedDays?: number[]) => void;
-  deleteRoutine: (id: string) => void;
-
-  cloudStatus: 'disconnected' | 'connected' | 'syncing' | 'error';
-  connectToCloud: () => Promise<void>;
-  triggerCloudSync: () => Promise<void>;
-  lastSyncTime: number | null;
-  exportData: () => string;
-  importData: (json: string, merge?: boolean) => boolean;
-
-  notificationsEnabled: boolean;
-  requestNotificationPermission: () => Promise<void>;
-  toggleDailyNotification: () => Promise<void>;
-
-  firebaseUser: User | null;
-  handleLoginRanking: () => Promise<void>;
-  handleLogoutRanking: () => Promise<void>;
-  addFriend: (friendId: string) => void;
-  removeFriend: (friendId: string) => void;
-  leaderboard: any[];
-  calculateTotalScore: () => number;
-  rankingError: string | null;
-  localFriends: string[];
+    tasks: Task[];
+    addTask: (task: Task) => void;
+    updateTask: (task: Task) => void;
+    deleteTask: (id: string) => void;
+    getTaskById: (id: string) => Task | undefined;
+    
+    timeEntries: TimeEntry[];
+    activeEntry: TimeEntry | null;
+    startTask: (taskId: string) => void;
+    stopTask: () => void;
+    updateEntry: (entry: TimeEntry) => void;
+    deleteEntry: (id: string) => void;
+    liveElapsedTime: number;
+    deleteAllData: () => void;
+    
+    subtasks: Subtask[];
+    addSubtask: (subtask: Omit<Subtask, 'id' | 'createdAt' | 'completed' | 'status'>) => void;
+    updateSubtask: (subtask: Subtask) => void;
+    deleteSubtask: (id: string) => void;
+    toggleSubtaskCompletion: (id: string) => void;
+    moveSubtaskStatus: (id: string, status: SubtaskStatus) => void;
+    lastAddedSubtaskId: string | null;
+    
+    goals: Goal[];
+    setGoal: (goal: Goal) => void;
+    deleteGoal: (taskId: string, period: GoalPeriod) => void;
+    getGoalByTaskIdAndPeriod: (taskId: string, period: GoalPeriod) => Goal | undefined;
+    
+    contract: DisciplineContract | null;
+    pastContracts: ContractHistoryItem[];
+    startContract: (commitments: Omit<Commitment, 'id' | 'status'>[], duration?: number, allowedDays?: number[]) => void;
+    toggleCommitment: (id: string) => void;
+    setCommitmentStatus: (id: string, status: CommitmentStatus) => void;
+    resetContract: () => void;
+    completeContract: () => void;
+    completeDay: () => void;
+    
+    savedRoutines: SavedRoutine[];
+    saveRoutine: (title: string, commitments: Omit<Commitment, 'id' | 'status'>[], allowedDays?: number[]) => void;
+    deleteRoutine: (id: string) => void;
+    
+    cloudStatus: string;
+    connectToCloud: () => Promise<void>;
+    triggerCloudSync: () => Promise<void>;
+    lastSyncTime: number | null;
+    exportData: () => string;
+    importData: (json: string, merge: boolean) => boolean;
+    
+    notificationsEnabled: boolean;
+    requestNotificationPermission: () => Promise<boolean>;
+    toggleDailyNotification: () => Promise<void>;
+    
+    firebaseUser: User | null;
+    handleLoginRanking: () => Promise<void>;
+    handleLogoutRanking: () => Promise<void>;
+    addFriend: (id: string) => void;
+    removeFriend: (id: string) => void;
+    leaderboard: any[];
+    calculateTotalScore: () => number;
+    rankingError: string | null;
+    localFriends: string[];
 }
 
 const TimeTrackerContext = createContext<TimeTrackerContextType | undefined>(undefined);
 
 export const useTimeTracker = () => {
-  const context = useContext(TimeTrackerContext);
-  if (!context) {
-    throw new Error('useTimeTracker must be used within a TimeTrackerProvider');
-  }
-  return context;
+    const context = useContext(TimeTrackerContext);
+    if (!context) {
+        throw new Error('useTimeTracker must be used within a TimeTrackerProvider');
+    }
+    return context;
 };
 
-// Helper to get ISO date string YYYY-MM-DD
+// Helper for date string YYYY-MM-DD
 const getTodayStr = () => new Date().toISOString().split('T')[0];
 
 export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // State definitions
-  const [tasks, setTasks] = useState<Task[]>(() => {
-      const saved = localStorage.getItem('tasks');
-      return saved ? JSON.parse(saved) : [];
-  });
-  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>(() => {
-      const saved = localStorage.getItem('timeEntries');
-      return saved ? JSON.parse(saved) : [];
-  });
-  const [activeEntry, setActiveEntry] = useState<TimeEntry | null>(null);
-  const [liveElapsedTime, setLiveElapsedTime] = useState(0);
-  
-  const [subtasks, setSubtasks] = useState<Subtask[]>(() => {
-      const saved = localStorage.getItem('subtasks');
-      return saved ? JSON.parse(saved) : [];
-  });
-  const [lastAddedSubtaskId, setLastAddedSubtaskId] = useState<string | null>(null);
+    // --- State Definitions ---
+    const [tasks, setTasks] = useState<Task[]>([]);
+    const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
+    const [activeEntry, setActiveEntry] = useState<TimeEntry | null>(null);
+    const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+    const [goals, setGoals] = useState<Goal[]>([]);
+    const [contract, setContract] = useState<DisciplineContract | null>(null);
+    const [pastContracts, setPastContracts] = useState<ContractHistoryItem[]>([]);
+    const [savedRoutines, setSavedRoutines] = useState<SavedRoutine[]>([]);
+    
+    // UI/System State
+    const [liveElapsedTime, setLiveElapsedTime] = useState(0);
+    const [lastAddedSubtaskId, setLastAddedSubtaskId] = useState<string | null>(null);
+    const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+    
+    // Cloud/Firebase State
+    const [cloudStatus, setCloudStatus] = useState<'disconnected' | 'connected' | 'syncing' | 'error'>('disconnected');
+    const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
+    const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+    const [leaderboard, setLeaderboard] = useState<any[]>([]);
+    const [rankingError, setRankingError] = useState<string | null>(null);
+    const [localFriends, setLocalFriends] = useState<string[]>([]);
 
-  const [goals, setGoals] = useState<Goal[]>(() => {
-      const saved = localStorage.getItem('goals');
-      return saved ? JSON.parse(saved) : [];
-  });
+    // --- Persistence (LocalStorage) ---
+    useEffect(() => {
+        const loadLocal = (key: string, setter: (val: any) => void, def: any) => {
+            const stored = localStorage.getItem(key);
+            if (stored) {
+                try { setter(JSON.parse(stored)); } catch (e) { console.error(`Error loading ${key}`, e); }
+            } else {
+                setter(def);
+            }
+        };
 
-  const [contract, setContract] = useState<DisciplineContract | null>(() => {
-      const saved = localStorage.getItem('contract');
-      return saved ? JSON.parse(saved) : null;
-  });
-  const [pastContracts, setPastContracts] = useState<ContractHistoryItem[]>(() => {
-      const saved = localStorage.getItem('pastContracts');
-      return saved ? JSON.parse(saved) : [];
-  });
-  const [savedRoutines, setSavedRoutines] = useState<SavedRoutine[]>(() => {
-      const saved = localStorage.getItem('savedRoutines');
-      return saved ? JSON.parse(saved) : [];
-  });
+        loadLocal('tasks', setTasks, []);
+        loadLocal('timeEntries', setTimeEntries, []);
+        loadLocal('activeEntry', setActiveEntry, null);
+        loadLocal('subtasks', setSubtasks, []);
+        loadLocal('goals', setGoals, []);
+        loadLocal('contract', setContract, null);
+        loadLocal('pastContracts', setPastContracts, []);
+        loadLocal('savedRoutines', setSavedRoutines, []);
+        loadLocal('notifications_enabled', setNotificationsEnabled, false);
+        loadLocal('localFriends', setLocalFriends, []);
+    }, []);
 
-  // User Identity & Ranking
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
-  const [leaderboard, setLeaderboard] = useState<any[]>([]);
-  const [rankingError, setRankingError] = useState<string | null>(null);
-  const [localFriends, setLocalFriends] = useState<string[]>(() => {
-      const saved = localStorage.getItem('localFriends');
-      return saved ? JSON.parse(saved) : [];
-  });
+    useEffect(() => localStorage.setItem('tasks', JSON.stringify(tasks)), [tasks]);
+    useEffect(() => localStorage.setItem('timeEntries', JSON.stringify(timeEntries)), [timeEntries]);
+    useEffect(() => localStorage.setItem('activeEntry', JSON.stringify(activeEntry)), [activeEntry]);
+    useEffect(() => localStorage.setItem('subtasks', JSON.stringify(subtasks)), [subtasks]);
+    useEffect(() => localStorage.setItem('goals', JSON.stringify(goals)), [goals]);
+    useEffect(() => { if(contract) localStorage.setItem('contract', JSON.stringify(contract)); else localStorage.removeItem('contract'); }, [contract]);
+    useEffect(() => localStorage.setItem('pastContracts', JSON.stringify(pastContracts)), [pastContracts]);
+    useEffect(() => localStorage.setItem('savedRoutines', JSON.stringify(savedRoutines)), [savedRoutines]);
+    useEffect(() => localStorage.setItem('localFriends', JSON.stringify(localFriends)), [localFriends]);
 
-  // Cloud & Settings
-  const [cloudStatus, setCloudStatus] = useState<'disconnected' | 'connected' | 'syncing' | 'error'>('disconnected');
-  const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
-      if (typeof Notification !== 'undefined') {
-          return Notification.permission === 'granted';
-      }
-      return false;
-  });
+    // --- Timer Logic ---
+    useEffect(() => {
+        let interval: any;
+        if (activeEntry) {
+            setLiveElapsedTime(Date.now() - activeEntry.startTime);
+            interval = setInterval(() => {
+                setLiveElapsedTime(Date.now() - activeEntry.startTime);
+            }, 1000);
+        } else {
+            setLiveElapsedTime(0);
+        }
+        return () => clearInterval(interval);
+    }, [activeEntry]);
 
-  // Persistence Effects
-  useEffect(() => localStorage.setItem('tasks', JSON.stringify(tasks)), [tasks]);
-  useEffect(() => localStorage.setItem('timeEntries', JSON.stringify(timeEntries)), [timeEntries]);
-  useEffect(() => localStorage.setItem('subtasks', JSON.stringify(subtasks)), [subtasks]);
-  useEffect(() => localStorage.setItem('goals', JSON.stringify(goals)), [goals]);
-  useEffect(() => {
-      if (contract) localStorage.setItem('contract', JSON.stringify(contract));
-      else localStorage.removeItem('contract');
-  }, [contract]);
-  useEffect(() => localStorage.setItem('pastContracts', JSON.stringify(pastContracts)), [pastContracts]);
-  useEffect(() => localStorage.setItem('savedRoutines', JSON.stringify(savedRoutines)), [savedRoutines]);
-  useEffect(() => localStorage.setItem('localFriends', JSON.stringify(localFriends)), [localFriends]);
+    // --- Import/Export ---
+    const exportData = useCallback(() => {
+        const data: BackupData = {
+            tasks, timeEntries, goals, subtasks, contract: contract || undefined,
+            contractHistory: pastContracts, savedRoutines,
+            settings: { dailyNotificationEnabled: notificationsEnabled },
+            timestamp: Date.now(), version: 1
+        };
+        return JSON.stringify(data);
+    }, [tasks, timeEntries, goals, subtasks, contract, pastContracts, savedRoutines, notificationsEnabled]);
 
-  // Active Entry Restoration
-  useEffect(() => {
-    const active = timeEntries.find(e => e.endTime === null);
-    if (active) setActiveEntry(active);
-  }, [timeEntries]);
+    const importData = useCallback((json: string, merge: boolean) => {
+        try {
+            const data: BackupData = JSON.parse(json);
+            if (merge) {
+                // Simple merge for lists, replacement for singletons if present
+                if (data.tasks) setTasks(prev => [...prev, ...data.tasks.filter(t => !prev.find(p => p.id === t.id))]);
+                if (data.timeEntries) setTimeEntries(prev => [...prev, ...data.timeEntries.filter(t => !prev.find(p => p.id === t.id))]);
+                if (data.subtasks) setSubtasks(prev => [...prev, ...data.subtasks.filter(t => !prev.find(p => p.id === t.id))]);
+                if (data.contractHistory) setPastContracts(prev => [...prev, ...data.contractHistory!.filter(t => !prev.find(p => p.id === t.id))]);
+            } else {
+                if (data.tasks) setTasks(data.tasks);
+                if (data.timeEntries) setTimeEntries(data.timeEntries);
+                if (data.subtasks) setSubtasks(data.subtasks);
+                if (data.goals) setGoals(data.goals);
+                if (data.contract) setContract(data.contract);
+                if (data.contractHistory) setPastContracts(data.contractHistory);
+                if (data.savedRoutines) setSavedRoutines(data.savedRoutines);
+            }
+            return true;
+        } catch (e) {
+            console.error("Import failed", e);
+            return false;
+        }
+    }, []);
 
-  // Timer Interval
-  useEffect(() => {
-    let interval: any;
-    if (activeEntry) {
-      interval = setInterval(() => {
-        setLiveElapsedTime(Date.now() - activeEntry.startTime);
-      }, 1000);
-    } else {
-      setLiveElapsedTime(0);
-    }
-    return () => clearInterval(interval);
-  }, [activeEntry]);
+    // --- Auth Listener ---
+    useEffect(() => {
+        const unsubscribe = subscribeToAuthChanges((user) => {
+            setFirebaseUser(user);
+            if (user) {
+                setCloudStatus('connected');
+                // Auto-sync on login could go here
+                getUserData(user.uid).then(val => {
+                     // Optionally prompt user to overwrite local with cloud or vice versa
+                     // For now, we assume local is master if it has data, or we could just setCloudStatus('connected')
+                });
+            } else {
+                setCloudStatus('disconnected');
+            }
+        });
+        return () => unsubscribe();
+    }, []);
 
-  // --- Task Methods ---
-  const addTask = (task: Task) => setTasks([...tasks, task]);
-  const updateTask = (task: Task) => setTasks(tasks.map(t => t.id === task.id ? task : t));
-  const deleteTask = (taskId: string) => {
-      setTasks(tasks.filter(t => t.id !== taskId));
-      setSubtasks(subtasks.filter(s => s.taskId !== taskId));
-      setTimeEntries(timeEntries.filter(e => e.taskId !== taskId));
-  };
-  const getTaskById = (taskId: string) => tasks.find(t => t.id === taskId);
-
-  // --- Time Entry Methods ---
-  const startTask = (taskId: string) => {
-    if (activeEntry) stopTask();
-    const newEntry: TimeEntry = {
-      id: `entry_${Date.now()}`,
-      taskId,
-      startTime: Date.now(),
-      endTime: null
+    // --- CRUD Functions & Logic (Pasted from prompt fragment + inferred) ---
+    const addTask = (task: Task) => { setTasks(prev => [...prev, task]); };
+    const updateTask = (task: Task) => { setTasks(prev => prev.map(t => t.id === task.id ? task : t)); };
+    const deleteTask = (taskId: string) => {
+        setTasks(prev => prev.filter(t => t.id !== taskId));
+        setSubtasks(prev => prev.filter(s => s.taskId !== taskId));
+        setTimeEntries(prev => prev.filter(e => e.taskId !== taskId));
     };
-    setTimeEntries([...timeEntries, newEntry]);
-    setActiveEntry(newEntry);
-  };
+    const getTaskById = (taskId: string) => tasks.find(t => t.id === taskId);
 
-  const stopTask = () => {
-    if (activeEntry) {
-      const updatedEntry = { ...activeEntry, endTime: Date.now() };
-      setTimeEntries(timeEntries.map(e => e.id === activeEntry.id ? updatedEntry : e));
-      setActiveEntry(null);
-    }
-  };
+    const startTask = (taskId: string) => {
+        if (activeEntry) stopTask();
+        const newEntry: TimeEntry = { id: `entry_${Date.now()}`, taskId, startTime: Date.now(), endTime: null };
+        setTimeEntries(prev => [...prev, newEntry]);
+        setActiveEntry(newEntry);
+    };
 
-  const updateEntry = (entry: TimeEntry) => {
-      setTimeEntries(timeEntries.map(e => e.id === entry.id ? entry : e));
-      if (activeEntry && activeEntry.id === entry.id) {
-          setActiveEntry(entry.endTime ? null : entry);
-      }
-  };
+    const stopTask = () => {
+        if (activeEntry) {
+            const updatedEntry = { ...activeEntry, endTime: Date.now() };
+            setTimeEntries(prev => prev.map(e => e.id === activeEntry.id ? updatedEntry : e));
+            setActiveEntry(null);
+        }
+    };
 
-  const deleteEntry = (entryId: string) => {
-      setTimeEntries(timeEntries.filter(e => e.id !== entryId));
-      if (activeEntry && activeEntry.id === entryId) setActiveEntry(null);
-  };
+    const updateEntry = (entry: TimeEntry) => {
+        setTimeEntries(prev => prev.map(e => e.id === entry.id ? entry : e));
+        if (activeEntry && activeEntry.id === entry.id) setActiveEntry(entry.endTime ? null : entry);
+    };
 
-  const deleteAllData = () => {
-      if (window.confirm("¿Estás seguro de que quieres borrar TODO? Esta acción no se puede deshacer.")) {
-          setTasks([]);
-          setTimeEntries([]);
-          setActiveEntry(null);
-          setSubtasks([]);
-          setContract(null);
-          setPastContracts([]);
-          setSavedRoutines([]);
-          setGoals([]);
-          localStorage.clear();
-      }
-  };
+    const deleteEntry = (entryId: string) => {
+        setTimeEntries(prev => prev.filter(e => e.id !== entryId));
+        if (activeEntry && activeEntry.id === entryId) setActiveEntry(null);
+    };
 
-  // --- Subtask Methods ---
-  const addSubtask = (subtaskData: Omit<Subtask, 'id' | 'createdAt' | 'completed' | 'status'>) => {
-      const id = `sub_${Date.now()}`;
-      const newSubtask: Subtask = {
-          ...subtaskData,
-          id,
-          createdAt: Date.now(),
-          completed: false,
-          status: 'idea'
-      };
-      if (newSubtask.deadline) {
-          const today = new Date().setHours(0,0,0,0);
-          if (newSubtask.deadline <= today + 86400000) newSubtask.status = 'today'; 
-          else newSubtask.status = 'pending';
-      }
-      
-      setSubtasks(prev => [...prev, newSubtask]);
-      setLastAddedSubtaskId(id);
-      setTimeout(() => setLastAddedSubtaskId(null), 2000);
-  };
+    const deleteAllData = () => {
+        if (window.confirm("¿Borrar TODO?")) {
+            localStorage.clear();
+            window.location.reload();
+        }
+    };
 
-  const updateSubtask = (subtask: Subtask) => {
-      setSubtasks(subtasks.map(s => s.id === subtask.id ? subtask : s));
-  };
+    const addSubtask = (subtaskData: Omit<Subtask, 'id' | 'createdAt' | 'completed' | 'status'>) => {
+        const id = `sub_${Date.now()}`;
+        // Explicitly cast the partial object to Subtask by providing default values
+        const newSubtask: Subtask = { 
+            ...subtaskData, 
+            id, 
+            createdAt: Date.now(), 
+            completed: false, 
+            status: 'idea',
+        };
+        
+        if (newSubtask.deadline) {
+            const today = new Date().setHours(0,0,0,0);
+            if (newSubtask.deadline <= today + 86400000) newSubtask.status = 'today'; 
+            else newSubtask.status = 'pending';
+        }
+        setSubtasks(prev => [...prev, newSubtask]);
+        setLastAddedSubtaskId(id);
+        setTimeout(() => setLastAddedSubtaskId(null), 2000);
+    };
 
-  const deleteSubtask = (id: string) => setSubtasks(subtasks.filter(s => s.id !== id));
+    const updateSubtask = (s: Subtask) => { setSubtasks(prev => prev.map(old => old.id === s.id ? s : old)); };
+    const deleteSubtask = (id: string) => { setSubtasks(prev => prev.filter(s => s.id !== id)); };
+    
+    const toggleSubtaskCompletion = (id: string) => {
+        setSubtasks(prev => prev.map(s => {
+            if (s.id === id) return { ...s, completed: !s.completed, completedAt: !s.completed ? Date.now() : undefined, status: !s.completed ? 'log' : (s.status === 'log' ? 'today' : s.status) };
+            return s;
+        }));
+    };
+    
+    const moveSubtaskStatus = (id: string, status: SubtaskStatus) => { setSubtasks(prev => prev.map(s => s.id === id ? { ...s, status } : s)); };
+    
+    const setGoal = (goal: Goal) => { setGoals(prev => { const others = prev.filter(g => !(g.taskId === goal.taskId && g.period === goal.period)); return [...others, goal]; }); };
+    const deleteGoal = (taskId: string, period: GoalPeriod) => { setGoals(prev => prev.filter(g => !(g.taskId === taskId && g.period === period))); };
+    const getGoalByTaskIdAndPeriod = (taskId: string, period: GoalPeriod) => goals.find(g => g.taskId === taskId && g.period === period);
 
-  const toggleSubtaskCompletion = (id: string) => {
-      setSubtasks(subtasks.map(s => {
-          if (s.id === id) {
-              const completed = !s.completed;
-              return { 
-                  ...s, 
-                  completed, 
-                  completedAt: completed ? Date.now() : undefined,
-                  status: completed ? 'log' : (s.status === 'log' ? 'today' : s.status) 
-              };
-          }
-          return s;
-      }));
-  };
+    // Contract Logic helpers
+    const getContractWithTodayHistory = (c: DisciplineContract): DisciplineContract => {
+        const total = c.commitments.length;
+        const completed = c.commitments.filter(com => com.status === 'completed').length;
+        const ratio = total > 0 ? completed / total : 0;
+        
+        const diaActual = c.currentStreakLevel;
+        const points = parseFloat((diaActual * ratio).toFixed(2));
 
-  const moveSubtaskStatus = (id: string, status: SubtaskStatus) => {
-      setSubtasks(subtasks.map(s => s.id === id ? { ...s, status } : s));
-  };
-
-  // --- Goal Methods ---
-  const setGoal = (goal: Goal) => {
-      setGoals(prev => {
-          const others = prev.filter(g => !(g.taskId === goal.taskId && g.period === goal.period));
-          return [...others, goal];
-      });
-  };
-
-  const deleteGoal = (taskId: string, period: GoalPeriod) => {
-      setGoals(prev => prev.filter(g => !(g.taskId === taskId && g.period === period)));
-  };
-
-  const getGoalByTaskIdAndPeriod = (taskId: string, period: GoalPeriod) => {
-      return goals.find(g => g.taskId === taskId && g.period === period);
-  };
-
-  // --- Discipline Contract Logic ---
+        const today = getTodayStr();
+        const newHistory = [...c.dailyHistory];
+        const todayIndex = newHistory.findIndex(h => h.date === today);
+        const entry = { date: today, points, streakLevel: diaActual, totalCommitments: total, completedCommitments: completed };
+        if (todayIndex >= 0) newHistory[todayIndex] = entry; else newHistory.push(entry);
+        return { ...c, dailyHistory: newHistory, lastCheckDate: today };
+    };
   
-  const getContractWithTodayHistory = (c: DisciplineContract): DisciplineContract => {
-      const total = c.commitments.length;
-      const completed = c.commitments.filter(com => com.status === 'completed').length;
-      const ratio = total > 0 ? completed / total : 0;
-      const points = parseFloat((c.currentStreakLevel * ratio).toFixed(1));
+    const startContract = (commitments: Omit<Commitment, 'id' | 'status'>[], duration = 1, allowedDays = [0,1,2,3,4,5,6]) => {
+        setContract({ active: true, currentPhase: duration, dayInPhase: 0, startDate: Date.now(), lastCheckDate: getTodayStr(), commitments: commitments.map((c, i) => ({ ...c, id: `c_${i}_${Date.now()}`, status: 'pending' })), dailyHistory: [], currentStreakLevel: 1, failed: false, allowedDays, dailyCompleted: false });
+    };
+    
+    const setCommitmentStatus = (id: string, status: CommitmentStatus) => { 
+        setContract(prev => { 
+            if (!prev) return null; 
+            const updated = { ...prev, commitments: prev.commitments.map(com => com.id === id ? { ...com, status } : com) };
+            return getContractWithTodayHistory(updated);
+        }); 
+    };
 
-      const today = getTodayStr();
-      const newHistory = [...c.dailyHistory];
-      const todayIndex = newHistory.findIndex(h => h.date === today);
-
-      const entry = {
-          date: today,
-          points,
-          streakLevel: c.currentStreakLevel,
-          totalCommitments: total,
-          completedCommitments: completed
-      };
-
-      if (todayIndex >= 0) {
-          newHistory[todayIndex] = entry;
-      } else {
-          newHistory.push(entry);
-      }
-      
-      return { ...c, dailyHistory: newHistory, lastCheckDate: today };
-  };
-
-  const archiveContract = useCallback((finalContract: DisciplineContract, status: 'completed' | 'failed' | 'finished') => {
-      const historyItem: ContractHistoryItem = {
-          id: `hist_${Date.now()}`,
-          startDate: finalContract.startDate,
-          endDate: Date.now(),
-          phaseDuration: finalContract.currentPhase,
-          status: status,
-          commitmentsSnapshot: finalContract.commitments.map(c => c.title),
-          dailyHistory: finalContract.dailyHistory
-      };
-      setPastContracts(prev => [historyItem, ...prev]);
-  }, []);
-
-  const startContract = (commitments: Omit<Commitment, 'id' | 'status'>[], duration: number = 1, allowedDays: number[] = [0,1,2,3,4,5,6]) => {
-      const newContract: DisciplineContract = {
-          active: true,
-          currentPhase: duration,
-          dayInPhase: 0,
-          startDate: Date.now(),
-          lastCheckDate: getTodayStr(),
-          commitments: commitments.map((c, i) => ({ ...c, id: `c_${i}_${Date.now()}`, status: 'pending' })),
-          history: [], 
-          dailyHistory: [],
-          currentStreakLevel: 1,
-          failed: false,
-          allowedDays,
-          dailyCompleted: false
-      };
-      setContract(newContract);
-  };
-
-  const updateContractState = (updater: (c: DisciplineContract) => DisciplineContract) => {
-      if (contract) {
-          const updated = updater(contract);
-          const withHistory = getContractWithTodayHistory(updated);
-          setContract(withHistory);
-      }
-  };
-
-  const toggleCommitment = (id: string) => {
-      updateContractState(c => ({
-          ...c,
-          commitments: c.commitments.map(com => com.id === id ? { 
-              ...com, 
-              status: com.status === 'completed' ? 'pending' : 'completed' 
-          } : com)
-      }));
-  };
-
-  const setCommitmentStatus = (id: string, status: CommitmentStatus) => {
-      updateContractState(c => ({
-          ...c,
-          commitments: c.commitments.map(com => com.id === id ? { ...com, status } : com)
-      }));
-  };
-
-  const completeDay = () => {
-      if (contract) {
-          const updated = getContractWithTodayHistory(contract);
-          setContract({ ...updated, dailyCompleted: true });
-      }
-  };
-
-  const completeContract = () => {
-      if (contract) {
-         const final = getContractWithTodayHistory(contract);
-         archiveContract(final, 'completed');
-         setContract(null);
-      }
-  };
-
-  const resetContract = useCallback(() => {
-      if (contract) {
-          let finalContract = getContractWithTodayHistory(contract);
-          finalContract = {
-              ...finalContract,
-              dailyHistory: finalContract.dailyHistory.map(h => 
-                  h.date === finalContract.lastCheckDate 
-                      ? { ...h, points: 0 } 
-                      : h
-              )
-          };
-          archiveContract(finalContract, 'failed');
-      }
-      setContract(null);
-      triggerCloudSync();
-  }, [contract, archiveContract]);
-
-  useEffect(() => {
-      if (!contract) return;
-      const today = getTodayStr();
-      if (contract.lastCheckDate !== today) {
-          const dayOfWeek = new Date().getDay();
-          const isAllowedToday = contract.allowedDays?.includes(dayOfWeek) ?? true;
-          
-          if (isAllowedToday) {
-              setContract(prev => {
-                  if(!prev) return null;
-                  return {
-                      ...prev,
-                      dayInPhase: prev.dayInPhase + 1, 
-                      lastCheckDate: today,
-                      dailyCompleted: false,
-                      commitments: prev.commitments.map(c => ({ ...c, status: 'pending' })) 
-                  }
-              });
-          } else {
-             setContract(prev => prev ? ({ ...prev, lastCheckDate: today }) : null);
-          }
-      }
-  }, [contract]);
-
-  // --- Saved Routines ---
-  const saveRoutine = (title: string, commitments: Omit<Commitment, 'id' | 'status'>[], allowedDays: number[] = [0,1,2,3,4,5,6]) => {
-      const newRoutine: SavedRoutine = {
-          id: `routine_${Date.now()}`,
-          title,
-          commitments,
-          allowedDays
-      };
-      setSavedRoutines(prev => [...prev, newRoutine]);
-  };
-
-  const deleteRoutine = (id: string) => setSavedRoutines(prev => prev.filter(r => r.id !== id));
-
-  // --- Cloud & Export ---
+    // Alias for toggle used in DisciplineView but not RoutinesView (mapped to setCommitmentStatus in Routines)
+    const toggleCommitment = (id: string) => {
+         if(!contract) return;
+         const com = contract.commitments.find(c => c.id === id);
+         if(com) {
+             setCommitmentStatus(id, com.status === 'completed' ? 'pending' : 'completed');
+         }
+    };
   
-  const exportData = () => {
-      const data = {
-          version: 1,
-          timestamp: Date.now(),
-          tasks,
-          timeEntries,
-          subtasks,
-          goals,
-          contract,
-          pastContracts,
-          savedRoutines
-      };
-      return JSON.stringify(data, null, 2);
-  };
-
-  const importData = (json: string, merge = false) => {
-      try {
-          const data = JSON.parse(json);
-          if (merge) {
-              if (data.tasks) setTasks(data.tasks);
-              if (data.timeEntries) setTimeEntries(data.timeEntries);
-              if (data.subtasks) setSubtasks(data.subtasks);
-              if (data.goals) setGoals(data.goals);
-              if (data.contract) setContract(data.contract);
-              if (data.pastContracts) setPastContracts(data.pastContracts);
-              if (data.savedRoutines) setSavedRoutines(data.savedRoutines);
-          } else {
-              if (data.tasks) setTasks(data.tasks);
-              if (data.timeEntries) setTimeEntries(data.timeEntries);
-              if (data.subtasks) setSubtasks(data.subtasks);
-              if (data.goals) setGoals(data.goals);
-              if (data.contract) setContract(data.contract);
-              if (data.pastContracts) setPastContracts(data.pastContracts);
-              if (data.savedRoutines) setSavedRoutines(data.savedRoutines);
-          }
-          return true;
-      } catch (e) {
-          console.error("Import error", e);
-          return false;
-      }
-  };
-
-  const connectToCloud = async () => {
-      setCloudStatus('connected');
-  };
-
-  const triggerCloudSync = async () => {
-      if (cloudStatus !== 'connected') return;
-      setCloudStatus('syncing');
-      try {
-          const data = exportData();
-          await uploadBackupFile(data); 
-          setLastSyncTime(Date.now());
-          setCloudStatus('connected');
-      } catch (e) {
-          console.error(e);
-          setCloudStatus('error');
-      }
-  };
-
-  // --- Notifications ---
-  const requestNotificationPermission = async () => {
-      try {
-          if ("Notification" in window) {
-              const permission = await Notification.requestPermission();
-              const granted = permission === 'granted';
-              setNotificationsEnabled(granted);
-              if(granted) {
-                  const token = await requestFcmToken("USER_ID_PLACEHOLDER"); // Needs real User ID integration
-                  if(token) console.log("Token obtained:", token);
-              }
-          }
-      } catch (e) {
-          console.error(e);
-      }
-  };
-
-  const toggleDailyNotification = async () => {
-      await requestNotificationPermission();
-  };
-
-  // --- Firebase Ranking & Social ---
-  const handleLoginRanking = async () => { /* Implement in next pass or use JS implementation as reference */ };
-  const handleLogoutRanking = async () => { /* Implement in next pass */ };
-  const addFriend = (friendId: string) => setLocalFriends(prev => [...prev, friendId]);
-  const removeFriend = (friendId: string) => setLocalFriends(prev => prev.filter(id => id !== friendId));
+    const completeDay = () => { if (contract) { setContract(prev => prev ? ({ ...getContractWithTodayHistory(prev), dailyCompleted: true }) : null); } };
   
-  const calculateTotalScore = useCallback(() => {
-      let total = 0;
-      timeEntries.forEach(entry => {
-          if (entry.endTime) {
-              const hours = (entry.endTime - entry.startTime) / (1000 * 60 * 60);
-              total += (hours * 0.5);
-          }
-      });
-      subtasks.forEach(s => {
-          if (s.completed && s.difficulty) total += s.difficulty;
-      });
-      const contractsToCheck = [...pastContracts, ...(contract ? [contract] : [])];
-      contractsToCheck.forEach(c => {
-          if (c.dailyHistory && c.dailyHistory.length > 0) {
-              c.dailyHistory.forEach(h => {
-                  if (h.points) total += h.points; 
-              });
-          }
-      });
-      return parseFloat(total.toFixed(2)); 
-  }, [timeEntries, subtasks, pastContracts, contract]);
+    const completeContract = () => { 
+        if (contract) { 
+            const final = getContractWithTodayHistory(contract); 
+            const historyItem: ContractHistoryItem = { id: `hist_${Date.now()}`, startDate: final.startDate, endDate: Date.now(), phaseDuration: final.currentPhase, status: 'completed', commitmentsSnapshot: final.commitments.map(c => c.title), dailyHistory: final.dailyHistory };
+            setPastContracts(prev => [historyItem, ...prev]);
+            setContract(null); 
+        } 
+    };
+  
+    const resetContract = () => { 
+        if (contract) { 
+            const final = getContractWithTodayHistory(contract); 
+            const historyItem: ContractHistoryItem = { id: `hist_${Date.now()}`, startDate: final.startDate, endDate: Date.now(), phaseDuration: final.currentPhase, status: 'failed', commitmentsSnapshot: final.commitments.map(c => c.title), dailyHistory: final.dailyHistory };
+            setPastContracts(prev => [historyItem, ...prev]);
+        } 
+        setContract(null); 
+    };
+  
+    // Logic to handle Day Transitions and Streak Updates
+    useEffect(() => { 
+        if (!contract) return; 
+        const today = getTodayStr(); 
+        if (contract.lastCheckDate !== today) { 
+            const dayOfWeek = new Date().getDay(); 
+            if (contract.allowedDays?.includes(dayOfWeek) ?? true) { 
+                setContract(prev => {
+                    if (!prev) return null;
+                    const total = prev.commitments.length;
+                    const completed = prev.commitments.filter(c => c.status === 'completed').length;
+                    const ratio = total > 0 ? completed / total : 0;
+                    
+                    const diaActual = prev.currentStreakLevel; 
+                    const pointsEarned = parseFloat((diaActual * ratio).toFixed(2));
+                    
+                    let streakForTomorrow;
+                    if (completed === total) {
+                        streakForTomorrow = diaActual; 
+                    } else {
+                        streakForTomorrow = diaActual * ratio; 
+                    }
+                    
+                    let nextLevel = Math.min(streakForTomorrow + 1, 10);
+                    nextLevel = parseFloat(nextLevel.toFixed(2));
+                    if (nextLevel < 1) nextLevel = 1;
 
-  useEffect(() => {
-      if (firebaseUser) {
-          const score = calculateTotalScore();
-          syncUserScore(firebaseUser, score);
-          const interval = setInterval(() => syncUserScore(firebaseUser, score), 60000);
-          return () => clearInterval(interval);
-      }
-  }, [firebaseUser, calculateTotalScore]);
+                    const newHistory = [...prev.dailyHistory];
+                    const histIdx = newHistory.findIndex(h => h.date === prev.lastCheckDate);
+                    const historyEntry = { 
+                        date: prev.lastCheckDate, 
+                        points: pointsEarned, 
+                        streakLevel: diaActual, 
+                        totalCommitments: total, 
+                        completedCommitments: completed 
+                    };
+                    
+                    if (histIdx >= 0) {
+                        newHistory[histIdx] = historyEntry;
+                    } else {
+                        newHistory.push(historyEntry);
+                    }
 
-  // FIXED: Subscribe to Leaderboard ONLY when firebaseUser changes (login/logout)
-  useEffect(() => {
-      if (!firebaseUser) {
-          setLeaderboard([]);
-          return;
-      }
-      const unsubscribe = subscribeToLeaderboard(
-          (data) => { setLeaderboard(data); setRankingError(null); },
-          (error) => setRankingError(error.message)
-      );
-      return () => unsubscribe();
-  }, [firebaseUser]);
+                    return {
+                        ...prev,
+                        dayInPhase: prev.dayInPhase + 1,
+                        lastCheckDate: today,
+                        dailyCompleted: false,
+                        currentStreakLevel: nextLevel, 
+                        commitments: prev.commitments.map(c => ({ ...c, status: 'pending' })),
+                        dailyHistory: newHistory
+                    };
+                }); 
+            } else { 
+                setContract(prev => prev ? ({ ...prev, lastCheckDate: today }) : null); 
+            } 
+        } 
+    }, [contract]);
+  
+    const saveRoutine = (title: string, commitments: Omit<Commitment, 'id' | 'status'>[], allowedDays?: number[]) => { 
+        setSavedRoutines(prev => [...prev, { id: `routine_${Date.now()}`, title, commitments, allowedDays }]); 
+    };
+    const deleteRoutine = (id: string) => { setSavedRoutines(prev => prev.filter(r => r.id !== id)); };
 
-  return (
-    <TimeTrackerContext.Provider value={{
-      tasks, addTask, updateTask, deleteTask, getTaskById,
-      timeEntries, activeEntry, startTask, stopTask, updateEntry, deleteEntry, liveElapsedTime, deleteAllData,
-      subtasks, addSubtask, updateSubtask, deleteSubtask, toggleSubtaskCompletion, moveSubtaskStatus, lastAddedSubtaskId,
-      goals, setGoal, deleteGoal, getGoalByTaskIdAndPeriod,
-      contract, pastContracts, startContract, toggleCommitment, setCommitmentStatus, resetContract, completeContract, completeDay,
-      savedRoutines, saveRoutine, deleteRoutine,
-      cloudStatus, connectToCloud, triggerCloudSync, lastSyncTime, exportData, importData,
-      notificationsEnabled, requestNotificationPermission, toggleDailyNotification,
-      firebaseUser, handleLoginRanking, handleLogoutRanking, addFriend, removeFriend, leaderboard, calculateTotalScore, rankingError, localFriends
-    }}>
-      {children}
-    </TimeTrackerContext.Provider>
-  );
+    // --- Firebase Ranking & Social Logic (Merged) ---
+    const handleAuthLogin = useCallback(async () => {
+        setCloudStatus('syncing');
+        try {
+            await signInWithGoogle();
+        } catch (error: any) {
+            console.error("Auth Error:", error);
+            setCloudStatus('error');
+            throw error; 
+        }
+    }, []);
+
+    const handleLogoutRanking = async () => {
+        await logoutFirebase();
+    };
+    const addFriend = (friendId: string) => setLocalFriends(prev => [...prev, friendId]);
+    const removeFriend = (friendId: string) => setLocalFriends(prev => prev.filter(id => id !== friendId));
+  
+    const calculateTotalScore = useCallback(() => {
+        let total = 0;
+        timeEntries.forEach(entry => {
+            if (entry.endTime) {
+                const hours = (entry.endTime - entry.startTime) / (1000 * 60 * 60);
+                total += (hours * 0.5);
+            }
+        });
+        subtasks.forEach(s => {
+            if (s.completed && s.difficulty) total += s.difficulty;
+        });
+        const contractsToCheck = [...pastContracts, ...(contract ? [contract] : [])];
+        contractsToCheck.forEach(c => {
+            if (c.dailyHistory && c.dailyHistory.length > 0) {
+                c.dailyHistory.forEach(h => {
+                    if (h.points) total += h.points; 
+                });
+            }
+        });
+        return parseFloat(total.toFixed(2)); 
+    }, [timeEntries, subtasks, pastContracts, contract]);
+
+    useEffect(() => {
+        if (firebaseUser) {
+            const score = calculateTotalScore();
+            syncUserScore(firebaseUser, score);
+            const interval = setInterval(() => syncUserScore(firebaseUser, score), 60000);
+            return () => clearInterval(interval);
+        }
+    }, [firebaseUser, calculateTotalScore]);
+
+    useEffect(() => {
+        if (!firebaseUser) {
+            setLeaderboard([]);
+            return;
+        }
+        const unsubscribe = subscribeToLeaderboard(
+            (data) => { setLeaderboard(data); setRankingError(null); },
+            (error) => setRankingError(error.message)
+        );
+        return () => unsubscribe();
+    }, [firebaseUser]);
+
+    const triggerCloudSync = useCallback(async () => {
+        if (cloudStatus !== 'connected' || !firebaseUser) return;
+        setCloudStatus('syncing');
+        try {
+            await saveUserData(firebaseUser.uid, exportData());
+            setLastSyncTime(Date.now());
+            setCloudStatus('connected');
+        } catch (e) {
+            setCloudStatus('error');
+        }
+    }, [cloudStatus, exportData, firebaseUser]);
+
+    const requestNotificationPermission = async () => { 
+        if (!firebaseUser) return false;
+        try {
+            const token = await requestFcmToken(firebaseUser.uid);
+            if (token) {
+                setNotificationsEnabled(true);
+                localStorage.setItem('notifications_enabled', 'true');
+                return true;
+            } else {
+                setNotificationsEnabled(false);
+                localStorage.setItem('notifications_enabled', 'false');
+                return false;
+            }
+        } catch (e) {
+            setNotificationsEnabled(false);
+            localStorage.setItem('notifications_enabled', 'false');
+            return false;
+        }
+    };
+    
+    const toggleDailyNotification = async () => { 
+        if (notificationsEnabled) {
+            setNotificationsEnabled(false);
+            localStorage.setItem('notifications_enabled', 'false');
+        } else {
+            const success = await requestNotificationPermission();
+            if (success) alert("Notificaciones activadas correctamente.");
+        }
+    };
+
+    return (
+        <TimeTrackerContext.Provider value={{
+            tasks, addTask, updateTask, deleteTask, getTaskById,
+            timeEntries, activeEntry, startTask, stopTask, updateEntry, deleteEntry, liveElapsedTime, deleteAllData,
+            subtasks, addSubtask, updateSubtask, deleteSubtask, toggleSubtaskCompletion, moveSubtaskStatus, lastAddedSubtaskId,
+            goals, setGoal, deleteGoal, getGoalByTaskIdAndPeriod,
+            contract, pastContracts, startContract, toggleCommitment, setCommitmentStatus, resetContract, completeContract, completeDay,
+            savedRoutines, saveRoutine, deleteRoutine,
+            cloudStatus, 
+            connectToCloud: handleAuthLogin, 
+            triggerCloudSync, lastSyncTime, exportData, importData,
+            notificationsEnabled, requestNotificationPermission, toggleDailyNotification,
+            firebaseUser, 
+            handleLoginRanking: handleAuthLogin, 
+            handleLogoutRanking, addFriend, removeFriend, leaderboard, calculateTotalScore, rankingError, localFriends
+        }}>
+            {children}
+        </TimeTrackerContext.Provider>
+    );
 };

@@ -16,7 +16,7 @@ const messaging = firebase.messaging();
 
 // --- 2. App Caching Logic ---
 // Bumped version to force clear old cache containing install banners
-const CACHE_NAME = 'chronohabit-v1.4.18'; 
+const CACHE_NAME = 'chronohabit-v1.4.19'; 
 const urlsToCache = [
   './',
   './index.html',
@@ -64,6 +64,11 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('fetch', event => {
+  // Exclude version.json from cache to ensure we always fetch fresh data for version checks
+  if (event.request.url.includes('version.json')) {
+      return fetch(event.request);
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then(response => {

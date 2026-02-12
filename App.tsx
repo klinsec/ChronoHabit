@@ -11,7 +11,7 @@ import { ClockIcon, ChartIcon, ChecklistIcon, RoutineIcon } from './components/I
 import { View } from './types';
 import ErrorBoundary from './components/ErrorBoundary';
 
-const APP_VERSION = '1.4.18';
+const APP_VERSION = '1.4.19';
 
 const CloudIconIndicator = () => {
     const { cloudStatus } = useTimeTracker();
@@ -36,11 +36,44 @@ const AppContent: React.FC = () => {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
 
+  // Check for updates by comparing local version with remote version.json
+  const checkForUpdates = async () => {
+      try {
+          // Append timestamp to bypass browser cache
+          const response = await fetch(`./version.json?t=${Date.now()}`);
+          if (response.ok) {
+              const data = await response.json();
+              if (data.version !== APP_VERSION) {
+                  console.log(`New version detected: ${data.version}. Updating SW...`);
+                  if ('serviceWorker' in navigator) {
+                      const reg = await navigator.serviceWorker.getRegistration();
+                      if (reg) {
+                          // Force the SW to check for updates (byte-to-byte comparison of sw.js)
+                          reg.update(); 
+                      }
+                  }
+              }
+          }
+      } catch (e) {
+          console.warn("Could not check for updates:", e);
+      }
+  };
+
   useEffect(() => {
-    // Strictly prevent default install prompt to avoid unwanted banners
+    // 1. Check on load
+    checkForUpdates();
+
+    // 2. Check when app comes back to foreground
+    const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+            checkForUpdates();
+        }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Strictly prevent default install prompt
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
-      // Do not stash the event, effectively disabling the custom install flow
     };
 
     const handleSWUpdateFound = (e: any) => {
@@ -50,10 +83,11 @@ const AppContent: React.FC = () => {
         setShowUpdateModal(true);
       }
     };
+    
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('sw-update-found', handleSWUpdateFound);
     
-    // Check initial state
+    // Check initial SW state
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistration().then(reg => {
             if (reg && reg.waiting) {
@@ -66,6 +100,7 @@ const AppContent: React.FC = () => {
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('sw-update-found', handleSWUpdateFound);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 
@@ -105,8 +140,8 @@ const AppContent: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-6">
           <div className="bg-surface rounded-2xl p-6 w-full max-w-sm border border-primary/40 shadow-2xl">
             <h2 className="text-xl font-bold mb-3 text-on-surface">¡Actualización Disponible!</h2>
-            <p className="text-gray-300 mb-6 text-sm">Nueva versión {APP_VERSION} lista para instalar.</p>
-            <button onClick={() => { if(waitingWorker) waitingWorker.postMessage({ type: 'SKIP_WAITING' }); setShowUpdateModal(false); }} className="w-full bg-primary text-bkg font-bold py-3 px-4 rounded-xl">Actualizar Ahora</button>
+            <p className="text-gray-300 mb-6 text-sm">Nueva versión detectada. Actualiza para obtener las últimas mejoras.</p>
+            <button onClick={() => { if(waitingWorker) waitingWorker.postMessage({ type: 'SKIP_WAITING' }); setShowUpdateModal(false); }} className="w-full bg-primary text-bkg font-bold py-3 px-4 rounded-xl shadow-lg">Actualizar Ahora</button>
           </div>
         </div>
       )}

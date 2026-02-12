@@ -10,7 +10,7 @@ import BottomNav from './components/BottomNav.js';
 import { ClockIcon, ChartIcon, ChecklistIcon, RoutineIcon } from './components/Icons.js';
 import ErrorBoundary from './components/ErrorBoundary.js';
 
-const APP_VERSION = '1.4.18';
+const APP_VERSION = '1.4.19';
 
 const CloudIconIndicator = () => {
     const { cloudStatus } = useTimeTracker();
@@ -36,7 +36,39 @@ const AppContent = () => {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [waitingWorker, setWaitingWorker] = useState(null);
 
+  // Check for updates by comparing local version with remote version.json
+  const checkForUpdates = async () => {
+      try {
+          const response = await fetch(`./version.json?t=${Date.now()}`);
+          if (response.ok) {
+              const data = await response.json();
+              if (data.version !== APP_VERSION) {
+                  console.log(`New version detected: ${data.version}. Updating SW...`);
+                  if ('serviceWorker' in navigator) {
+                      const reg = await navigator.serviceWorker.getRegistration();
+                      if (reg) {
+                          reg.update();
+                      }
+                  }
+              }
+          }
+      } catch (e) {
+          console.warn("Could not check for updates:", e);
+      }
+  };
+
   useEffect(() => {
+    // 1. Check on load
+    checkForUpdates();
+
+    // 2. Check when app comes back to foreground
+    const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+            checkForUpdates();
+        }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     // Assistant Deep Link Check
     const params = new URLSearchParams(window.location.search);
     if (params.get('add') === 'task') {
@@ -45,7 +77,6 @@ const AppContent = () => {
 
     const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
-      // Silently ignore to prevent default banner
     };
 
     const handleSWUpdateFound = (e) => {
@@ -75,6 +106,7 @@ const AppContent = () => {
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('sw-update-found', handleSWUpdateFound);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
   
@@ -107,7 +139,7 @@ const AppContent = () => {
     React.createElement('div', { className: "bg-surface rounded-2xl p-6 w-full max-w-sm border border-primary/40 shadow-2xl" },
         React.createElement('h2', { className: "text-xl font-bold mb-3 text-on-surface" }, `¡Actualización Disponible!`),
         React.createElement('p', { className: "text-gray-300 mb-6 text-sm" },
-            `Nueva versión ${APP_VERSION} lista para instalar.`
+            `Nueva versión detectada. Actualiza para obtener las últimas mejoras.`
         ),
         React.createElement('div', { className: "flex flex-col gap-3" },
             React.createElement('button', 
@@ -116,13 +148,6 @@ const AppContent = () => {
                   className: "w-full bg-primary hover:bg-purple-500 text-bkg font-bold py-3 px-4 rounded-xl transition-transform active:scale-95 shadow-lg"
                 },
                 "Actualizar Ahora"
-            ),
-            React.createElement('button', 
-                { 
-                  onClick: () => setShowUpdateModal(false),
-                  className: "w-full bg-transparent hover:bg-gray-800 text-gray-400 font-semibold py-2 px-4 rounded-xl transition-colors"
-                },
-                "Más tarde"
             )
         )
     )

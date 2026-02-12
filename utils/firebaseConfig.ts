@@ -4,7 +4,8 @@ import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken, onMessage, Messaging } from 'firebase/messaging';
 // @ts-ignore
 import { getAnalytics } from 'firebase/analytics';
-import { getDatabase, ref, set, onValue, query, orderByChild, limitToLast } from 'firebase/database';
+import { getDatabase, ref, set, onValue, query, orderByChild, limitToLast, get, child } from 'firebase/database';
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHmV3KCrZPym4Vep2dlwAbrgOegQAEQ8M",
@@ -22,13 +23,16 @@ const VAPID_KEY = 'BMnJFazf6Q0gIA20JT0xrCYJImRTctyTvahlKDBUCANbvJl6HMLv2-4Ba81PY
 let app: any;
 let messaging: Messaging | null = null;
 let db: any = null;
+let auth: any = null;
+const provider = new GoogleAuthProvider();
 
 try {
     app = initializeApp(firebaseConfig);
     try {
         db = getDatabase(app);
+        auth = getAuth(app);
     } catch (e) {
-        console.error("DB Connect error", e);
+        console.error("DB/Auth Connect error", e);
     }
     try { getAnalytics(app); } catch (e) {}
     try { messaging = getMessaging(app); } catch (e) { console.error("Messaging Init Failed", e); }
@@ -36,16 +40,64 @@ try {
     console.error("Firebase initialization error:", error);
 }
 
+// --- AUTH ---
+export const signInWithGoogle = async () => {
+    if (!auth) throw new Error("Auth not initialized");
+    const result = await signInWithPopup(auth, provider);
+    return result.user;
+};
+
+export const logoutFirebase = async () => {
+    if (!auth) return;
+    await signOut(auth);
+};
+
+export const subscribeToAuthChanges = (callback: (user: User | null) => void) => {
+    if (!auth) return () => {};
+    return onAuthStateChanged(auth, callback);
+};
+
+// --- DATA SYNC (CLOUD SAVE) ---
+// Uses 'set' to OVERWRITE existing data at the user's path.
+export const saveUserData = async (userId: string, data: string) => {
+    if (!db || !userId) return;
+    try {
+        // This path is unique per user. 'set' overwrites everything at this location.
+        await set(ref(db, 'users/' + userId + '/backup'), {
+            data: data, // The full JSON string
+            updatedAt: Date.now(),
+            device: navigator.userAgent
+        });
+    } catch (e) {
+        console.error("Error saving user data:", e);
+        throw e;
+    }
+};
+
+export const getUserData = async (userId: string) => {
+    if (!db || !userId) return null;
+    try {
+        const snapshot = await get(child(ref(db), 'users/' + userId + '/backup'));
+        if (snapshot.exists()) {
+            return snapshot.val();
+        } else {
+            return null;
+        }
+    } catch (e) {
+        console.error("Error getting user data:", e);
+        return null;
+    }
+};
+
+// --- NOTIFICATIONS ---
 export const requestFcmToken = async (userId?: string): Promise<string | null> => {
     if (!messaging) {
         console.error("Messaging not supported or failed to init");
         return null;
     }
     try {
-        console.log("Requesting permission...");
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-            console.log("Granted. Getting SW...");
             let swRegistration = await navigator.serviceWorker.getRegistration();
             if (!swRegistration) {
                  swRegistration = await navigator.serviceWorker.ready;
@@ -58,8 +110,6 @@ export const requestFcmToken = async (userId?: string): Promise<string | null> =
                 serviceWorkerRegistration: swRegistration
             });
             
-            console.log("FCM Token Generated:", token);
-            
             if (db && userId) {
                 await set(ref(db, 'tokens_notificaciones/' + userId), {
                     token: token,
@@ -69,7 +119,6 @@ export const requestFcmToken = async (userId?: string): Promise<string | null> =
             }
             return token;
         } else {
-            console.warn("Notification permission denied");
             return null;
         }
     } catch (error) {
@@ -78,13 +127,15 @@ export const requestFcmToken = async (userId?: string): Promise<string | null> =
     }
 };
 
+// --- RANKING ---
 export const syncUserScore = async (userProfile: any, score: number) => {
-    if (!db || !userProfile.id) return;
+    if (!db || !userProfile.uid) return;
     try {
-        await set(ref(db, 'leaderboard/' + userProfile.id), {
-            id: userProfile.id,
-            username: userProfile.name,
+        await set(ref(db, 'leaderboard/' + userProfile.uid), {
+            id: userProfile.uid,
+            username: userProfile.displayName || 'Anónimo',
             points: score,
+            photo: userProfile.photoURL,
             updatedAt: Date.now()
         });
     } catch (e) {

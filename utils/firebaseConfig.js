@@ -2,7 +2,7 @@
 import { initializeApp } from 'firebase/app';
 import { getMessaging, getToken } from 'firebase/messaging';
 import { getAnalytics } from 'firebase/analytics';
-import { getDatabase, ref, set, onValue, query, orderByChild, limitToLast } from 'firebase/database';
+import { getDatabase, ref, set, onValue, query, orderByChild, limitToLast, get, child } from 'firebase/database';
 import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -44,10 +44,7 @@ try {
 
 // 1. Auth Functions
 export const signInWithGoogle = async () => {
-    if (!auth) {
-        console.error("Auth not initialized. Config:", firebaseConfig);
-        throw new Error("Firebase Auth not initialized. Check console.");
-    }
+    if (!auth) throw new Error("Firebase Auth not initialized.");
     try {
         const result = await signInWithPopup(auth, provider);
         return result.user;
@@ -71,7 +68,39 @@ export const subscribeToAuthChanges = (callback) => {
     return onAuthStateChanged(auth, callback);
 };
 
-// 2. Notificaciones Push
+// 2. Data Sync (Realtime Database)
+// Uses 'set' to OVERWRITE existing data at the user's path.
+export const saveUserData = async (userId, data) => {
+    if (!db || !userId) return;
+    try {
+        // This path is unique per user. 'set' overwrites everything at this location.
+        await set(ref(db, 'users/' + userId + '/backup'), {
+            data: data, // The full JSON string
+            updatedAt: Date.now(),
+            device: navigator.userAgent
+        });
+    } catch (e) {
+        console.error("Error saving user data:", e);
+        throw e;
+    }
+};
+
+export const getUserData = async (userId) => {
+    if (!db || !userId) return null;
+    try {
+        const snapshot = await get(child(ref(db), 'users/' + userId + '/backup'));
+        if (snapshot.exists()) {
+            return snapshot.val();
+        } else {
+            return null;
+        }
+    } catch (e) {
+        console.error("Error getting user data:", e);
+        return null;
+    }
+};
+
+// 3. Notificaciones Push
 export const requestFcmToken = async (userId) => {
     if (!messaging) return null;
     try {
@@ -103,7 +132,7 @@ export const requestFcmToken = async (userId) => {
     return null;
 };
 
-// 3. Ranking System
+// 4. Ranking System
 export const syncUserScore = async (user, score) => {
     if (!db || !user || !user.uid) return;
     try {
