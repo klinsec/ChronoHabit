@@ -131,7 +131,7 @@ const RankingTable = ({ data, localUser, title, icon, showFooterSelf = false, on
                                         React.createElement('div', { className: "flex items-center gap-2" },
                                             user.photo ? 
                                                 React.createElement('img', { src: user.photo, alt: "Avatar", className: "w-6 h-6 rounded-full" }) :
-                                                React.createElement('div', { className: "w-6 h-6 rounded-full bg-gray-700" }),
+                                                React.createElement('div', { className: "w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-[10px] font-bold text-gray-400" }, user.username?.[0]?.toUpperCase()),
                                             React.createElement('div', { className: "flex flex-col" },
                                                 React.createElement('span', null, user.username || 'Anónimo'),
                                                 user.id === currentUserId && React.createElement('span', { className: "text-[10px] text-gray-500" }, "(Tú)")
@@ -191,7 +191,6 @@ const RankingView = () => {
 
     const myScore = calculateTotalScore();
     
-    // Si no está logueado, mostrar pantalla de login
     if (!firebaseUser) {
         return (
             React.createElement('div', { className: "flex flex-col items-center justify-center p-8 space-y-6 text-center animate-in fade-in" },
@@ -207,7 +206,7 @@ const RankingView = () => {
                         onClick: handleLoginRanking,
                         className: "bg-white text-black font-bold py-3 px-6 rounded-full flex items-center gap-2 hover:bg-gray-200 transition-colors shadow-lg"
                     },
-                    React.createElement('img', { src: "https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg", className: "w-5 h-5" }),
+                    React.createElement('img', { src: "https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg", className: "w-5 h-5", alt: "Google" }),
                     "Iniciar con Google"
                 )
             )
@@ -227,7 +226,6 @@ const RankingView = () => {
     return (
         React.createElement('div', { className: "space-y-6 animate-in fade-in duration-300" },
             
-            /* Error Warning */
             rankingError && (
                 React.createElement('div', { className: "bg-red-900/50 border border-red-500/50 text-red-200 p-3 rounded-lg text-xs break-words" },
                     React.createElement('p', { className: "font-bold mb-1" }, "⚠️ Error de Conexión"),
@@ -235,14 +233,13 @@ const RankingView = () => {
                 )
             ),
 
-            /* Profile Card */
             React.createElement('div', { className: "bg-gradient-to-r from-gray-800 to-gray-900 p-4 rounded-2xl border border-gray-700" },
                 React.createElement('div', { className: "flex justify-between items-start mb-2" },
                     React.createElement('div', null,
                         React.createElement('div', { className: "flex items-center gap-3 mb-2" },
                             localUserObj.photo ? 
-                                React.createElement('img', { src: localUserObj.photo, className: "w-10 h-10 rounded-full border-2 border-primary" }) :
-                                React.createElement('div', { className: "w-10 h-10 rounded-full bg-primary flex items-center justify-center text-black font-bold" }, localUserObj.username[0]),
+                                React.createElement('img', { src: localUserObj.photo, className: "w-10 h-10 rounded-full border-2 border-primary", alt: "" }) :
+                                React.createElement('div', { className: "w-10 h-10 rounded-full bg-primary flex items-center justify-center text-black font-bold text-lg" }, localUserObj.username[0]?.toUpperCase()),
                             React.createElement('div', null,
                                 React.createElement('h2', { className: "text-lg font-bold text-white" }, localUserObj.username),
                                 React.createElement('p', { className: "text-[10px] text-green-400" }, "● Online")
@@ -261,7 +258,6 @@ const RankingView = () => {
                 React.createElement('button', { onClick: handleLogoutRanking, className: "text-xs text-red-400 hover:text-red-300 mt-2 underline" }, "Cerrar sesión")
             ),
 
-            /* Friends Section */
             React.createElement('div', null,
                 React.createElement('div', { className: "flex gap-2 mb-3" },
                     React.createElement('input', {
@@ -285,21 +281,18 @@ const RankingView = () => {
                 })
             ),
 
-            /* Global Section */
             React.createElement(RankingTable, { 
                 title: "Top Global", 
                 icon: React.createElement(StarIcon, null),
                 data: globalData, 
                 localUser: localUserObj,
                 showFooterSelf: true,
-                filterZero: true,
+                filterZero: false, // CHANGED: Show everyone, even with 0 points
                 limit: 10
             })
         )
     );
 };
-
-// --- MAIN STATS VIEW ---
 
 const StatsView = () => {
   const { timeEntries, getTaskById, activeEntry, liveElapsedTime, getGoalByTaskIdAndPeriod, subtasks, contract, pastContracts } = useTimeTracker();
@@ -623,7 +616,7 @@ const StatsView = () => {
           React.createElement('div', null,
             React.createElement('div', { className: "flex justify-center bg-surface p-1 rounded-xl mb-4" },
                 ['day', 'week', 'month', 'all'].map(p => (
-                React.createElement('button', { key: p, onClick: () => setPeriod(p), className: `w-full py-2 text-sm font-semibold rounded-lg transition-colors ${period === p ? 'bg-primary text-bkg' : 'text-gray-300 hover:bg-gray-700'}` },
+                React.createElement('button', { key: p, onClick: () => setPeriod(p), className: `w-full py-2 text-sm font-semibold rounded-lg ${period === p ? 'bg-primary text-bkg' : 'text-gray-300'}` },
                     periodLabels[p]
                 )
                 ))
