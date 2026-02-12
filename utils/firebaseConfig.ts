@@ -26,9 +26,9 @@ let db: any = null;
 let auth: any = null;
 const provider = new GoogleAuthProvider();
 
-// Paths
-const USER_DATA_PATH = 'usuarios_data';
-const LEADERBOARD_PATH = 'leaderboard';
+// NUEVAS RUTAS SEGÚN TU CONFIGURACIÓN
+const USER_DATA_PATH = 'configuracion_privada';
+const LEADERBOARD_PATH = 'ranking_global';
 
 try {
     app = initializeApp(firebaseConfig);
@@ -65,12 +65,9 @@ export const subscribeToAuthChanges = (callback: (user: User | null) => void) =>
 export const saveUserData = async (userId: string, data: string) => {
     if (!db || !userId) return;
     try {
-        // Clean JSON to avoid serialization errors with Firebase
-        // Although data is string, we parse and re-stringify if needed, or just ensure the wrapper object is clean.
         const cleanState = JSON.parse(data);
-
         await set(ref(db, `${USER_DATA_PATH}/${userId}`), {
-            data: JSON.stringify(cleanState), // Saving as string to ensure structure integrity
+            data: JSON.stringify(cleanState),
             updatedAt: new Date().toISOString(),
             device: navigator.userAgent || 'unknown'
         });
@@ -86,7 +83,6 @@ export const getUserData = async (userId: string) => {
         const snapshot = await get(child(ref(db), `${USER_DATA_PATH}/${userId}`));
         if (snapshot.exists()) {
             const val = snapshot.val();
-            // Handle both legacy (direct object) and new (stringified data field) formats
             if (val.data && typeof val.data === 'string') {
                 return { ...val, data: val.data };
             }
@@ -102,18 +98,12 @@ export const getUserData = async (userId: string) => {
 
 // --- NOTIFICATIONS ---
 export const requestFcmToken = async (userId?: string): Promise<string | null> => {
-    if (!messaging) {
-        console.error("Messaging not supported or failed to init");
-        return null;
-    }
+    if (!messaging) return null;
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
             let swRegistration = await navigator.serviceWorker.getRegistration();
-            if (!swRegistration) {
-                 swRegistration = await navigator.serviceWorker.ready;
-            }
-            
+            if (!swRegistration) swRegistration = await navigator.serviceWorker.ready;
             if(!swRegistration) throw new Error("No Service Worker found.");
 
             const token = await getToken(messaging, { 
@@ -129,26 +119,24 @@ export const requestFcmToken = async (userId?: string): Promise<string | null> =
                 });
             }
             return token;
-        } else {
-            return null;
         }
+        return null;
     } catch (error) {
         console.error("An error occurred while retrieving token. ", error);
         return null;
     }
 };
 
-// --- RANKING ---
+// --- RANKING OPTIMIZADO ---
 export const syncUserScore = async (userProfile: any, score: number) => {
     if (!db || !userProfile.uid) return;
     try {
+        // Escritura directa al nuevo path 'ranking_global'
         await set(ref(db, `${LEADERBOARD_PATH}/${userProfile.uid}`), {
-            id: userProfile.uid,
-            username: userProfile.displayName || 'Anónimo',
-            points: score,
-            puntos: score, // Double write for compatibility
-            photo: userProfile.photoURL,
-            updatedAt: Date.now()
+            nombre: userProfile.displayName || 'Anónimo', 
+            puntos: score,
+            foto: userProfile.photoURL || '',
+            ultimaActualizacion: Date.now()
         });
     } catch (e) {
         console.debug("Offline or sync error:", e);
@@ -161,22 +149,26 @@ export const subscribeToLeaderboard = (onData: (data: any[]) => void, onError?: 
         return () => {};
     }
     try {
-        // Fallback: Fetch all and sort client-side to avoid index requirement issues
-        const q = ref(db, LEADERBOARD_PATH);
+        const dbRef = ref(db, LEADERBOARD_PATH);
+        // Consulta optimizada: Ordenar por puntos y traer solo los últimos 50 (los más altos)
+        const q = query(dbRef, orderByChild('puntos'), limitToLast(50));
+
         return onValue(q, (snapshot) => {
             const data: any[] = [];
             if (snapshot.exists()) {
                 snapshot.forEach(child => {
                     const val = child.val();
-                    // normalize points
-                    const p = val.points !== undefined ? val.points : (val.puntos !== undefined ? val.puntos : 0);
-                    data.push({ ...val, points: p, id: child.key });
+                    // Mapeo de campos (BD -> App)
+                    data.push({ 
+                        id: child.key,
+                        username: val.nombre || 'Anónimo',
+                        points: val.puntos || 0,
+                        photo: val.foto || null
+                    });
                 });
             }
-            // Sort descending by points
-            data.sort((a, b) => b.points - a.points);
-            // Limit to top 50 client side
-            onData(data.slice(0, 50));
+            // Firebase devuelve ascendente (menor a mayor), invertimos para ranking (mayor a menor)
+            onData(data.reverse());
         }, onError);
     } catch (e) {
         if(onError) onError(e);

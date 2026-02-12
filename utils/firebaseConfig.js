@@ -26,9 +26,9 @@ const provider = new GoogleAuthProvider();
 provider.addScope('profile');
 provider.addScope('email');
 
-// Paths
-const USER_DATA_PATH = 'usuarios_data';
-const LEADERBOARD_PATH = 'leaderboard';
+// Nuevas rutas
+const USER_DATA_PATH = 'configuracion_privada';
+const LEADERBOARD_PATH = 'ranking_global';
 
 try {
     app = initializeApp(firebaseConfig);
@@ -40,7 +40,7 @@ try {
     }
     try { getAnalytics(app); } catch (e) {}
     try { messaging = getMessaging(app); } catch (e) {
-        console.warn("Firebase Messaging init failed (may be offline or unsupported):", e);
+        console.warn("Firebase Messaging init failed:", e);
     }
 } catch (error) {
     console.error("Firebase Init Error:", error);
@@ -72,13 +72,11 @@ export const subscribeToAuthChanges = (callback) => {
     return onAuthStateChanged(auth, callback);
 };
 
-// 2. Data Sync (Realtime Database)
+// 2. Data Sync
 export const saveUserData = async (userId, data) => {
     if (!db || !userId) return;
     try {
-        // Clean and prepare data
         const cleanState = JSON.parse(data);
-        
         await set(ref(db, `${USER_DATA_PATH}/${userId}`), {
             data: JSON.stringify(cleanState),
             updatedAt: new Date().toISOString(),
@@ -109,16 +107,14 @@ export const getUserData = async (userId) => {
     }
 };
 
-// 3. Notificaciones Push
+// 3. Notifications
 export const requestFcmToken = async (userId) => {
     if (!messaging) return null;
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
             let swRegistration = await navigator.serviceWorker.getRegistration();
-            if (!swRegistration) {
-                swRegistration = await navigator.serviceWorker.ready;
-            }
+            if (!swRegistration) swRegistration = await navigator.serviceWorker.ready;
             if (!swRegistration) throw new Error("Service Worker not found.");
 
             const token = await getToken(messaging, { 
@@ -146,12 +142,10 @@ export const syncUserScore = async (user, score) => {
     if (!db || !user || !user.uid) return;
     try {
         await set(ref(db, `${LEADERBOARD_PATH}/${user.uid}`), {
-            id: user.uid,
-            username: user.displayName || 'Anónimo',
-            points: score,
+            nombre: user.displayName || 'Anónimo', 
             puntos: score,
-            photo: user.photoURL,
-            updatedAt: Date.now()
+            foto: user.photoURL || '',
+            ultimaActualizacion: Date.now()
         });
     } catch (e) {
         console.debug("Error sync score:", e);
@@ -164,19 +158,25 @@ export const subscribeToLeaderboard = (onData, onError) => {
         return () => {};
     }
     try {
-        // Fetch whole list and sort client side
-        const q = ref(db, LEADERBOARD_PATH);
+        const dbRef = ref(db, LEADERBOARD_PATH);
+        // Usamos query para ordenar por servidor
+        const q = query(dbRef, orderByChild('puntos'), limitToLast(50));
+
         return onValue(q, (snapshot) => {
             const data = [];
             if (snapshot.exists()) {
                 snapshot.forEach(child => {
                     const val = child.val();
-                    const p = val.points !== undefined ? val.points : (val.puntos !== undefined ? val.puntos : 0);
-                    data.push({ ...val, points: p, id: child.key });
+                    data.push({ 
+                        id: child.key, 
+                        username: val.nombre || 'Anónimo', 
+                        points: val.puntos || 0, 
+                        photo: val.foto || null 
+                    });
                 });
             }
-            data.sort((a, b) => b.points - a.points);
-            onData(data.slice(0, 50));
+            // Invertir porque Firebase devuelve menor->mayor
+            onData(data.reverse());
         }, onError);
     } catch (e) {
         if(onError) onError(e);
