@@ -16,7 +16,7 @@ const messaging = firebase.messaging();
 
 // --- 2. App Caching Logic ---
 // Bumped version to force clear old cache containing install banners
-const CACHE_NAME = 'chronohabit-v1.4.17'; 
+const CACHE_NAME = 'chronohabit-v1.4.18'; 
 const urlsToCache = [
   './',
   './index.html',

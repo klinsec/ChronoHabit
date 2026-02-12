@@ -7,7 +7,6 @@ import { CogIcon, EditIcon, StarIcon, PlusIcon, TrashIcon, CopyIcon, UsersIcon }
 import GoalModal from '../modals/GoalModal.js';
 
 const DateNavigator = ({ period, currentDate, setCurrentDate, dateRangeDisplay }) => {
-    
     const handlePrev = () => {
         const newDate = new Date(currentDate);
         if (period === 'day') newDate.setDate(newDate.getDate() - 1);
@@ -56,8 +55,6 @@ const DateNavigator = ({ period, currentDate, setCurrentDate, dateRangeDisplay }
 
 const RankBadge = ({ rank }) => {
     let colorClass = "bg-gray-700 text-gray-300";
-    
-    // Numbers only, no medals, just colors
     if (rank === 1) { colorClass = "bg-yellow-500/20 text-yellow-500"; }
     else if (rank === 2) { colorClass = "bg-gray-400/20 text-gray-300"; }
     else if (rank === 3) { colorClass = "bg-orange-600/20 text-orange-500"; }
@@ -70,40 +67,28 @@ const RankBadge = ({ rank }) => {
 };
 
 const RankingTable = ({ data, localUser, title, icon, showFooterSelf = false, onRemoveItem, filterZero = false, limit }) => {
-    // 1. Crear una copia de los datos remotos o usar array vacío
     let activeUsers = data ? [...data] : [];
 
-    // 2. Inyectar al usuario local si no está en la lista (para que siempre te veas a ti mismo)
     if (localUser) {
         const exists = activeUsers.find(u => u.id === localUser.id);
         if (!exists) {
             activeUsers.push(localUser);
         } else {
-            // Actualizar con datos locales más recientes si ya existe
-            activeUsers = activeUsers.map(u => u.id === localUser.id ? { ...u, points: localUser.points, username: localUser.username } : u);
+            activeUsers = activeUsers.map(u => u.id === localUser.id ? { ...u, points: localUser.points, username: localUser.username, photo: localUser.photo } : u);
         }
     }
 
-    // 3. Filtrar usuarios con 0 puntos si se solicita (excepto el usuario local si showFooterSelf es true, aunque el footer lo maneja aparte)
-    // Actually, filterZero should filter everyone with 0. 
-    // If showFooterSelf is true, we will re-check localUser separately for the footer if they get filtered out here.
     if (filterZero) {
         activeUsers = activeUsers.filter(u => u.points > 0 || (localUser && u.id === localUser.id));
     }
 
-    // 4. Ordenar por puntos descendente
     activeUsers.sort((a, b) => b.points - a.points);
     
-    // Find self index in the FULL sorted list
     const currentUserId = localUser?.id;
     const selfIndex = activeUsers.findIndex(u => u.id === currentUserId);
     const selfData = selfIndex >= 0 ? { ...activeUsers[selfIndex], rank: selfIndex + 1 } : null;
     
-    // 5. Apply Limit (Mostrar solo los top N)
     const displayUsers = limit ? activeUsers.slice(0, limit) : activeUsers;
-    
-    // Check if self is in the visible list (index < limit)
-    // Note: selfIndex is 0-based. Limit is count. e.g., Limit 10. Index 0-9 are visible.
     const isSelfInTop = selfIndex >= 0 && (limit ? selfIndex < limit : true);
 
     return (
@@ -143,9 +128,14 @@ const RankingTable = ({ data, localUser, title, icon, showFooterSelf = false, on
                                         React.createElement(RankBadge, { rank: index + 1 })
                                     ),
                                     React.createElement('td', { className: `px-4 py-3 ${user.id === currentUserId ? 'font-bold text-primary' : 'text-gray-300'}` }, 
-                                        React.createElement('div', { className: "flex flex-col" },
-                                            React.createElement('span', null, user.username || 'Anónimo'),
-                                            user.id === currentUserId && React.createElement('span', { className: "text-[10px] text-gray-500" }, "(Tú)")
+                                        React.createElement('div', { className: "flex items-center gap-2" },
+                                            user.photo ? 
+                                                React.createElement('img', { src: user.photo, alt: "Avatar", className: "w-6 h-6 rounded-full" }) :
+                                                React.createElement('div', { className: "w-6 h-6 rounded-full bg-gray-700" }),
+                                            React.createElement('div', { className: "flex flex-col" },
+                                                React.createElement('span', null, user.username || 'Anónimo'),
+                                                user.id === currentUserId && React.createElement('span', { className: "text-[10px] text-gray-500" }, "(Tú)")
+                                            )
                                         )
                                     ),
                                     React.createElement('td', { className: "px-4 py-3 text-right font-mono font-bold text-white" }, 
@@ -164,11 +154,9 @@ const RankingTable = ({ data, localUser, title, icon, showFooterSelf = false, on
                     )
                 )
             ),
-            // Footer separator for cutoff
             limit && activeUsers.length > limit && (
                  React.createElement('div', { className: "px-4 py-2 bg-gray-900/30 text-center text-xs text-gray-500 font-mono tracking-widest" }, "...")
             ),
-            // Self Row at bottom if not in visible list
             showFooterSelf && !isSelfInTop && selfData && (
                 React.createElement('div', { className: "border-t border-gray-700 bg-gray-800 p-3 flex justify-between items-center animate-in slide-in-from-bottom-2" },
                     React.createElement('div', { className: "flex items-center gap-3" },
@@ -183,17 +171,8 @@ const RankingTable = ({ data, localUser, title, icon, showFooterSelf = false, on
 };
 
 const RankingView = () => {
-    const { userProfile, updateUsername, leaderboard, calculateTotalScore, addFriend, removeFriend, rankingError } = useTimeTracker();
-    const [isEditingName, setIsEditingName] = useState(false);
-    const [newName, setNewName] = useState(userProfile.name);
+    const { firebaseUser, handleLoginRanking, handleLogoutRanking, leaderboard, calculateTotalScore, addFriend, removeFriend, rankingError, localFriends } = useTimeTracker();
     const [friendInput, setFriendInput] = useState('');
-
-    const handleSaveName = () => {
-        if (newName.trim()) {
-            updateUsername(newName.trim());
-            setIsEditingName(false);
-        }
-    };
 
     const handleAddFriend = () => {
         if (friendInput.trim()) {
@@ -203,20 +182,46 @@ const RankingView = () => {
     };
 
     const copyUserId = () => {
-        navigator.clipboard.writeText(userProfile.id).then(() => {
-            alert("ID copiado al portapapeles: " + userProfile.id);
-        });
+        if (firebaseUser) {
+            navigator.clipboard.writeText(firebaseUser.uid).then(() => {
+                alert("ID copiado: " + firebaseUser.uid);
+            });
+        }
     };
 
     const myScore = calculateTotalScore();
+    
+    // Si no está logueado, mostrar pantalla de login
+    if (!firebaseUser) {
+        return (
+            React.createElement('div', { className: "flex flex-col items-center justify-center p-8 space-y-6 text-center animate-in fade-in" },
+                React.createElement('div', { className: "p-4 bg-primary/10 rounded-full text-primary" },
+                    React.createElement('div', { className: "transform scale-150" }, React.createElement(StarIcon, null))
+                ),
+                React.createElement('h2', { className: "text-xl font-bold text-white" }, "Ranking Global"),
+                React.createElement('p', { className: "text-gray-400 text-sm max-w-xs" }, 
+                    "Inicia sesión con Google para guardar tu puntuación y competir en la tabla de clasificación."
+                ),
+                React.createElement('button', 
+                    { 
+                        onClick: handleLoginRanking,
+                        className: "bg-white text-black font-bold py-3 px-6 rounded-full flex items-center gap-2 hover:bg-gray-200 transition-colors shadow-lg"
+                    },
+                    React.createElement('img', { src: "https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg", className: "w-5 h-5" }),
+                    "Iniciar con Google"
+                )
+            )
+        );
+    }
+
     const localUserObj = {
-        id: userProfile.id,
-        username: userProfile.name,
+        id: firebaseUser.uid,
+        username: firebaseUser.displayName || 'Yo',
+        photo: firebaseUser.photoURL,
         points: myScore
     };
 
-    // Filter logic: Friends are those in local friends list AND existing in leaderboard, OR self
-    const friendsData = (leaderboard || []).filter(u => userProfile.friends.includes(u.id));
+    const friendsData = (leaderboard || []).filter(u => localFriends.includes(u.id));
     const globalData = leaderboard || []; 
 
     return (
@@ -226,16 +231,7 @@ const RankingView = () => {
             rankingError && (
                 React.createElement('div', { className: "bg-red-900/50 border border-red-500/50 text-red-200 p-3 rounded-lg text-xs break-words" },
                     React.createElement('p', { className: "font-bold mb-1" }, "⚠️ Error de Conexión"),
-                    React.createElement('p', { className: "font-mono bg-black/20 p-1 rounded mb-2" }, 
-                        typeof rankingError === 'object' ? JSON.stringify(rankingError) : String(rankingError)
-                    ),
-                    React.createElement('p', null, "Posibles causas:"),
-                    React.createElement('ul', { className: "list-disc pl-4 space-y-1 mt-1 text-[10px]" },
-                        React.createElement('li', null, "Reglas de base de datos (comprueba que .read y .write sean true)"),
-                        React.createElement('li', null, "API Key restringida en Google Cloud Console"),
-                        React.createElement('li', null, "API 'Realtime Database' inhabilitada"),
-                        React.createElement('li', null, "Conexión a internet inestable")
-                    )
+                    React.createElement('p', { className: "font-mono bg-black/20 p-1 rounded mb-2" }, String(rankingError))
                 )
             ),
 
@@ -243,25 +239,17 @@ const RankingView = () => {
             React.createElement('div', { className: "bg-gradient-to-r from-gray-800 to-gray-900 p-4 rounded-2xl border border-gray-700" },
                 React.createElement('div', { className: "flex justify-between items-start mb-2" },
                     React.createElement('div', null,
-                        React.createElement('p', { className: "text-[10px] text-gray-400 uppercase tracking-widest mb-1" }, "TU PERFIL"),
-                        isEditingName ? (
-                            React.createElement('div', { className: "flex gap-2" },
-                                React.createElement('input', { 
-                                    type: "text", 
-                                    value: newName, 
-                                    onChange: (e) => setNewName(e.target.value),
-                                    className: "bg-black/30 border border-gray-600 rounded px-2 py-1 text-white text-sm w-32"
-                                }),
-                                React.createElement('button', { onClick: handleSaveName, className: "bg-primary text-black px-2 rounded font-bold text-xs" }, "OK")
-                            )
-                        ) : (
-                            React.createElement('h2', { className: "text-xl font-bold text-white flex items-center gap-2" },
-                                userProfile.name,
-                                React.createElement('button', { onClick: () => setIsEditingName(true), className: "text-gray-500 hover:text-white" }, React.createElement(EditIcon, null))
+                        React.createElement('div', { className: "flex items-center gap-3 mb-2" },
+                            localUserObj.photo ? 
+                                React.createElement('img', { src: localUserObj.photo, className: "w-10 h-10 rounded-full border-2 border-primary" }) :
+                                React.createElement('div', { className: "w-10 h-10 rounded-full bg-primary flex items-center justify-center text-black font-bold" }, localUserObj.username[0]),
+                            React.createElement('div', null,
+                                React.createElement('h2', { className: "text-lg font-bold text-white" }, localUserObj.username),
+                                React.createElement('p', { className: "text-[10px] text-green-400" }, "● Online")
                             )
                         ),
-                        React.createElement('div', { onClick: copyUserId, className: "flex items-center gap-1 text-xs text-gray-500 mt-2 cursor-pointer hover:text-primary transition-colors bg-black/20 w-fit px-2 py-1 rounded" },
-                            React.createElement('span', null, `ID: ${userProfile.id}`),
+                        React.createElement('div', { onClick: copyUserId, className: "flex items-center gap-1 text-xs text-gray-500 cursor-pointer hover:text-primary transition-colors bg-black/20 w-fit px-2 py-1 rounded" },
+                            React.createElement('span', null, "Copiar ID"),
                             React.createElement(CopyIcon, null)
                         )
                     ),
@@ -269,10 +257,11 @@ const RankingView = () => {
                         React.createElement('p', { className: "text-[10px] text-gray-400 uppercase tracking-widest mb-1" }, "PUNTUACIÓN"),
                         React.createElement('p', { className: "text-2xl font-mono font-bold text-primary" }, myScore.toLocaleString())
                     )
-                )
+                ),
+                React.createElement('button', { onClick: handleLogoutRanking, className: "text-xs text-red-400 hover:text-red-300 mt-2 underline" }, "Cerrar sesión")
             ),
 
-            /* Friends Section - Muestra a todos, incluso con 0 puntos */
+            /* Friends Section */
             React.createElement('div', null,
                 React.createElement('div', { className: "flex gap-2 mb-3" },
                     React.createElement('input', {
@@ -287,24 +276,24 @@ const RankingView = () => {
                     )
                 ),
                 React.createElement(RankingTable, { 
-                    title: "Ranking de Amigos", 
+                    title: "Amigos", 
                     icon: React.createElement(UsersIcon, null),
                     data: friendsData, 
                     localUser: localUserObj,
                     onRemoveItem: removeFriend,
-                    filterZero: false // Amigos siempre visibles
+                    filterZero: false
                 })
             ),
 
-            /* Global Section - Oculta ceros excepto tú */
+            /* Global Section */
             React.createElement(RankingTable, { 
-                title: "Ranking Global", 
+                title: "Top Global", 
                 icon: React.createElement(StarIcon, null),
                 data: globalData, 
                 localUser: localUserObj,
                 showFooterSelf: true,
-                filterZero: true, // Ocultar extraños con 0 puntos
-                limit: 10 // Mostrar solo los 10 primeros
+                filterZero: true,
+                limit: 10
             })
         )
     );
@@ -314,7 +303,7 @@ const RankingView = () => {
 
 const StatsView = () => {
   const { timeEntries, getTaskById, activeEntry, liveElapsedTime, getGoalByTaskIdAndPeriod, subtasks, contract, pastContracts } = useTimeTracker();
-  const [activeTab, setActiveTab] = useState('charts'); // 'charts' | 'ranking'
+  const [activeTab, setActiveTab] = useState('charts');
   const [period, setPeriod] = useState('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
@@ -419,7 +408,6 @@ const StatsView = () => {
   
   const totalDuration = useMemo(() => Object.values(taskDurations).reduce((sum, item) => sum + Number(item), 0), [taskDurations]);
 
-  // --- UNIFIED POINTS LOGIC (For Charts) ---
   const unifiedPointsData = useMemo(() => {
       const bucketType = (period === 'week' || period === 'month') ? 'day' : 'month';
       const dataMap = new Map();
@@ -440,11 +428,10 @@ const StatsView = () => {
           dataMap.set(key, { timer: 0, tasks: 0, routine: 0 });
       }
 
-      // 1. Timer: 0.5 points per hour
       filteredEntries.forEach(entry => {
           if (!entry.endTime) return;
           const task = getTaskById(entry.taskId);
-          if (!task) return; // Note: Difficulty check removed as timer is flat rate now
+          if (!task) return;
 
           const entryDate = new Date(entry.startTime);
           let key = '';
@@ -453,13 +440,12 @@ const StatsView = () => {
 
           if (dataMap.has(key)) {
               const durationHours = (entry.endTime - entry.startTime) / (1000 * 60 * 60);
-              const score = durationHours * 0.5; // Flat rate 0.5 points/hour
+              const score = durationHours * 0.5;
               const current = dataMap.get(key);
               current.timer += score;
           }
       });
 
-      // 2. Tasks
       subtasks.forEach(subtask => {
           if (subtask.completed && subtask.completedAt) {
               if (subtask.completedAt >= dateRange.start && subtask.completedAt <= dateRange.end) {
@@ -477,7 +463,6 @@ const StatsView = () => {
           }
       });
 
-      // 3. Routine (History)
       const allDailyHistory = [
           ...(contract?.dailyHistory || []),
           ...pastContracts.flatMap(c => c.dailyHistory || [])
@@ -498,7 +483,6 @@ const StatsView = () => {
           }
       });
 
-      // 4. Routine (TODAY - ACTIVE CONTRACT)
       if (contract && contract.active) {
           const todayStr = new Date().toISOString().split('T')[0];
           const todayDate = new Date();
@@ -650,7 +634,7 @@ const StatsView = () => {
             chartData.length > 0 || unifiedPointsData.some(d => d.total > 0) ? (
                 React.createElement('div', { className: "space-y-10" },
                     
-                    /* Unified Stacked Bar Chart (NOW FIRST) */
+                    /* Unified Stacked Bar Chart */
                     period !== 'day' && (
                         React.createElement('div', { className: "bg-surface/30 p-4 rounded-xl border border-gray-800" },
                             React.createElement('div', { className: "flex items-center justify-center gap-2 mb-4" },
@@ -679,7 +663,7 @@ const StatsView = () => {
                         )
                     ),
 
-                    /* Pie Chart (NOW SECOND) */
+                    /* Pie Chart */
                     React.createElement('div', null,
                         React.createElement('h3', { className: "text-xl font-semibold mb-2 text-center" }, "Distribución del Tiempo"),
                         React.createElement('div', { style: { width: '100%', height: 300 } },

@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { uploadBackupFile, signInToGoogle, getUserInfo, initGoogleDrive, checkTokenAndRestore } from '../utils/googleDrive.js';
-import { requestFcmToken, syncUserScore, subscribeToLeaderboard } from '../utils/firebaseConfig.js';
+import { uploadBackupFile, signInToGoogle, initGoogleDrive, checkTokenAndRestore } from '../utils/googleDrive.js';
+import { requestFcmToken, syncUserScore, subscribeToLeaderboard, signInWithGoogle, logoutFirebase, subscribeToAuthChanges } from '../utils/firebaseConfig.js';
 
 const TimeTrackerContext = createContext(undefined);
 
@@ -15,15 +15,6 @@ export const useTimeTracker = () => {
 
 // Helper to get ISO date string YYYY-MM-DD
 const getTodayStr = () => new Date().toISOString().split('T')[0];
-
-const generateId = () => Math.random().toString(36).substring(2, 8).toUpperCase();
-
-const FUN_ALIASES = [
-    "Axolote", "Capibara", "Ornitorrinco", "Cactus", "Tostada", "Ninja", 
-    "Samurái", "Vikingo", "Robot", "Fantasma", "Llama", "Yeti", "Kraken"
-];
-
-const generateFunName = () => FUN_ALIASES[Math.floor(Math.random() * FUN_ALIASES.length)];
 
 export const GOOGLE_CLIENT_ID = '347833746217-of5l8r31t5csaqtqce7130raeisgidlv.apps.googleusercontent.com';
 
@@ -73,54 +64,48 @@ export const TimeTrackerProvider = ({ children }) => {
   });
 
   // User Identity & Ranking
-  const [userProfile, setUserProfile] = useState(() => {
-      const saved = localStorage.getItem('userProfile');
-      if (saved) {
-          const parsed = JSON.parse(saved);
-          if (!parsed.friends) parsed.friends = []; 
-          return parsed;
-      }
-      return { id: generateId(), name: generateFunName(), friends: [] };
-  });
-  
+  const [firebaseUser, setFirebaseUser] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
   const [rankingError, setRankingError] = useState(null);
+  const [localFriends, setLocalFriends] = useState(() => {
+      const saved = localStorage.getItem('localFriends');
+      return saved ? JSON.parse(saved) : [];
+  });
 
   // Cloud & Settings
   const [cloudStatus, setCloudStatus] = useState('disconnected');
   const [lastSyncTime, setLastSyncTime] = useState(null);
   
-  // Initialize notification state
-  // We check localStorage preference first. If user explicitly turned it off, keep it off.
-  // If undefined, we check browser permission.
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
       const pref = localStorage.getItem('notifications_enabled');
       if (pref === 'true') return true;
       if (pref === 'false') return false;
-      
-      // Default fallback
-      if (typeof Notification !== 'undefined') {
-          return Notification.permission === 'granted';
-      }
+      if (typeof Notification !== 'undefined') return Notification.permission === 'granted';
       return false;
   });
 
-  // AUTO-INIT GOOGLE DRIVE ON MOUNT
+  // AUTO-INIT GOOGLE DRIVE & FIREBASE AUTH ON MOUNT
   useEffect(() => {
+      // 1. Drive
       const initDrive = async () => {
           try {
               await initGoogleDrive(GOOGLE_CLIENT_ID);
-              // Check if we have a valid token saved
               const token = checkTokenAndRestore();
               if (token) {
                   setCloudStatus('connected');
-                  console.log("Google Drive auto-connected via stored token.");
               }
           } catch (e) {
               console.warn("Failed to auto-init Google Drive:", e);
           }
       };
       initDrive();
+
+      // 2. Firebase Auth
+      const unsubscribeAuth = subscribeToAuthChanges((user) => {
+          setFirebaseUser(user);
+      });
+
+      return () => unsubscribeAuth();
   }, []);
 
   // Persistence Effects
@@ -134,7 +119,7 @@ export const TimeTrackerProvider = ({ children }) => {
   }, [contract]);
   useEffect(() => localStorage.setItem('pastContracts', JSON.stringify(pastContracts)), [pastContracts]);
   useEffect(() => localStorage.setItem('savedRoutines', JSON.stringify(savedRoutines)), [savedRoutines]);
-  useEffect(() => localStorage.setItem('userProfile', JSON.stringify(userProfile)), [userProfile]);
+  useEffect(() => localStorage.setItem('localFriends', JSON.stringify(localFriends)), [localFriends]);
   
   // Active Entry Restoration
   useEffect(() => {
@@ -147,7 +132,6 @@ export const TimeTrackerProvider = ({ children }) => {
     let interval = null;
     if (activeEntry) {
       setLiveElapsedTime(Date.now() - activeEntry.startTime);
-      // Update every 30ms to show hundredths smoothly
       interval = setInterval(() => {
         setLiveElapsedTime(Date.now() - activeEntry.startTime);
       }, 30);
@@ -181,29 +165,21 @@ export const TimeTrackerProvider = ({ children }) => {
               c.dailyHistory.forEach(h => {
                   if (h.points) total += h.points; 
               });
-          } else if (c.history && Array.isArray(c.history)) {
-              let currentStreak = 1;
-              c.history.forEach(dayOk => {
-                  if (dayOk) {
-                      total += currentStreak;
-                      if (currentStreak < 10) currentStreak++;
-                  } else {
-                      currentStreak = 1; 
-                  }
-              });
           }
       });
 
-      return parseFloat(total.toFixed(1)); 
+      return parseFloat(total.toFixed(2)); 
   }, [timeEntries, subtasks, pastContracts, contract]);
 
-  // Sync Score
+  // Sync Score when Auth user is present
   useEffect(() => {
-      const score = calculateTotalScore();
-      syncUserScore(userProfile, score);
-      const interval = setInterval(() => syncUserScore(userProfile, score), 60000);
-      return () => clearInterval(interval);
-  }, [userProfile, calculateTotalScore]);
+      if (firebaseUser) {
+          const score = calculateTotalScore();
+          syncUserScore(firebaseUser, score);
+          const interval = setInterval(() => syncUserScore(firebaseUser, score), 60000);
+          return () => clearInterval(interval);
+      }
+  }, [firebaseUser, calculateTotalScore]);
 
   // Subscribe Leaderboard
   useEffect(() => {
@@ -214,21 +190,26 @@ export const TimeTrackerProvider = ({ children }) => {
       return () => unsubscribe();
   }, []);
 
-  const updateUsername = (name) => {
-      if (name === userProfile.name) return;
-      const newProfile = { ...userProfile, name };
-      setUserProfile(newProfile);
-      syncUserScore(newProfile, calculateTotalScore());
+  const handleLoginRanking = async () => {
+      try {
+          await signInWithGoogle();
+      } catch (e) {
+          alert("Error al iniciar sesión: " + e.message);
+      }
+  };
+
+  const handleLogoutRanking = async () => {
+      await logoutFirebase();
   };
   
   const addFriend = (friendId) => {
-      if (friendId && friendId !== userProfile.id && !userProfile.friends.includes(friendId)) {
-          setUserProfile(prev => ({ ...prev, friends: [...prev.friends, friendId] }));
+      if (friendId && !localFriends.includes(friendId)) {
+          setLocalFriends(prev => [...prev, friendId]);
       }
   };
 
   const removeFriend = (friendId) => {
-      setUserProfile(prev => ({ ...prev, friends: prev.friends.filter(f => f !== friendId) }));
+      setLocalFriends(prev => prev.filter(f => f !== friendId));
   };
 
   // Import/Export Logic
@@ -237,10 +218,10 @@ export const TimeTrackerProvider = ({ children }) => {
           version: 1,
           timestamp: Date.now(),
           tasks, timeEntries, subtasks, goals, contract, pastContracts, savedRoutines,
-          userProfile
+          localFriends
       };
       return JSON.stringify(data, null, 2);
-  }, [tasks, timeEntries, subtasks, goals, contract, pastContracts, savedRoutines, userProfile]);
+  }, [tasks, timeEntries, subtasks, goals, contract, pastContracts, savedRoutines, localFriends]);
 
   const importData = useCallback((json, merge = false) => {
       try {
@@ -248,10 +229,7 @@ export const TimeTrackerProvider = ({ children }) => {
           const update = (key, setter) => { 
               if (data[key]) {
                   if (merge && Array.isArray(data[key])) {
-                      // Simple merge strategy for arrays: concat unique IDs if possible, or just append
                       setter(prev => {
-                          // Very basic merge: just replacing for now to avoid complexity, unless specified
-                          // For arrays like tasks, we should probably merge by ID
                           if (key === 'tasks' || key === 'subtasks' || key === 'timeEntries') {
                               const existingIds = new Set(prev.map(i => i.id));
                               const newItems = data[key].filter(i => !existingIds.has(i.id));
@@ -270,12 +248,10 @@ export const TimeTrackerProvider = ({ children }) => {
               update('timeEntries', setTimeEntries);
               update('subtasks', setSubtasks);
               update('goals', setGoals);
-              // Contracts usually single source of truth, harder to merge
               if(data.contract && !contract) update('contract', setContract);
               update('pastContracts', setPastContracts);
               update('savedRoutines', setSavedRoutines);
-              // Profile usually keep local unless empty
-              if(userProfile.name === 'Usuario' || !userProfile.id) update('userProfile', setUserProfile);
+              update('localFriends', setLocalFriends);
           } else {
               update('tasks', setTasks);
               update('timeEntries', setTimeEntries);
@@ -284,18 +260,18 @@ export const TimeTrackerProvider = ({ children }) => {
               update('contract', setContract);
               update('pastContracts', setPastContracts);
               update('savedRoutines', setSavedRoutines);
-              update('userProfile', setUserProfile);
+              update('localFriends', setLocalFriends);
           }
           return true;
       } catch (e) {
           console.error("Import error", e);
           return false;
       }
-  }, [contract, userProfile]);
+  }, [contract]);
 
   const connectToCloud = async () => {
       try {
-          const tokenResponse = await signInToGoogle();
+          await signInToGoogle();
           setCloudStatus('connected');
           return true;
       } catch (error) {
@@ -395,18 +371,24 @@ export const TimeTrackerProvider = ({ children }) => {
       const total = c.commitments.length;
       const completed = c.commitments.filter(com => com.status === 'completed').length;
       const ratio = total > 0 ? completed / total : 0;
-      const points = parseFloat((c.currentStreakLevel * ratio).toFixed(1));
+      
+      // Calculate projected points for today based on CURRENT streak level
+      const diaActual = c.currentStreakLevel;
+      const points = parseFloat((diaActual * ratio).toFixed(2));
+
       const today = getTodayStr();
       const newHistory = [...c.dailyHistory];
       const todayIndex = newHistory.findIndex(h => h.date === today);
-      const entry = { date: today, points, streakLevel: c.currentStreakLevel, totalCommitments: total, completedCommitments: completed };
+      const entry = { date: today, points, streakLevel: diaActual, totalCommitments: total, completedCommitments: completed };
       if (todayIndex >= 0) newHistory[todayIndex] = entry; else newHistory.push(entry);
       return { ...c, dailyHistory: newHistory, lastCheckDate: today };
   };
+  
   const startContract = (commitments, duration = 1, allowedDays = [0,1,2,3,4,5,6]) => {
       setContract({ active: true, currentPhase: duration, dayInPhase: 0, startDate: Date.now(), lastCheckDate: getTodayStr(), commitments: commitments.map((c, i) => ({ ...c, id: `c_${i}_${Date.now()}`, status: 'pending' })), dailyHistory: [], currentStreakLevel: 1, failed: false, allowedDays, dailyCompleted: false });
       triggerCloudSync();
   };
+  
   const setCommitmentStatus = (id, status) => { 
       setContract(prev => { 
           if (!prev) return null; 
@@ -415,7 +397,9 @@ export const TimeTrackerProvider = ({ children }) => {
       }); 
       triggerCloudSync(); 
   };
+  
   const completeDay = () => { if (contract) { setContract(prev => ({ ...getContractWithTodayHistory(prev), dailyCompleted: true })); triggerCloudSync(); } };
+  
   const completeContract = () => { 
       if (contract) { 
           const final = getContractWithTodayHistory(contract); 
@@ -425,6 +409,7 @@ export const TimeTrackerProvider = ({ children }) => {
           triggerCloudSync(); 
       } 
   };
+  
   const resetContract = () => { 
       if (contract) { 
           const final = getContractWithTodayHistory(contract); 
@@ -434,6 +419,8 @@ export const TimeTrackerProvider = ({ children }) => {
       setContract(null); 
       triggerCloudSync(); 
   };
+  
+  // Logic to handle Day Transitions and Streak Updates
   useEffect(() => { 
       if (!contract) return; 
       const today = getTodayStr(); 
@@ -445,17 +432,34 @@ export const TimeTrackerProvider = ({ children }) => {
                   const total = prev.commitments.length;
                   const completed = prev.commitments.filter(c => c.status === 'completed').length;
                   const ratio = total > 0 ? completed / total : 0;
-                  const pointsEarned = parseFloat((prev.currentStreakLevel * ratio).toFixed(1));
-                  let nextLevel = Math.floor(pointsEarned) + 1;
-                  if (nextLevel > 10) nextLevel = 10;
+                  
+                  // 1. Calculate points for YESTERDAY based on yesterday's active streak level
+                  const diaActual = prev.currentStreakLevel; // Level used yesterday
+                  const pointsEarned = parseFloat((diaActual * ratio).toFixed(2));
+                  
+                  // 2. Determine base streak for tomorrow (today)
+                  let streakForTomorrow;
+                  if (completed === total) {
+                      streakForTomorrow = diaActual; // Met target, keep level as base to grow
+                  } else {
+                      streakForTomorrow = diaActual * ratio; // Missed target, streak decays
+                  }
+                  
+                  // 3. Calculate TODAY's new active level
+                  // "Si ayer cumplió todo, hoy sube un nivel. Si no, se usa el nivel penalizado."
+                  let nextLevel = Math.min(streakForTomorrow + 1, 10);
+                  
+                  // Formatting to avoid long floats, keep it clean (e.g. 5.5 is valid level)
+                  nextLevel = parseFloat(nextLevel.toFixed(2));
                   if (nextLevel < 1) nextLevel = 1;
 
+                  // Update History for Yesterday
                   const newHistory = [...prev.dailyHistory];
                   const histIdx = newHistory.findIndex(h => h.date === prev.lastCheckDate);
                   const historyEntry = { 
                       date: prev.lastCheckDate, 
                       points: pointsEarned, 
-                      streakLevel: prev.currentStreakLevel, 
+                      streakLevel: diaActual, 
                       totalCommitments: total, 
                       completedCommitments: completed 
                   };
@@ -487,30 +491,19 @@ export const TimeTrackerProvider = ({ children }) => {
 
   // --- Notifications (Firebase Only) ---
   const requestNotificationPermission = async () => { 
-      if (!userProfile || !userProfile.id) {
-          console.warn("User ID missing for notifications");
-          return false;
-      }
-      
+      if (!firebaseUser) return false;
       try {
-          // If already granted in browser but we are re-requesting (e.g. to get token)
-          // or requesting for the first time.
-          const token = await requestFcmToken(userProfile.id);
-          
+          const token = await requestFcmToken(firebaseUser.uid);
           if (token) {
               setNotificationsEnabled(true);
               localStorage.setItem('notifications_enabled', 'true');
               return true;
           } else {
-              if (Notification.permission === 'denied') {
-                  alert("Has bloqueado las notificaciones. Habilítalas en la configuración de tu navegador.");
-              }
               setNotificationsEnabled(false);
               localStorage.setItem('notifications_enabled', 'false');
               return false;
           }
       } catch (e) {
-          console.error("Permission request failed", e);
           setNotificationsEnabled(false);
           localStorage.setItem('notifications_enabled', 'false');
           return false;
@@ -519,17 +512,11 @@ export const TimeTrackerProvider = ({ children }) => {
   
   const toggleDailyNotification = async () => { 
       if (notificationsEnabled) {
-          // Turn OFF logic
           setNotificationsEnabled(false);
           localStorage.setItem('notifications_enabled', 'false');
-          // Optional: Call a function to delete token from DB if you want strict privacy,
-          // but just stopping the UI indicator and local preference is usually enough for client-side toggles.
       } else {
-          // Turn ON logic
           const success = await requestNotificationPermission();
-          if (success) {
-              alert("Notificaciones activadas correctamente.");
-          }
+          if (success) alert("Notificaciones activadas correctamente.");
       }
   };
 
@@ -542,7 +529,7 @@ export const TimeTrackerProvider = ({ children }) => {
       savedRoutines, saveRoutine, deleteRoutine,
       cloudStatus, connectToCloud, triggerCloudSync, lastSyncTime, exportData, importData,
       notificationsEnabled, requestNotificationPermission, toggleDailyNotification,
-      userProfile, updateUsername, addFriend, removeFriend, leaderboard, calculateTotalScore, rankingError
+      firebaseUser, handleLoginRanking, handleLogoutRanking, addFriend, removeFriend, leaderboard, calculateTotalScore, rankingError, localFriends
     }},
     children
   );

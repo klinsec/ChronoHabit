@@ -84,63 +84,73 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 z-50 p-0 sm:p-4 flex items-end sm:items-center justify-center">
-      <div className="bg-surface rounded-t-2xl sm:rounded-2xl p-4 w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl border-t sm:border border-gray-700">
-        <h2 className="text-xl font-bold mb-4">{task ? 'Editar Tarea' : 'Nueva Tarea'}</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="task-name" className="block text-sm font-medium text-gray-300 mb-1">Nombre de la Tarea</label>
-            <input
-              id="task-name"
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-primary focus:border-primary"
-              required
-              autoFocus={!task}
-            />
-          </div>
+    <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4">
+      <div className="bg-surface rounded-2xl w-full max-w-sm shadow-2xl border border-gray-700 flex flex-col max-h-[90vh]">
+        
+        {/* Header (Fixed) */}
+        <div className="p-4 border-b border-gray-700 flex-shrink-0">
+            <h2 className="text-xl font-bold">{task ? 'Editar Tarea' : 'Nueva Tarea'}</h2>
+        </div>
 
-          <div>
-             <label className="block text-sm font-medium text-gray-300 mb-1">Icono</label>
-             <div className="grid grid-cols-6 gap-2 bg-gray-800 p-2 rounded-lg">
-                 {icons.map(i => (
-                     <button type="button" key={i} onClick={() => setIcon(i)} className={`text-2xl rounded p-1 ${icon === i ? 'bg-primary' : 'hover:bg-gray-700'}`}>
-                         {i}
-                     </button>
-                 ))}
-             </div>
-          </div>
-          
-          <div>
-             <label className="block text-sm font-medium text-gray-300 mb-1">Dificultad (Satisfacción)</label>
-             <div className="bg-gray-800 p-3 rounded-lg flex flex-col items-center">
-                 {renderStars()}
-                 <p className="text-xs text-gray-400 mt-2 font-mono">
-                     {difficulty > 0 ? `${difficulty / 2} Estrellas (${difficulty} pts)` : 'Sin dificultad'}
-                 </p>
-             </div>
-          </div>
-          
-          <div>
-             <label className="block text-sm font-medium text-gray-300 mb-1">Color</label>
-             <div className="flex flex-wrap gap-2">
-                 {colors.map(c => (
-                     <button type="button" key={c} onClick={() => setColor(c)} className={`w-8 h-8 rounded-full ${color === c ? 'ring-2 ring-offset-2 ring-offset-surface ring-white' : ''}`} style={{ backgroundColor: c }} />
-                 ))}
-             </div>
-          </div>
-          
-          <div className="flex justify-between items-center pt-4 border-t border-gray-700">
+        {/* Content (Scrollable) */}
+        <div className="p-4 overflow-y-auto flex-grow">
+            <form id="task-form" onSubmit={handleSubmit} className="space-y-4">
+            <div>
+                <label htmlFor="task-name" className="block text-sm font-medium text-gray-300 mb-1">Nombre</label>
+                <input
+                id="task-name"
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-primary focus:border-primary"
+                required
+                autoFocus={!task}
+                />
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Icono</label>
+                <div className="grid grid-cols-6 gap-2 bg-gray-800 p-2 rounded-lg">
+                    {icons.map(i => (
+                        <button type="button" key={i} onClick={() => setIcon(i)} className={`text-2xl rounded p-1 ${icon === i ? 'bg-primary' : 'hover:bg-gray-700'}`}>
+                            {i}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            
+            <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Satisfacción (Puntos)</label>
+                <div className="bg-gray-800 p-3 rounded-lg flex flex-col items-center">
+                    {renderStars()}
+                    <p className="text-xs text-gray-400 mt-2 font-mono">
+                        {difficulty > 0 ? `${difficulty / 2} Estrellas (${difficulty} pts)` : 'Sin dificultad'}
+                    </p>
+                </div>
+            </div>
+            
+            <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Color</label>
+                <div className="flex flex-wrap gap-2">
+                    {colors.map(c => (
+                        <button type="button" key={c} onClick={() => setColor(c)} className={`w-8 h-8 rounded-full ${color === c ? 'ring-2 ring-offset-2 ring-offset-surface ring-white' : ''}`} style={{ backgroundColor: c }} />
+                    ))}
+                </div>
+            </div>
+            </form>
+        </div>
+        
+        {/* Footer (Fixed) */}
+        <div className="p-4 border-t border-gray-700 flex justify-between items-center flex-shrink-0 bg-surface rounded-b-2xl">
             <div>
               {task && <button type="button" onClick={handleDelete} className="text-red-500 hover:text-red-400 font-semibold px-4 py-2 rounded-lg">Eliminar</button>}
             </div>
             <div className="flex space-x-2">
               <button type="button" onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Cancelar</button>
-              <button type="submit" className="bg-primary hover:bg-purple-500 text-bkg font-bold py-2 px-4 rounded-lg">{task ? 'Guardar' : 'Crear'}</button>
+              <button type="submit" form="task-form" className="bg-primary hover:bg-purple-500 text-bkg font-bold py-2 px-4 rounded-lg">{task ? 'Guardar' : 'Crear'}</button>
             </div>
-          </div>
-        </form>
+        </div>
+
       </div>
     </div>
   );

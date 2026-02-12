@@ -1,8 +1,9 @@
 
 import { initializeApp } from 'firebase/app';
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+import { getMessaging, getToken } from 'firebase/messaging';
 import { getAnalytics } from 'firebase/analytics';
 import { getDatabase, ref, set, onValue, query, orderByChild, limitToLast } from 'firebase/database';
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHmV3KCrZPym4Vep2dlwAbrgOegQAEQ8M",
@@ -20,72 +21,81 @@ const VAPID_KEY = 'BMnJFazf6Q0gIA20JT0xrCYJImRTctyTvahlKDBUCANbvJl6HMLv2-4Ba81PY
 let app;
 let messaging;
 let db = null;
+let auth = null;
+const provider = new GoogleAuthProvider();
+provider.addScope('profile');
+provider.addScope('email');
 
 try {
     app = initializeApp(firebaseConfig);
     try {
         db = getDatabase(app);
+        auth = getAuth(app);
     } catch (e) {
-        console.error("DB Connect error", e);
-        try {
-            db = getDatabase(app, firebaseConfig.databaseURL);
-        } catch (e2) {}
+        console.error("DB/Auth Connect error", e);
     }
     try { getAnalytics(app); } catch (e) {}
     try { messaging = getMessaging(app); } catch (e) {
-        console.error("Firebase Messaging failed to init (likely non-https or private mode):", e);
+        console.warn("Firebase Messaging init failed (may be offline or unsupported):", e);
     }
 } catch (error) {
     console.error("Firebase Init Error:", error);
 }
 
-// 1. Notificaciones Push
-export const requestFcmToken = async (userId) => {
-    if (!messaging) {
-        console.error("Messaging not initialized.");
-        return null;
+// 1. Auth Functions
+export const signInWithGoogle = async () => {
+    if (!auth) {
+        console.error("Auth not initialized. Config:", firebaseConfig);
+        throw new Error("Firebase Auth not initialized. Check console.");
     }
-    
     try {
-        console.log("Requesting notification permission...");
+        const result = await signInWithPopup(auth, provider);
+        return result.user;
+    } catch (error) {
+        console.error("Auth Error details:", error);
+        throw error;
+    }
+};
+
+export const logoutFirebase = async () => {
+    if (!auth) return;
+    try {
+        await signOut(auth);
+    } catch (error) {
+        console.error("Logout Error:", error);
+    }
+};
+
+export const subscribeToAuthChanges = (callback) => {
+    if (!auth) return () => {};
+    return onAuthStateChanged(auth, callback);
+};
+
+// 2. Notificaciones Push
+export const requestFcmToken = async (userId) => {
+    if (!messaging) return null;
+    try {
         const permission = await Notification.requestPermission();
-        
         if (permission === 'granted') {
-            console.log("Permission granted. Getting Service Worker...");
-            
-            // Try to get existing registration or wait for ready
             let swRegistration = await navigator.serviceWorker.getRegistration();
             if (!swRegistration) {
-                console.log("No SW registration found, waiting for ready...");
                 swRegistration = await navigator.serviceWorker.ready;
             }
+            if (!swRegistration) throw new Error("Service Worker not found.");
 
-            if (!swRegistration) {
-                 throw new Error("Service Worker not found.");
-            }
-
-            console.log("Getting token from Firebase...");
             const token = await getToken(messaging, { 
                 vapidKey: VAPID_KEY,
                 serviceWorkerRegistration: swRegistration
             });
             
-            if (token) {
-                console.log("FCM Token success:", token);
-                if (db && userId) {
-                    // Update user token in DB with correct User ID
-                    await set(ref(db, 'tokens_notificaciones/' + userId), {
-                        token: token,
-                        updatedAt: Date.now(),
-                        ua: navigator.userAgent
-                    });
-                } else {
-                    console.warn("No user ID provided to save token.");
-                }
+            if (token && db && userId) {
+                await set(ref(db, 'tokens_notificaciones/' + userId), {
+                    token: token,
+                    updatedAt: Date.now(),
+                    ua: navigator.userAgent
+                });
                 return token;
             }
-        } else {
-            console.warn("Permission denied.");
         }
     } catch (error) {
         console.error("Error requesting FCM token:", error);
@@ -93,18 +103,19 @@ export const requestFcmToken = async (userId) => {
     return null;
 };
 
-// 2. Ranking System
-export const syncUserScore = async (userProfile, score) => {
-    if (!db || !userProfile.id) return;
+// 3. Ranking System
+export const syncUserScore = async (user, score) => {
+    if (!db || !user || !user.uid) return;
     try {
-        await set(ref(db, 'leaderboard/' + userProfile.id), {
-            id: userProfile.id,
-            username: userProfile.name,
+        await set(ref(db, 'leaderboard/' + user.uid), {
+            id: user.uid,
+            username: user.displayName || 'Anónimo',
             points: score,
+            photo: user.photoURL,
             updatedAt: Date.now()
         });
     } catch (e) {
-        console.debug("Offline or sync error:", e);
+        console.debug("Error sync score:", e);
     }
 };
 
