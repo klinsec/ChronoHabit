@@ -26,6 +26,10 @@ let db: any = null;
 let auth: any = null;
 const provider = new GoogleAuthProvider();
 
+// Paths
+const USER_DATA_PATH = 'usuarios_data';
+const LEADERBOARD_PATH = 'leaderboard';
+
 try {
     app = initializeApp(firebaseConfig);
     try {
@@ -58,15 +62,17 @@ export const subscribeToAuthChanges = (callback: (user: User | null) => void) =>
 };
 
 // --- DATA SYNC (CLOUD SAVE) ---
-// Uses 'set' to OVERWRITE existing data at the user's path.
 export const saveUserData = async (userId: string, data: string) => {
     if (!db || !userId) return;
     try {
-        // This path is unique per user. 'set' overwrites everything at this location.
-        await set(ref(db, 'users/' + userId + '/backup'), {
-            data: data, // The full JSON string
-            updatedAt: Date.now(),
-            device: navigator.userAgent
+        // Clean JSON to avoid serialization errors with Firebase
+        // Although data is string, we parse and re-stringify if needed, or just ensure the wrapper object is clean.
+        const cleanState = JSON.parse(data);
+
+        await set(ref(db, `${USER_DATA_PATH}/${userId}`), {
+            data: JSON.stringify(cleanState), // Saving as string to ensure structure integrity
+            updatedAt: new Date().toISOString(),
+            device: navigator.userAgent || 'unknown'
         });
     } catch (e) {
         console.error("Error saving user data:", e);
@@ -77,9 +83,14 @@ export const saveUserData = async (userId: string, data: string) => {
 export const getUserData = async (userId: string) => {
     if (!db || !userId) return null;
     try {
-        const snapshot = await get(child(ref(db), 'users/' + userId + '/backup'));
+        const snapshot = await get(child(ref(db), `${USER_DATA_PATH}/${userId}`));
         if (snapshot.exists()) {
-            return snapshot.val();
+            const val = snapshot.val();
+            // Handle both legacy (direct object) and new (stringified data field) formats
+            if (val.data && typeof val.data === 'string') {
+                return { ...val, data: val.data };
+            }
+            return val;
         } else {
             return null;
         }
@@ -131,10 +142,11 @@ export const requestFcmToken = async (userId?: string): Promise<string | null> =
 export const syncUserScore = async (userProfile: any, score: number) => {
     if (!db || !userProfile.uid) return;
     try {
-        await set(ref(db, 'leaderboard/' + userProfile.uid), {
+        await set(ref(db, `${LEADERBOARD_PATH}/${userProfile.uid}`), {
             id: userProfile.uid,
             username: userProfile.displayName || 'Anónimo',
             points: score,
+            puntos: score, // Double write for compatibility
             photo: userProfile.photoURL,
             updatedAt: Date.now()
         });
@@ -149,11 +161,22 @@ export const subscribeToLeaderboard = (onData: (data: any[]) => void, onError?: 
         return () => {};
     }
     try {
-        const q = query(ref(db, 'leaderboard'), orderByChild('points'), limitToLast(50));
+        // Fallback: Fetch all and sort client-side to avoid index requirement issues
+        const q = ref(db, LEADERBOARD_PATH);
         return onValue(q, (snapshot) => {
             const data: any[] = [];
-            snapshot.forEach(child => data.push(child.val()));
-            onData(data.reverse());
+            if (snapshot.exists()) {
+                snapshot.forEach(child => {
+                    const val = child.val();
+                    // normalize points
+                    const p = val.points !== undefined ? val.points : (val.puntos !== undefined ? val.puntos : 0);
+                    data.push({ ...val, points: p, id: child.key });
+                });
+            }
+            // Sort descending by points
+            data.sort((a, b) => b.points - a.points);
+            // Limit to top 50 client side
+            onData(data.slice(0, 50));
         }, onError);
     } catch (e) {
         if(onError) onError(e);

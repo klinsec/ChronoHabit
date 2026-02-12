@@ -26,6 +26,10 @@ const provider = new GoogleAuthProvider();
 provider.addScope('profile');
 provider.addScope('email');
 
+// Paths
+const USER_DATA_PATH = 'usuarios_data';
+const LEADERBOARD_PATH = 'leaderboard';
+
 try {
     app = initializeApp(firebaseConfig);
     try {
@@ -69,15 +73,16 @@ export const subscribeToAuthChanges = (callback) => {
 };
 
 // 2. Data Sync (Realtime Database)
-// Uses 'set' to OVERWRITE existing data at the user's path.
 export const saveUserData = async (userId, data) => {
     if (!db || !userId) return;
     try {
-        // This path is unique per user. 'set' overwrites everything at this location.
-        await set(ref(db, 'users/' + userId + '/backup'), {
-            data: data, // The full JSON string
-            updatedAt: Date.now(),
-            device: navigator.userAgent
+        // Clean and prepare data
+        const cleanState = JSON.parse(data);
+        
+        await set(ref(db, `${USER_DATA_PATH}/${userId}`), {
+            data: JSON.stringify(cleanState),
+            updatedAt: new Date().toISOString(),
+            device: navigator.userAgent || 'unknown'
         });
     } catch (e) {
         console.error("Error saving user data:", e);
@@ -88,9 +93,13 @@ export const saveUserData = async (userId, data) => {
 export const getUserData = async (userId) => {
     if (!db || !userId) return null;
     try {
-        const snapshot = await get(child(ref(db), 'users/' + userId + '/backup'));
+        const snapshot = await get(child(ref(db), `${USER_DATA_PATH}/${userId}`));
         if (snapshot.exists()) {
-            return snapshot.val();
+            const val = snapshot.val();
+            if (val.data && typeof val.data === 'string') {
+                return { ...val, data: val.data };
+            }
+            return val;
         } else {
             return null;
         }
@@ -136,10 +145,11 @@ export const requestFcmToken = async (userId) => {
 export const syncUserScore = async (user, score) => {
     if (!db || !user || !user.uid) return;
     try {
-        await set(ref(db, 'leaderboard/' + user.uid), {
+        await set(ref(db, `${LEADERBOARD_PATH}/${user.uid}`), {
             id: user.uid,
             username: user.displayName || 'Anónimo',
             points: score,
+            puntos: score,
             photo: user.photoURL,
             updatedAt: Date.now()
         });
@@ -154,11 +164,19 @@ export const subscribeToLeaderboard = (onData, onError) => {
         return () => {};
     }
     try {
-        const q = query(ref(db, 'leaderboard'), orderByChild('points'), limitToLast(50));
+        // Fetch whole list and sort client side
+        const q = ref(db, LEADERBOARD_PATH);
         return onValue(q, (snapshot) => {
             const data = [];
-            snapshot.forEach(child => data.push(child.val()));
-            onData(data.reverse());
+            if (snapshot.exists()) {
+                snapshot.forEach(child => {
+                    const val = child.val();
+                    const p = val.points !== undefined ? val.points : (val.puntos !== undefined ? val.puntos : 0);
+                    data.push({ ...val, points: p, id: child.key });
+                });
+            }
+            data.sort((a, b) => b.points - a.points);
+            onData(data.slice(0, 50));
         }, onError);
     } catch (e) {
         if(onError) onError(e);
