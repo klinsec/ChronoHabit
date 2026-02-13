@@ -14,9 +14,32 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+// Handle Background Messages (Push Notifications when app is closed/hidden)
+messaging.onBackgroundMessage((payload) => {
+  console.log('[service-worker.js] Background message received:', payload);
+  
+  // If Firebase SDK already showed the notification, do nothing.
+  // Otherwise, construct a custom notification.
+  if (payload.notification) {
+      // Firebase automatically handles 'notification' payload, but we can customize here if needed.
+      return; 
+  }
+
+  const notificationTitle = payload.data?.title || 'ChronoHabit';
+  const notificationOptions = {
+    body: payload.data?.body || 'Tienes una nueva notificación',
+    icon: './icon-192.png',
+    data: payload.data, 
+    tag: 'chronohabit-notification', // Replaces old notifications with this tag
+    renotify: true
+  };
+
+  self.registration.showNotification(notificationTitle, notificationOptions);
+});
+
 // --- 2. App Caching Logic ---
 // Bumped version to force clear old cache containing install banners
-const CACHE_NAME = 'chronohabit-v1.5.3'; 
+const CACHE_NAME = 'chronohabit-v1.5.4'; 
 const urlsToCache = [
   './',
   './index.html',

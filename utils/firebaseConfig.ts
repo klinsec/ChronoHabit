@@ -113,15 +113,12 @@ export const requestFcmToken = async (userId?: string): Promise<string | null> =
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-            console.log("Notification permission granted.");
             
-            // Register SW explicitly
-            let swRegistration;
-            try {
-                swRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
-            } catch (err) {
-                console.error("Failed to register messaging SW:", err);
-                throw new Error("Error al registrar el Service Worker de mensajería.");
+            // USE EXISTING REGISTRATION (service-worker.js) INSTEAD OF REGISTERING NEW ONE
+            let swRegistration = await navigator.serviceWorker.getRegistration();
+            if (!swRegistration) {
+                // Fallback: Si no hay SW activo (raro), registramos el principal
+                swRegistration = await navigator.serviceWorker.register('./service-worker.js');
             }
 
             try {
