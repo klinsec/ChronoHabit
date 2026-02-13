@@ -11,7 +11,7 @@ import { ClockIcon, ChartIcon, ChecklistIcon, RoutineIcon } from './components/I
 import { View } from './types';
 import ErrorBoundary from './components/ErrorBoundary';
 
-const APP_VERSION = '1.4.20';
+const APP_VERSION = '1.5.1';
 
 const CloudIconIndicator = () => {
     const { cloudStatus } = useTimeTracker();

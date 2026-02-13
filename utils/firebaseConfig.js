@@ -16,7 +16,8 @@ const firebaseConfig = {
   measurementId: "G-CWY1BEGH6V"
 };
 
-const VAPID_KEY = 'BMnJFazf6Q0gIA20JT0xrCYJImRTctyTvahlKDBUCANbvJl6HMLv2-4Ba81PYuNbiTqrkI4KuPgFGaWTVBlo5ao';
+// Updated VAPID Key
+const VAPID_KEY = 'BIy4MCnijbKGk82g6RT8ETcjHKO7Vbvwt9obBaLEwsekAWmXemCmSOQNNENZ4R_FRSgdXw06CUwrRij8ICRcSr4';
 
 let app;
 let messaging;
@@ -113,9 +114,8 @@ export const requestFcmToken = async (userId) => {
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-            let swRegistration = await navigator.serviceWorker.getRegistration();
-            if (!swRegistration) swRegistration = await navigator.serviceWorker.ready;
-            if (!swRegistration) throw new Error("Service Worker not found.");
+            // Explicitly register the service worker for messaging with correct PATH
+            const swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
 
             const token = await getToken(messaging, { 
                 vapidKey: VAPID_KEY,
