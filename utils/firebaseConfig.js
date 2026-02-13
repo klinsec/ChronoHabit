@@ -110,12 +110,16 @@ export const getUserData = async (userId) => {
 
 // 3. Notifications
 export const requestFcmToken = async (userId) => {
-    if (!messaging) return null;
+    if (!messaging) {
+        alert("El sistema de mensajería no está disponible.");
+        return null;
+    }
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-            // Explicitly register the service worker for messaging with correct PATH
-            const swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+            // Using relative path './' to ensure it works on GitHub Pages subdirectories
+            // This looks for the file in the same directory as the index.html
+            const swRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
 
             const token = await getToken(messaging, { 
                 vapidKey: VAPID_KEY,
@@ -130,9 +134,12 @@ export const requestFcmToken = async (userId) => {
                 });
                 return token;
             }
+        } else {
+            alert("Permiso denegado. Habilita las notificaciones en tu navegador.");
         }
     } catch (error) {
         console.error("Error requesting FCM token:", error);
+        alert("Error técnico al solicitar token: " + error.message);
     }
     return null;
 };
