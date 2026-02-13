@@ -103,33 +103,55 @@ export const requestFcmToken = async (userId?: string): Promise<string | null> =
         alert("Firebase Messaging no se ha inicializado correctamente.");
         return null;
     }
+
+    // 1. Check if permission is already blocked
+    if (Notification.permission === 'denied') {
+        alert("Las notificaciones están bloqueadas en tu navegador. Por favor, habilítalas en la configuración del sitio (candado junto a la URL).");
+        return null;
+    }
+
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-            // Using relative path './' to ensure it works on GitHub Pages subdirectories
-            // This looks for the file in the same directory as the index.html
-            const swRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+            console.log("Notification permission granted.");
             
-            const token = await getToken(messaging, { 
-                vapidKey: VAPID_KEY,
-                serviceWorkerRegistration: swRegistration
-            });
-            
-            if (db && userId) {
-                await set(ref(db, 'tokens_notificaciones/' + userId), {
-                    token: token,
-                    updatedAt: Date.now(),
-                    ua: navigator.userAgent
-                });
+            // Register SW explicitly
+            let swRegistration;
+            try {
+                swRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+            } catch (err) {
+                console.error("Failed to register messaging SW:", err);
+                throw new Error("Error al registrar el Service Worker de mensajería.");
             }
-            return token;
+
+            try {
+                const token = await getToken(messaging, { 
+                    vapidKey: VAPID_KEY,
+                    serviceWorkerRegistration: swRegistration
+                });
+                
+                if (db && userId) {
+                    await set(ref(db, 'tokens_notificaciones/' + userId), {
+                        token: token,
+                        updatedAt: Date.now(),
+                        ua: navigator.userAgent
+                    });
+                }
+                return token;
+            } catch (tokenError: any) {
+                console.error("GetToken Failed:", tokenError);
+                if (tokenError.code === 'messaging/permission-blocked' || tokenError.message?.includes('PERMISSION_DENIED')) {
+                    throw new Error("Fallo de autenticación (VAPID) o permiso bloqueado. Verifica que la Clave VAPID coincida con el proyecto Firebase.");
+                }
+                throw tokenError;
+            }
         } else {
-            alert("Permiso de notificaciones denegado. Revisa la configuración del navegador.");
+            alert("Permiso denegado. No podremos enviarte notificaciones.");
         }
         return null;
     } catch (error: any) {
         console.error("An error occurred while retrieving token. ", error);
-        alert("Error al activar notificaciones: " + error.message);
+        alert("Error técnico: " + error.message);
         return null;
     }
 };
