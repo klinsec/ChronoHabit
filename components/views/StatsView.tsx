@@ -440,6 +440,8 @@ const StatsView: React.FC = () => {
           else { key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`; cursor.setMonth(cursor.getMonth() + 1); }
           dataMap.set(key, { timer: 0, tasks: 0, routine: 0 });
       }
+      
+      // Timer Points
       filteredEntries.forEach(entry => {
           if (!entry.endTime) return;
           const entryDate = new Date(entry.startTime);
@@ -449,14 +451,53 @@ const StatsView: React.FC = () => {
               current.timer += ((entry.endTime - entry.startTime) / (1000 * 60 * 60)) * 0.5;
           }
       });
-      // Add tasks and routine logic here similar to previous implementation if needed, for brevity assuming similar iteration
-      // ... (Rest of unifiedPointsData logic)
+
+      // Task Points
+      subtasks.forEach(subtask => {
+          if (subtask.completed && subtask.completedAt) {
+              if (subtask.completedAt >= dateRange.start && subtask.completedAt <= dateRange.end) {
+                  const points = subtask.difficulty || 0;
+                  const completedDate = new Date(subtask.completedAt);
+                  let key = '';
+                  if (bucketType === 'day') key = completedDate.toISOString().split('T')[0];
+                  else key = `${completedDate.getFullYear()}-${String(completedDate.getMonth() + 1).padStart(2, '0')}`;
+
+                  if (dataMap.has(key)) {
+                      const current = dataMap.get(key);
+                      current.tasks += points;
+                  }
+              }
+          }
+      });
+
+      // Routine Points (From History only - Avoid double counting with live contract)
+      const allDailyHistory = [
+          ...(contract?.dailyHistory || []),
+          ...pastContracts.flatMap(c => c.dailyHistory || [])
+      ];
+
+      allDailyHistory.forEach(dayHistory => {
+          const historyDate = new Date(dayHistory.date);
+          if (historyDate.getTime() >= dateRange.start && historyDate.getTime() <= dateRange.end) {
+              let key = dayHistory.date; // already YYYY-MM-DD
+              if (bucketType === 'month') {
+                  key = `${historyDate.getFullYear()}-${String(historyDate.getMonth() + 1).padStart(2, '0')}`;
+              }
+              
+              if (dataMap.has(key)) {
+                  const current = dataMap.get(key);
+                  // dailyHistory contains the finalized or live points for that day
+                  current.routine += dayHistory.points;
+              }
+          }
+      });
+
       return Array.from(dataMap.entries()).map(([dateKey, values]: any) => {
           const [year, month, day] = dateKey.split('-').map(Number);
           let label = bucketType === 'day' ? new Date(year, month - 1, day).toLocaleDateString('es-ES', { weekday: 'narrow', day: 'numeric' }) : new Date(year, month - 1, 1).toLocaleDateString('es-ES', { month: 'short' });
           return { date: label, ...values, total: values.timer + values.tasks + values.routine };
       });
-  }, [filteredEntries, period, dateRange]); 
+  }, [filteredEntries, subtasks, contract, pastContracts, period, dateRange]); 
 
   return (
     <div className="space-y-6">
@@ -481,6 +522,35 @@ const StatsView: React.FC = () => {
 
              {chartData.length > 0 || unifiedPointsData.some((d: any) => d.total > 0) ? (
                 <div className="space-y-10">
+                    {/* Unified Stacked Bar Chart */}
+                    {period !== 'day' && (
+                        <div className="bg-surface/30 p-4 rounded-xl border border-gray-800">
+                            <div className="flex items-center justify-center gap-2 mb-4">
+                                <h3 className="text-lg font-semibold text-center text-white">Puntos Totales (Diario)</h3>
+                            </div>
+                            <div style={{ width: '100%', height: 300 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={unifiedPointsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#333" />
+                                        <XAxis 
+                                            dataKey="date" 
+                                            tick={{ fill: '#888', fontSize: 10 }} 
+                                            axisLine={false} 
+                                            tickLine={false}
+                                            interval={period === 'month' ? 2 : 0}
+                                        />
+                                        <YAxis tick={{ fill: '#888', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                        <Tooltip content={<UnifiedTooltip />} cursor={{ fill: 'rgba(255, 255, 255, 0.1)' }} />
+                                        <Legend iconType="circle" wrapperStyle={{ paddingTop: '10px' }} />
+                                        <Bar dataKey="timer" name="Cronómetro" stackId="a" fill="#bb86fc" radius={[0,0,4,4]} barSize={20} />
+                                        <Bar dataKey="tasks" name="Tareas" stackId="a" fill="#eab308" barSize={20} />
+                                        <Bar dataKey="routine" name="Rutina" stackId="a" fill="#3b82f6" radius={[4,4,0,0]} barSize={20} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    )}
+
                     <div>
                         <h3 className="text-xl font-semibold mb-2 text-center">Distribución del Tiempo</h3>
                         <div style={{ width: '100%', height: 300 }}>

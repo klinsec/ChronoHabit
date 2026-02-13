@@ -407,13 +407,14 @@ export const TimeTrackerProvider = ({ children }) => {
       const completed = c.commitments.filter(com => com.status === 'completed').length;
       const ratio = total > 0 ? completed / total : 0;
       
-      const diaActual = c.currentStreakLevel;
-      const points = parseFloat((diaActual * ratio).toFixed(2));
+      const currentLevel = c.currentStreakLevel;
+      // Points = CurrentLevel * Ratio. Use 2 decimals.
+      const points = parseFloat((currentLevel * ratio).toFixed(2));
 
       const today = getTodayStr();
       const newHistory = [...c.dailyHistory];
       const todayIndex = newHistory.findIndex(h => h.date === today);
-      const entry = { date: today, points, streakLevel: diaActual, totalCommitments: total, completedCommitments: completed };
+      const entry = { date: today, points, streakLevel: currentLevel, totalCommitments: total, completedCommitments: completed };
       if (todayIndex >= 0) newHistory[todayIndex] = entry; else newHistory.push(entry);
       return { ...c, dailyHistory: newHistory, lastCheckDate: today };
   };
@@ -462,18 +463,13 @@ export const TimeTrackerProvider = ({ children }) => {
                   const total = prev.commitments.length;
                   const completed = prev.commitments.filter(c => c.status === 'completed').length;
                   const ratio = total > 0 ? completed / total : 0;
+                  const currentLevel = prev.currentStreakLevel;
                   
-                  const diaActual = prev.currentStreakLevel; 
-                  const pointsEarned = parseFloat((diaActual * ratio).toFixed(2));
+                  const pointsEarned = parseFloat((currentLevel * ratio).toFixed(2));
                   
-                  let streakForTomorrow;
-                  if (completed === total) {
-                      streakForTomorrow = diaActual; 
-                  } else {
-                      streakForTomorrow = diaActual * ratio; 
-                  }
-                  
-                  let nextLevel = Math.min(streakForTomorrow + 1, 10);
+                  // NEW LOGIC: Base = Current * Ratio. Next = Base + 1 (capped at 10)
+                  const nextBase = currentLevel * ratio;
+                  let nextLevel = Math.min(nextBase + 1, 10);
                   nextLevel = parseFloat(nextLevel.toFixed(2));
                   if (nextLevel < 1) nextLevel = 1;
 
@@ -482,7 +478,7 @@ export const TimeTrackerProvider = ({ children }) => {
                   const historyEntry = { 
                       date: prev.lastCheckDate, 
                       points: pointsEarned, 
-                      streakLevel: diaActual, 
+                      streakLevel: currentLevel, 
                       totalCommitments: total, 
                       completedCommitments: completed 
                   };

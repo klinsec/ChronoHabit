@@ -287,9 +287,69 @@ const RankingView = () => {
                 data: globalData, 
                 localUser: localUserObj,
                 showFooterSelf: true,
-                filterZero: false, // CHANGED: Show everyone, even with 0 points
+                filterZero: false, 
                 limit: 10
             })
+        )
+    );
+};
+
+const CustomTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      const { name, value, goal } = data;
+      return (
+        React.createElement('div', { className: "bg-surface p-2 border border-gray-700 rounded-md shadow-lg text-sm" },
+          React.createElement('p', { className: "font-bold text-base" }, name),
+          React.createElement('p', null, `Progreso: ${formatDuration(value)}`),
+          goal && React.createElement('p', null, `Objetivo: ${formatDuration(goal.duration)} (${goal.type === 'min' ? 'mínimo' : 'máximo'})`)
+        )
+      );
+    }
+    return null;
+};
+
+const UnifiedTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+        const total = payload.reduce((sum, entry) => sum + entry.value, 0);
+        return (
+          React.createElement('div', { className: "bg-surface p-3 border border-gray-700 rounded-xl shadow-lg text-sm" },
+              React.createElement('p', { className: "font-bold text-base text-white mb-2 border-b border-gray-700 pb-1" }, label),
+              payload.map((entry) => (
+                  React.createElement('div', { key: entry.name, className: "flex items-center gap-2 mb-1" },
+                      React.createElement('div', { className: "w-2 h-2 rounded-full", style: { backgroundColor: entry.color } }),
+                      React.createElement('span', { className: "text-gray-300 capitalize" }, `${entry.name}:`),
+                      React.createElement('span', { className: "font-bold text-white" }, `${parseFloat(entry.value.toFixed(1))} pts`)
+                  )
+              )),
+              React.createElement('div', { className: "mt-2 pt-2 border-t border-gray-700 flex justify-between" },
+                  React.createElement('span', { className: "font-bold text-gray-400" }, "Total:"),
+                  React.createElement('span', { className: "font-bold text-white text-lg" }, parseFloat(total.toFixed(1)))
+              )
+          )
+        );
+    }
+    return null;
+};
+
+const renderProgressLabel = (props) => {
+    const { x, y, width, value } = props;
+    if (value === 0) return null;
+    const formattedValue = formatDuration(value);
+    return (
+        React.createElement('text', { x: x + width + 5, y: y + 10, fill: "#e0e0e0", textAnchor: "start", dominantBaseline: "middle", className: "text-xs font-mono" },
+            formattedValue
+        )
+    );
+};
+
+const renderGoalLabel = (props) => {
+    const { x, y, width, goal } = props;
+    if (!goal || goal.duration === 0) return null;
+    const formattedValue = formatDuration(goal.duration);
+    return (
+         React.createElement('text', { x: x + width + 5, y: y + 18, fill: "#a0a0a0", textAnchor: "start", dominantBaseline: "middle", className: "text-xs font-mono" },
+            formattedValue
         )
     );
 };
@@ -399,8 +459,6 @@ const StatsView = () => {
       .sort((a, b) => Number(b.value) - Number(a.value));
   }, [taskDurations, getTaskById, getGoalByTaskIdAndPeriod, period]);
   
-  const totalDuration = useMemo(() => Object.values(taskDurations).reduce((sum, item) => sum + Number(item), 0), [taskDurations]);
-
   const unifiedPointsData = useMemo(() => {
       const bucketType = (period === 'week' || period === 'month') ? 'day' : 'month';
       const dataMap = new Map();
@@ -476,32 +534,7 @@ const StatsView = () => {
           }
       });
 
-      if (contract && contract.active) {
-          const todayStr = new Date().toISOString().split('T')[0];
-          const todayDate = new Date();
-          
-          if (todayDate.getTime() >= dateRange.start && todayDate.getTime() <= dateRange.end) {
-              let key = todayStr;
-              if (bucketType === 'month') {
-                  key = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}`;
-              }
-
-              if (dataMap.has(key)) {
-                  const potentialPoints = contract.currentStreakLevel || 1;
-                  const totalCommitments = contract.commitments.length;
-                  const completedCommitments = contract.commitments.filter(c => c.status === 'completed').length;
-                  
-                  let earnedPoints = 0;
-                  if (totalCommitments > 0) {
-                      const ratio = completedCommitments / totalCommitments;
-                      earnedPoints = parseFloat((potentialPoints * ratio).toFixed(1));
-                  }
-                  
-                  const current = dataMap.get(key);
-                  current.routine += earnedPoints;
-              }
-          }
-      }
+      // Removed redundant "live" contract block to prevent double counting
 
       return Array.from(dataMap.entries()).map(([dateKey, values]) => {
           let label = '';
@@ -523,68 +556,6 @@ const StatsView = () => {
       });
 
   }, [filteredEntries, subtasks, contract, pastContracts, period, dateRange, getTaskById]);
-
-  const CustomTooltip = ({ active, payload }) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      const { name, value, goal } = data;
-      const percentage = totalDuration > 0 ? ((value / totalDuration) * 100).toFixed(1) : 0;
-      return (
-        React.createElement('div', { className: "bg-surface p-2 border border-gray-700 rounded-md shadow-lg text-sm" },
-          React.createElement('p', { className: "font-bold text-base" }, name),
-          React.createElement('p', null, `Progreso: ${formatDuration(value)}`),
-          goal && React.createElement('p', null, `Objetivo: ${formatDuration(goal.duration)} (${goal.type === 'min' ? 'mínimo' : 'máximo'})`),
-          totalDuration > 0 && React.createElement('p', null, `Porcentaje: ${percentage}%`)
-        )
-      );
-    }
-    return null;
-  };
-
-  const UnifiedTooltip = ({ active, payload, label }) => {
-      if (active && payload && payload.length) {
-          const total = payload.reduce((sum, entry) => sum + entry.value, 0);
-          return (
-            React.createElement('div', { className: "bg-surface p-3 border border-gray-700 rounded-xl shadow-lg text-sm" },
-                React.createElement('p', { className: "font-bold text-base text-white mb-2 border-b border-gray-700 pb-1" }, label),
-                payload.map((entry) => (
-                    React.createElement('div', { key: entry.name, className: "flex items-center gap-2 mb-1" },
-                        React.createElement('div', { className: "w-2 h-2 rounded-full", style: { backgroundColor: entry.color } }),
-                        React.createElement('span', { className: "text-gray-300 capitalize" }, `${entry.name}:`),
-                        React.createElement('span', { className: "font-bold text-white" }, `${parseFloat(entry.value.toFixed(1))} pts`)
-                    )
-                )),
-                React.createElement('div', { className: "mt-2 pt-2 border-t border-gray-700 flex justify-between" },
-                    React.createElement('span', { className: "font-bold text-gray-400" }, "Total:"),
-                    React.createElement('span', { className: "font-bold text-white text-lg" }, parseFloat(total.toFixed(1)))
-                )
-            )
-          );
-      }
-      return null;
-  };
-  
-  const renderProgressLabel = (props) => {
-      const { x, y, width, value } = props;
-      if (value === 0) return null;
-      const formattedValue = formatDuration(value);
-      return (
-          React.createElement('text', { x: x + width + 5, y: y + 10, fill: "#e0e0e0", textAnchor: "start", dominantBaseline: "middle", className: "text-xs font-mono" },
-              formattedValue
-          )
-      );
-  };
-  
-  const renderGoalLabel = (props) => {
-      const { x, y, width, goal } = props;
-      if (!goal || goal.duration === 0) return null;
-      const formattedValue = formatDuration(goal.duration);
-      return (
-           React.createElement('text', { x: x + width + 5, y: y + 18, fill: "#a0a0a0", textAnchor: "start", dominantBaseline: "middle", className: "text-xs font-mono" },
-              formattedValue
-          )
-      );
-  };
 
   const periodLabels = { day: 'Día', week: 'Semana', month: 'Mes', all: 'Año' };
 

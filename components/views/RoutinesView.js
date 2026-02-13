@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext.js';
 import { CheckCircleIcon, PlusIcon, TrashIcon, RoutineIcon, HistoryIcon, FloppyDiskIcon, FolderIcon, XMarkIcon, ArrowUpIcon, ArrowDownIcon } from '../Icons.js';
 
@@ -577,6 +577,23 @@ const ContractSetup = ({ commitments, setCommitments, duration, setDuration, all
 
 const ActiveContractView = ({ contract, onStatusChange, onNext, onReset, onComplete, onCompleteDay }) => {
     
+    // Logic to calculate next active day label
+    const nextDayLabel = useMemo(() => {
+        if (!contract.allowedDays || contract.allowedDays.length === 7) return "MAÑANA";
+        
+        const days = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
+        const todayIndex = new Date().getDay();
+        
+        for (let i = 1; i <= 7; i++) {
+            const nextIndex = (todayIndex + i) % 7;
+            if (contract.allowedDays.includes(nextIndex)) {
+                if (i === 1) return "MAÑANA";
+                return days[nextIndex];
+            }
+        }
+        return "MAÑANA";
+    }, [contract.allowedDays]);
+
     // Check ONLY for manually completed status. dayInPhase check removed to allow day 0 interaction.
     if (contract.dailyCompleted) {
         return (
@@ -587,7 +604,7 @@ const ActiveContractView = ({ contract, onStatusChange, onNext, onReset, onCompl
                     ),
                     React.createElement('h2', { className: "text-2xl font-bold text-white mb-2" }, "¡Rutina Completada!"),
                     React.createElement('p', { className: "text-gray-400" },
-                        "Has terminado tus innegociables de hoy. ¡Nos vemos mañana!"
+                        "Has terminado tus innegociables de hoy. ¡Nos vemos en tu próxima sesión!"
                     )
                 ),
                 React.createElement('div', { className: "w-full max-w-xs bg-surface p-4 rounded-xl border border-gray-700" },
@@ -597,7 +614,7 @@ const ActiveContractView = ({ contract, onStatusChange, onNext, onReset, onCompl
                             contract.dayInPhase === 0 ? "Día 1" : `Día ${contract.dayInPhase + 1}`,
                             React.createElement('span', { className: "text-sm text-gray-500" }, ` / ${contract.currentPhase}`)
                         ),
-                        React.createElement('span', { className: "text-xs text-primary font-bold bg-primary/10 px-2 py-1 rounded" }, "MAÑANA")
+                        React.createElement('span', { className: "text-xs text-primary font-bold bg-primary/10 px-2 py-1 rounded" }, nextDayLabel)
                     )
                 ),
                 

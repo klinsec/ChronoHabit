@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useTimeTracker } from '../../context/TimeTrackerContext';
 import { CheckCircleIcon, PlusIcon, TrashIcon, RoutineIcon, HistoryIcon, FloppyDiskIcon, FolderIcon, XMarkIcon, ArrowUpIcon, ArrowDownIcon } from '../Icons';
 import { Commitment, ContractHistoryItem, SavedRoutine, CommitmentStatus } from '../../types';
@@ -627,6 +627,23 @@ const ActiveContractView: React.FC<{
     onCompleteDay: () => void;
 }> = ({ contract, onStatusChange, onNext, onReset, onComplete, onCompleteDay }) => {
     
+    // Logic to calculate next active day label
+    const nextDayLabel = useMemo(() => {
+        if (!contract.allowedDays || contract.allowedDays.length === 7) return "MAÑANA";
+        
+        const days = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
+        const todayIndex = new Date().getDay();
+        
+        for (let i = 1; i <= 7; i++) {
+            const nextIndex = (todayIndex + i) % 7;
+            if (contract.allowedDays.includes(nextIndex)) {
+                if (i === 1) return "MAÑANA";
+                return days[nextIndex];
+            }
+        }
+        return "MAÑANA";
+    }, [contract.allowedDays]);
+
     // Day 0 Handling OR Manually Completed Day
     if (contract.dayInPhase === 0 || contract.dailyCompleted) {
         return (
@@ -638,7 +655,7 @@ const ActiveContractView: React.FC<{
                     <h2 className="text-2xl font-bold text-white mb-2">¡Rutina Completada!</h2>
                     <p className="text-gray-400">
                         Has terminado tus innegociables de hoy. 
-                        ¡Nos vemos mañana!
+                        ¡Nos vemos en tu próxima sesión!
                     </p>
                 </div>
 
@@ -649,7 +666,7 @@ const ActiveContractView: React.FC<{
                             {contract.dayInPhase === 0 ? "Día 1" : `Día ${contract.dayInPhase + 1}`} 
                             <span className="text-sm text-gray-500"> / {contract.currentPhase}</span>
                         </span>
-                        <span className="text-xs text-primary font-bold bg-primary/10 px-2 py-1 rounded">MAÑANA</span>
+                        <span className="text-xs text-primary font-bold bg-primary/10 px-2 py-1 rounded">{nextDayLabel}</span>
                     </div>
                 </div>
 

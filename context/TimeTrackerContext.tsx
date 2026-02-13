@@ -348,7 +348,9 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       const total = c.commitments.length;
       const completed = c.commitments.filter(com => com.status === 'completed').length;
       const ratio = total > 0 ? completed / total : 0;
-      const points = parseFloat((c.currentStreakLevel * ratio).toFixed(1));
+      
+      // Points for today = Current Level * Ratio
+      const points = parseFloat((c.currentStreakLevel * ratio).toFixed(2));
 
       const today = getTodayStr();
       const newHistory = [...c.dailyHistory];
@@ -445,14 +447,8 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   const resetContract = useCallback(() => {
       if (contract) {
           let finalContract = getContractWithTodayHistory(contract);
-          finalContract = {
-              ...finalContract,
-              dailyHistory: finalContract.dailyHistory.map(h => 
-                  h.date === finalContract.lastCheckDate 
-                      ? { ...h, points: 0 } 
-                      : h
-              )
-          };
+          // If manually resetting, today is considered a fail? Or just end it?
+          // Usually means giving up.
           archiveContract(finalContract, 'failed');
       }
       setContract(null);
@@ -468,12 +464,48 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
           if (isAllowedToday) {
               setContract(prev => {
                   if(!prev) return null;
+                  
+                  // Calculate Yesterday's Results
+                  const total = prev.commitments.length;
+                  const completed = prev.commitments.filter(c => c.status === 'completed').length;
+                  const ratio = total > 0 ? completed / total : 0;
+                  const currentLevel = prev.currentStreakLevel;
+                  
+                  const pointsEarned = parseFloat((currentLevel * ratio).toFixed(2));
+                  
+                  // LOGIC UPDATE:
+                  // Base for tomorrow = CurrentLevel * Ratio
+                  // Next Potential = Base + 1 (Capped at 10)
+                  const nextBase = currentLevel * ratio;
+                  let nextLevel = Math.min(nextBase + 1, 10);
+                  // Ensure strict precision
+                  nextLevel = parseFloat(nextLevel.toFixed(2));
+                  if (nextLevel < 1) nextLevel = 1; // Sanity check
+
+                  const newHistory = [...prev.dailyHistory];
+                  const histIdx = newHistory.findIndex(h => h.date === prev.lastCheckDate);
+                  const historyEntry = { 
+                      date: prev.lastCheckDate, 
+                      points: pointsEarned, 
+                      streakLevel: currentLevel, 
+                      totalCommitments: total, 
+                      completedCommitments: completed 
+                  };
+                  
+                  if (histIdx >= 0) {
+                      newHistory[histIdx] = historyEntry;
+                  } else {
+                      newHistory.push(historyEntry);
+                  }
+
                   return {
                       ...prev,
                       dayInPhase: prev.dayInPhase + 1, 
                       lastCheckDate: today,
                       dailyCompleted: false,
-                      commitments: prev.commitments.map(c => ({ ...c, status: 'pending' })) 
+                      currentStreakLevel: nextLevel,
+                      commitments: prev.commitments.map(c => ({ ...c, status: 'pending' })),
+                      dailyHistory: newHistory
                   }
               });
           } else {
