@@ -39,7 +39,7 @@ messaging.onBackgroundMessage((payload) => {
 
 // --- 2. App Caching Logic ---
 // Bumped version to force clear old cache containing install banners
-const CACHE_NAME = 'chronohabit-v1.5.4'; 
+const CACHE_NAME = 'chronohabit-v1.5.5'; 
 const urlsToCache = [
   './',
   './index.html',

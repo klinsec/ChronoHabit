@@ -1,6 +1,6 @@
 
 import { initializeApp } from 'firebase/app';
-import { getMessaging, getToken } from 'firebase/messaging';
+import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { getAnalytics } from 'firebase/analytics';
 import { getDatabase, ref, set, onValue, query, orderByChild, limitToLast, get, child } from 'firebase/database';
 import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -160,6 +160,15 @@ export const requestFcmToken = async (userId) => {
         alert("Error técnico: " + error.message);
     }
     return null;
+};
+
+// Listen for foreground messages
+export const onForegroundMessage = (callback) => {
+    if (!messaging) return;
+    onMessage(messaging, (payload) => {
+        console.log("Foreground message received:", payload);
+        callback(payload);
+    });
 };
 
 // 4. Ranking System

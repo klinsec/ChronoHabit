@@ -153,6 +153,15 @@ export const requestFcmToken = async (userId?: string): Promise<string | null> =
     }
 };
 
+// Listen for foreground messages
+export const onForegroundMessage = (callback: (payload: any) => void) => {
+    if (!messaging) return;
+    onMessage(messaging, (payload) => {
+        console.log("Foreground message received:", payload);
+        callback(payload);
+    });
+};
+
 // --- RANKING OPTIMIZADO ---
 export const syncUserScore = async (userProfile: any, score: number) => {
     if (!db || !userProfile.uid) return;

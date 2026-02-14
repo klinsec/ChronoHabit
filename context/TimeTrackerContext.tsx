@@ -13,7 +13,8 @@ import {
     signInWithGoogle, 
     logoutFirebase,
     saveUserData, // Cloud save (overwrite)
-    getUserData   // Cloud load
+    getUserData,   // Cloud load
+    onForegroundMessage
 } from '../utils/firebaseConfig';
 import { User } from 'firebase/auth';
 
@@ -165,6 +166,26 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       });
       return () => unsubscribe();
   }, []);
+
+  // Listen for Foreground Messages
+  useEffect(() => {
+      if (notificationsEnabled) {
+          onForegroundMessage((payload) => {
+              // Standard behavior: manually trigger a system notification if app is in foreground
+              const title = payload.notification?.title || payload.data?.title || 'ChronoHabit';
+              const body = payload.notification?.body || payload.data?.body || 'Nueva notificación';
+              
+              if (Notification.permission === 'granted') {
+                  new Notification(title, {
+                      body: body,
+                      icon: './icon-192.png'
+                  });
+              } else {
+                  console.warn("Received foreground message but permission not granted.");
+              }
+          });
+      }
+  }, [notificationsEnabled]);
 
   // Persistence Effects (Local)
   useEffect(() => localStorage.setItem('tasks', JSON.stringify(tasks)), [tasks]);

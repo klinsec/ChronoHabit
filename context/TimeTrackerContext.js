@@ -9,7 +9,8 @@ import {
     logoutFirebase, 
     subscribeToAuthChanges,
     saveUserData, // Function to overwrite data
-    getUserData   // Function to read data
+    getUserData,   // Function to read data
+    onForegroundMessage
 } from '../utils/firebaseConfig.js';
 
 const TimeTrackerContext = createContext(undefined);
@@ -196,6 +197,25 @@ export const TimeTrackerProvider = ({ children }) => {
           return () => clearTimeout(timer);
       }
   }, [tasks, timeEntries, subtasks, goals, contract, pastContracts, savedRoutines, localFriends, firebaseUser, exportData]);
+
+  // Listen for Foreground Messages
+  useEffect(() => {
+      if (notificationsEnabled) {
+          onForegroundMessage((payload) => {
+              const title = payload.notification?.title || payload.data?.title || 'ChronoHabit';
+              const body = payload.notification?.body || payload.data?.body || 'Nueva notificación';
+              
+              if (Notification.permission === 'granted') {
+                  new Notification(title, {
+                      body: body,
+                      icon: './icon-192.png'
+                  });
+              } else {
+                  console.warn("Received foreground message but permission not granted.");
+              }
+          });
+      }
+  }, [notificationsEnabled]);
 
   // Persistence Effects (Local Storage)
   useEffect(() => localStorage.setItem('tasks', JSON.stringify(tasks)), [tasks]);
