@@ -1,0 +1,159 @@
+
+import React, { useState } from 'react';
+import { useTimeTracker } from '@/context/TimeTrackerContext';
+import { Task } from '@/types';
+import { StarIcon } from '@/components/Icons';
+
+interface TaskModalProps {
+  task: Task | null;
+  onClose: () => void;
+}
+
+const colors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#ec4899'];
+const icons = ['💼', '😴', '💪', '🎮', '📚', '🍳', '🧹', '🧘', '🎨', '🎵', '💬', '🛍️'];
+
+const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
+  const { addTask, updateTask, deleteTask } = useTimeTracker();
+  const [name, setName] = useState(task?.name || '');
+  const [color, setColor] = useState(task?.color || colors[0]);
+  const [icon, setIcon] = useState(task?.icon || icons[0]);
+  const [satisfaction, setSatisfaction] = useState(task?.satisfaction || 5); // 1-10 scale
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (name.trim() === '') return;
+
+    const taskData = { name, color, icon, satisfaction };
+
+    if (task) {
+      updateTask({ ...task, ...taskData });
+    } else {
+      addTask({ ...taskData, id: `task_${Date.now()}` });
+    }
+
+    onClose();
+  };
+  
+  const handleDelete = () => {
+    if (task) {
+        deleteTask(task.id);
+        onClose();
+    }
+  }
+
+  // Helper for Star Rating (1-10 scale mapped to 5 stars with halves)
+  const renderStars = () => {
+      return (
+          <div className="flex gap-1">
+              {[1, 2, 3, 4, 5].map((starIndex) => {
+                  const filledValue = starIndex * 2; // 2, 4, 6, 8, 10
+                  const halfValue = filledValue - 1; // 1, 3, 5, 7, 9
+                  
+                  let fillPercentage = '0%';
+                  if (satisfaction >= filledValue) fillPercentage = '100%';
+                  else if (satisfaction >= halfValue) fillPercentage = '50%';
+
+                  return (
+                      <div 
+                        key={starIndex} 
+                        className="relative w-6 h-6 cursor-pointer group"
+                        onClick={(e) => {
+                            // Smart click: Get bounding rect to see if click was on left or right half
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const x = e.clientX - rect.left;
+                            if (x < rect.width / 2) {
+                                setSatisfaction(halfValue);
+                            } else {
+                                setSatisfaction(filledValue);
+                            }
+                        }}
+                      >
+                          {/* Background Star (Empty) */}
+                          <div className="absolute inset-0 text-gray-700">
+                              <StarIcon />
+                          </div>
+                          {/* Foreground Star (Filled, clipped) */}
+                          <div className="absolute inset-0 text-yellow-400 overflow-hidden transition-all duration-200" style={{ width: fillPercentage }}>
+                              <StarIcon />
+                          </div>
+                      </div>
+                  );
+              })}
+          </div>
+      );
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4">
+      <div className="bg-surface rounded-2xl w-full max-w-sm shadow-2xl border border-gray-700 flex flex-col max-h-[90vh]">
+        
+        {/* Header (Fixed) */}
+        <div className="p-4 border-b border-gray-700 flex-shrink-0">
+            <h2 className="text-xl font-bold">{task ? 'Editar Tarea' : 'Nueva Tarea'}</h2>
+        </div>
+
+        {/* Content (Scrollable) */}
+        <div className="p-4 overflow-y-auto flex-grow">
+            <form id="task-form" onSubmit={handleSubmit} className="space-y-4">
+            <div>
+                <label htmlFor="task-name" className="block text-xs font-medium text-gray-300 mb-1">Nombre</label>
+                <input
+                id="task-name"
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-primary focus:border-primary"
+                required
+                autoFocus={!task}
+                />
+            </div>
+
+            <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Icono</label>
+                <div className="grid grid-cols-6 gap-2 bg-gray-800 p-2 rounded-lg">
+                    {icons.map(i => (
+                        <button type="button" key={i} onClick={() => setIcon(i)} className={`text-xl rounded p-1 ${icon === i ? 'bg-primary' : 'hover:bg-gray-700'}`}>
+                            {i}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            
+            <div className="flex gap-4">
+                <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-300 mb-1">Satisfacción</label>
+                    <div className="flex items-center gap-2 bg-gray-800/50 p-2 rounded-lg border border-gray-700">
+                        {renderStars()}
+                        <span className="text-sm font-bold font-mono text-primary min-w-[1.5rem] text-center">{satisfaction}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Color</label>
+                <div className="flex flex-wrap gap-2 bg-gray-800/30 p-2 rounded-lg">
+                    {colors.map(c => (
+                        <button type="button" key={c} onClick={() => setColor(c)} className={`w-6 h-6 rounded-full transition-transform hover:scale-110 ${color === c ? 'ring-2 ring-offset-2 ring-offset-surface ring-white scale-110' : ''}`} style={{ backgroundColor: c }} />
+                    ))}
+                </div>
+            </div>
+            </form>
+        </div>
+        
+        {/* Footer (Fixed) */}
+        <div className="p-4 border-t border-gray-700 flex justify-between items-center flex-shrink-0 bg-surface rounded-b-2xl">
+            <div>
+              {task && <button type="button" onClick={handleDelete} className="text-red-500 hover:text-red-400 font-semibold px-4 py-2 rounded-lg text-sm">Eliminar</button>}
+            </div>
+            <div className="flex space-x-2">
+              <button type="button" onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg text-sm">Cancelar</button>
+              <button type="submit" form="task-form" className="bg-primary hover:bg-purple-500 text-bkg font-bold py-2 px-4 rounded-lg text-sm">{task ? 'Guardar' : 'Crear'}</button>
+            </div>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+export default TaskModal;
