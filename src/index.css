@@ -35,3 +35,21 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #555; 
 }
+
+
+/* Custom scrollbar for mobile touch targets */
+.custom-scrollbar::-webkit-scrollbar {
+  height: 14px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #1e1e1e;
+  border-radius: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #bb86fc;
+  border-radius: 8px;
+  border: 3px solid #1e1e1e;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #a370e0;
+}

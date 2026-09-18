@@ -7,10 +7,15 @@ import { polyfill } from "mobile-drag-drop";
 import { scrollBehaviourDragImageTranslateOverride } from "mobile-drag-drop/scroll-behaviour";
 import "mobile-drag-drop/default.css";
 
-// Initialize polyfill
+// Initialize polyfill to support mobile touch dragging with a delay
+// holdToDrag allows the user to scroll horizontally if they swipe quickly.
 polyfill({
-    dragImageTranslateOverride: scrollBehaviourDragImageTranslateOverride
+    dragImageTranslateOverride: scrollBehaviourDragImageTranslateOverride,
+    holdToDrag: 300
 });
+
+// Fix for iOS/Chrome mobile to allow preventDefault on touchmove during drag
+window.addEventListener('touchmove', function() {}, { passive: false });
 
 interface TimeBoxingTabProps {
     subtasks: Subtask[];
@@ -185,7 +190,25 @@ const TimeBoxingTab: React.FC<TimeBoxingTabProps> = ({ subtasks, onEdit }) => {
                 </div>
                 
                 <h4 className="text-xs font-semibold text-gray-300 mb-2">Tareas sin asignar (Arrastra al horario)</h4>
-                <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
+                <div 
+                    className="flex gap-2 overflow-x-auto pb-2 pt-2 px-1 custom-scrollbar min-h-[60px] bg-gray-900/30 rounded-lg border border-dashed border-gray-700 transition-colors"
+                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                    onDrop={(e) => {
+                        e.preventDefault();
+                        const moveId = e.dataTransfer.getData('move');
+                        if (moveId) {
+                            const task = subtasks.find(s => s.id === moveId);
+                            if (task && task.timeBox) {
+                                const newTask = { ...task };
+                                delete newTask.timeBox;
+                                updateSubtask(newTask);
+                            }
+                        }
+                    }}
+                >
+                    {unassignedTasks.length === 0 && (
+                        <p className="text-xs text-gray-500 italic flex items-center justify-center w-full">No hay tareas sin asignar.</p>
+                    )}
                     {unassignedTasks.map(task => (
                         <div 
                             key={task.id} 
@@ -193,16 +216,15 @@ const TimeBoxingTab: React.FC<TimeBoxingTabProps> = ({ subtasks, onEdit }) => {
                             draggable
                             onDragStart={(e) => handleDragStartMove(e, task.id)}
                             onDragEnd={handleDragEnd}
-                            className={`flex-shrink-0 bg-gray-800 border border-gray-500 rounded-lg px-3 py-2 text-xs cursor-move hover:bg-gray-600 hover:border-primary transition-all shadow-sm flex items-center gap-2 max-w-[200px] ${movingTask === task.id ? 'opacity-50' : ''} ${task.completed ? 'opacity-50 line-through' : ''}`}
+                            className={`flex-shrink-0 bg-gray-800 border border-gray-500 rounded-lg px-3 py-2 text-xs cursor-move hover:bg-gray-600 hover:border-primary transition-all shadow-sm flex items-center gap-2 max-w-[200px] select-none ${movingTask === task.id ? 'opacity-50' : ''} ${task.completed ? 'opacity-50 line-through' : ''}`}
                             title={task.title}
                         >
-                            <span className="font-bold text-gray-100 truncate pointer-events-none">{task.title}</span>
-                            <span className="text-gray-400 pointer-events-none">✏️</span>
+                            <span className="truncate">{task.title}</span>
+                            <span className="text-[10px] text-gray-400 bg-gray-900 px-1 rounded flex-shrink-0">
+                                {task.estimatedPomodoros * 25}m
+                            </span>
                         </div>
                     ))}
-                    {unassignedTasks.length === 0 && (
-                        <p className="text-xs text-gray-500 italic">No hay tareas pendientes sin asignar.</p>
-                    )}
                 </div>
             </div>
             
