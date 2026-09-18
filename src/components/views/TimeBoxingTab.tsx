@@ -104,8 +104,9 @@ const TimeBoxingTab: React.FC<TimeBoxingTabProps> = ({ subtasks, onEdit }) => {
         e.preventDefault();
         setDragHoverHour(null);
         
-        const moveId = e.dataTransfer.getData('move');
-        const resizeId = e.dataTransfer.getData('resize');
+        // Use React state as primary source of truth (mobile polyfill drops dataTransfer)
+        const moveId = movingTask || e.dataTransfer.getData('move');
+        const resizeId = resizingTask || e.dataTransfer.getData('resize');
 
         if (moveId) {
             const task = subtasks.find(s => s.id === moveId);
@@ -195,7 +196,7 @@ const TimeBoxingTab: React.FC<TimeBoxingTabProps> = ({ subtasks, onEdit }) => {
                     onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
                     onDrop={(e) => {
                         e.preventDefault();
-                        const moveId = e.dataTransfer.getData('move');
+                        const moveId = movingTask || e.dataTransfer.getData('move');
                         if (moveId) {
                             const task = subtasks.find(s => s.id === moveId);
                             if (task && task.timeBox) {

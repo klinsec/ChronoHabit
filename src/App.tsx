@@ -13,7 +13,7 @@ import { View } from '@/types';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { ToastProvider } from '@/context/ToastContext';
 
-const APP_VERSION = '1.6.1';
+const APP_VERSION = '1.6.2';
 
 const CloudIconIndicator = () => {
     const { cloudStatus } = useTimeTracker();
@@ -58,7 +58,8 @@ const AppContent: React.FC = () => {
     // Auto-update logic
     const checkVersion = async () => {
       try {
-        const response = await fetch('/version.json?t=' + Date.now());
+        // Use relative path so it respects the GitHub Pages subpath (/ChronoHabit/)
+        const response = await fetch('./version.json?t=' + Date.now());
         if (response.ok) {
           const data = await response.json();
           if (data.version && data.version !== APP_VERSION) {
