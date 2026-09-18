@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { 
   Task, TimeEntry, Subtask, DisciplineContract, ContractHistoryItem, 
   SavedRoutine, Goal, View, GoalPeriod, Commitment, CommitmentStatus, SubtaskStatus,
-  Reward
+  Reward, RoutineLog
 } from '../types';
 // Import Firebase functions instead of Drive
 import { 
@@ -68,6 +68,9 @@ interface TimeTrackerContextType {
   saveRoutine: (title: string, commitments: Omit<Commitment, 'id' | 'status'>[], allowedDays?: number[]) => void;
   deleteRoutine: (id: string) => void;
 
+  routineLogs: RoutineLog[];
+  addRoutineLog: (moduleId: string, points: number) => void;
+
   // REWARDS
   rewards: Reward[];
   addReward: (reward: Omit<Reward, 'id' | 'createdAt' | 'redeemed'>) => void;
@@ -121,7 +124,10 @@ export const useTimeTracker = () => {
   return context;
 };
 
+import { useToast } from './ToastContext';
+
 export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { showToast } = useToast();
   // State definitions
   const getNow = useCallback(() => Date.now(), []);
   
@@ -216,6 +222,16 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   });
 
+  const [routineLogs, setRoutineLogs] = useState<RoutineLog[]>(() => {
+    try {
+      const saved = localStorage.getItem('routineLogs');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error("Error loading routineLogs:", e);
+      return [];
+    }
+  });
+
   const [rewards, setRewards] = useState<Reward[]>(() => {
     try {
       const saved = localStorage.getItem('rewards');
@@ -303,6 +319,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [contract]);
   useEffect(() => localStorage.setItem('pastContracts', JSON.stringify(pastContracts)), [pastContracts]);
   useEffect(() => localStorage.setItem('savedRoutines', JSON.stringify(savedRoutines)), [savedRoutines]);
+  useEffect(() => localStorage.setItem('routineLogs', JSON.stringify(routineLogs)), [routineLogs]);
   useEffect(() => localStorage.setItem('rewards', JSON.stringify(rewards)), [rewards]);
   useEffect(() => localStorage.setItem('localFriends', JSON.stringify(localFriends)), [localFriends]);
 
@@ -753,13 +770,26 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       const newRoutine: SavedRoutine = {
           id: `routine_${Date.now()}`,
           title,
-          commitments,
+          commitments: commitments.map(c => ({ ...c, id: `c_${Date.now()}_${Math.random()}`, status: 'pending' })),
           allowedDays
       };
       setSavedRoutines(prev => [...prev, newRoutine]);
   };
 
-  const deleteRoutine = (id: string) => setSavedRoutines(prev => prev.filter(r => r.id !== id));
+  const deleteRoutine = (id: string) => {
+      setSavedRoutines(prev => prev.filter(r => r.id !== id));
+  };
+
+  const addRoutineLog = useCallback((moduleId: string, points: number) => {
+      const date = getTodayStr();
+      setRoutineLogs(prev => {
+          // Check if already logged today
+          if (prev.some(log => log.moduleId === moduleId && log.date === date)) {
+              return prev;
+          }
+          return [...prev, { moduleId, date, points }];
+      });
+  }, [getTodayStr]);
 
   // --- REWARDS LOGIC ---
   const addReward = (rewardData: Omit<Reward, 'id' | 'createdAt' | 'redeemed'>) => {
@@ -779,7 +809,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (walletPoints >= reward.cost) {
           setRewards(prev => prev.map(r => r.id === id ? { ...r, redeemed: true, redeemedAt: getNow() } : r));
       } else {
-          alert("No tienes suficientes puntos.");
+          showToast("No tienes suficientes puntos.", "error");
       }
   };
 
@@ -968,8 +998,11 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
               });
           }
       });
+      routineLogs.forEach(log => {
+          if (typeof log.points === 'number') total += log.points;
+      });
       return parseFloat(total.toFixed(2)); 
-  }, [timeEntries, subtasks, pastContracts, contract]);
+  }, [timeEntries, subtasks, pastContracts, contract, routineLogs]);
 
   const calculateMonthlyScore = useCallback((monthKey: string) => {
       let total = 0;
@@ -999,8 +1032,14 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
               });
           }
       });
+      routineLogs.forEach(log => {
+          const logDate = new Date(log.date + 'T12:00:00').getTime();
+          if (logDate >= startOfMonth && logDate <= endOfMonth) {
+              if (typeof log.points === 'number') total += log.points;
+          }
+      });
       return parseFloat(total.toFixed(2));
-  }, [timeEntries, subtasks, pastContracts, contract]);
+  }, [timeEntries, subtasks, pastContracts, contract, routineLogs]);
 
   const walletPoints = useMemo(() => {
       const totalEarned = calculateTotalScore();
@@ -1059,6 +1098,7 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       goals, setGoal, deleteGoal, getGoalByTaskIdAndPeriod,
       contract, pastContracts, startContract, advanceContract, toggleCommitment, setCommitmentStatus, resetContract, completeContract, completeDay,
       savedRoutines, saveRoutine, deleteRoutine,
+      routineLogs, addRoutineLog,
       rewards, addReward, redeemReward, deleteReward, walletPoints,
       cloudStatus, connectToCloud, triggerCloudSync, lastSyncTime, exportData, importData,
       notificationsEnabled, requestNotificationPermission, toggleDailyNotification,

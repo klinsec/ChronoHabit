@@ -4,18 +4,16 @@ import { useTimeTracker } from '@/context/TimeTrackerContext';
 import { Subtask, SubtaskStatus } from '@/types';
 import SubtaskModal from '@/components/modals/SubtaskModal';
 import SettingsModal from '@/components/modals/SettingsModal';
-import TimeBoxingTab from './TimeBoxingTab';
 import { EditIcon, TrashIcon, PlusIcon, EyeIcon, EyeOffIcon, CogIcon, ArrowUpIcon, ArrowDownIcon, ArchiveIcon, StarIcon } from '@/components/Icons';
 
 const TasksView: React.FC = () => {
-  const { tasks, subtasks, deleteSubtask, moveSubtaskStatus, getTaskById, lastAddedSubtaskId, getNow, updateSubtask } = useTimeTracker();
+  const { tasks, subtasks, deleteSubtask, moveSubtaskStatus, getTaskById, lastAddedSubtaskId, getNow } = useTimeTracker();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSubtask, setEditingSubtask] = useState<Subtask | null>(null);
   const [showIdeas, setShowIdeas] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'timebox'>('list');
 
   // Deep Link Handling (Manual Add only)
   useEffect(() => {
@@ -118,27 +116,10 @@ const TasksView: React.FC = () => {
   const moveToPending = (subtask: Subtask) => checkLimitAndMove(subtask, 'pending');
   const moveToIdeas = (subtask: Subtask) => moveSubtaskStatus(subtask.id, 'idea');
 
-  const handleToggleFrog = (subtask: Subtask) => {
-      // Unset frog from all others, and toggle for this one
-      subtasks.forEach(s => {
-          if (s.isFrog && s.id !== subtask.id) {
-              updateSubtask({ ...s, isFrog: false });
-          }
-      });
-      updateSubtask({ ...subtask, isFrog: !subtask.isFrog });
-  };
-
   return (
     <div className="relative flex flex-col">
       <div className="flex justify-between items-center mb-6 bg-surface p-3 rounded-xl shadow-md">
         <h2 className="text-xl font-semibold text-primary">Modo Diario</h2>
-        
-        {/* View Toggle */}
-        <div className="flex bg-gray-800 rounded-lg p-1 mx-2">
-            <button onClick={() => setViewMode('list')} className={`text-xs px-3 py-1 rounded-md transition-colors ${viewMode === 'list' ? 'bg-primary text-white font-bold' : 'text-gray-400 hover:text-white'}`}>Lista</button>
-            <button onClick={() => setViewMode('timebox')} className={`text-xs px-3 py-1 rounded-md transition-colors ${viewMode === 'timebox' ? 'bg-primary text-white font-bold' : 'text-gray-400 hover:text-white'}`}>Time Box</button>
-        </div>
-
         <div className="flex items-center space-x-2">
             <button
                 onClick={() => setShowLog(!showLog)}
@@ -171,11 +152,7 @@ const TasksView: React.FC = () => {
         </div>
       </div>
 
-      {viewMode === 'timebox' ? (
-          <TimeBoxingTab subtasks={subtasks} tasks={tasks} onEdit={handleEdit} />
-      ) : (
-      <>
-        <div className="space-y-6 pb-24 overflow-y-auto flex-grow px-1">
+      <div className="space-y-6 pb-24 overflow-y-auto flex-grow px-1">
         {/* Today Section */}
         <div className="bg-surface/50 rounded-xl p-4 border border-primary/20">
             <h3 className="text-lg font-bold mb-3 flex justify-between items-center">
@@ -195,7 +172,6 @@ const TasksView: React.FC = () => {
                             onEdit={handleEdit} 
                             getTaskById={getTaskById}
                             isHighlighted={highlightedTaskId === subtask.id}
-                                  onToggleFrog={handleToggleFrog}
                             onSwipeRight={() => moveToPending(subtask)}
                             rightActionLabel="Pendientes"
                             rightActionColor="text-yellow-500"
@@ -224,7 +200,6 @@ const TasksView: React.FC = () => {
                             onEdit={handleEdit} 
                             getTaskById={getTaskById}
                             isHighlighted={highlightedTaskId === subtask.id}
-                                  onToggleFrog={handleToggleFrog}
                             onSwipeLeft={() => moveToToday(subtask)}
                             leftActionLabel="Hoy"
                             leftActionColor="text-green-500"
@@ -252,7 +227,6 @@ const TasksView: React.FC = () => {
                                 onEdit={handleEdit} 
                                 getTaskById={getTaskById}
                                 isHighlighted={highlightedTaskId === subtask.id}
-                                  onToggleFrog={handleToggleFrog}
                                 onSwipeLeft={() => moveToPending(subtask)}
                                 leftActionLabel="Pendientes"
                                 leftActionColor="text-yellow-500"
@@ -305,9 +279,6 @@ const TasksView: React.FC = () => {
           />
       )}
 
-        </>
-      )}
-
       {isSettingsOpen && (
           <SettingsModal onClose={() => setIsSettingsOpen(false)} />
       )}
@@ -320,7 +291,6 @@ interface SubtaskItemProps {
     onEdit: (subtask: Subtask) => void;
     getTaskById: (id: string) => any;
     isHighlighted?: boolean;
-    onToggleFrog?: (subtask: Subtask) => void;
     onSwipeLeft?: () => void;
     leftActionLabel?: string;
     leftActionColor?: string;
@@ -330,7 +300,7 @@ interface SubtaskItemProps {
 }
 
 const SubtaskItem: React.FC<SubtaskItemProps> = ({ 
-    subtask, onEdit, getTaskById, isHighlighted, onToggleFrog, 
+    subtask, onEdit, getTaskById, isHighlighted, 
     onSwipeLeft, leftActionLabel, leftActionColor,
     onSwipeRight, rightActionLabel, rightActionColor
 }) => {
@@ -443,18 +413,6 @@ const SubtaskItem: React.FC<SubtaskItemProps> = ({
                     <div className="flex items-center flex-wrap gap-x-2">
                         {parentTask && <span className="text-lg flex-shrink-0" title={parentTask.name}>{parentTask.icon}</span>}
                         <p className={`font-medium text-on-surface truncate ${subtask.completed ? 'line-through text-gray-500' : ''}`}>{subtask.title}</p>
-                        
-                        {/* Frog Badge / Toggle */}
-                        {onToggleFrog && (
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); onToggleFrog(subtask); }}
-                                className={`ml-1 text-sm transition-transform hover:scale-125 ${subtask.isFrog ? 'opacity-100 scale-110 drop-shadow-[0_0_8px_rgba(34,197,94,0.8)]' : 'opacity-20 grayscale hover:grayscale-0 hover:opacity-100'}`}
-                                title={subtask.isFrog ? "El Sapo del Día" : "Marcar como el Sapo"}
-                            >
-                                🐸
-                            </button>
-                        )}
-
                         {getDeadlineBadge(subtask.deadline)}
                         
                         {/* Difficulty Badge */}
@@ -603,6 +561,3 @@ const SwipeableModalItem = ({ task, parentTask, onSwipeRight, onSwipeLeft }: { t
 }
 
 export default TasksView;
-
-
-

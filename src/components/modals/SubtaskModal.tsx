@@ -15,7 +15,9 @@ const SubtaskModal: React.FC<SubtaskModalProps> = ({ subtask, onClose }) => {
   const [title, setTitle] = useState(subtask?.title || '');
   const [description, setDescription] = useState(subtask?.description || '');
   const [taskId, setTaskId] = useState(subtask?.taskId || (tasks.length > 0 ? tasks[0].id : ''));
-  const [difficulty, setDifficulty] = useState(subtask?.difficulty !== undefined ? subtask.difficulty : 3); // Default 3 points
+  const [difficulty, setDifficulty] = useState(subtask?.difficulty !== undefined ? subtask.difficulty : 3);
+  const [startTime, setStartTime] = useState(subtask?.timeBox?.startTime || '');
+  const [endTime, setEndTime] = useState(subtask?.timeBox?.endTime || ''); // Default 3 points
   
   // Format existing date to YYYY-MM-DD for input or empty string
   const formatDateForInput = (timestamp?: number) => {
@@ -41,7 +43,8 @@ const SubtaskModal: React.FC<SubtaskModalProps> = ({ subtask, onClose }) => {
         deadlineTimestamp = dateObj.getTime();
     }
 
-    const subtaskData = { title, description, taskId, deadline: deadlineTimestamp, difficulty };
+    const timeBox = startTime && endTime ? { startTime, endTime, repeatDays: subtask?.timeBox?.repeatDays || [] } : undefined;
+    const subtaskData = { title, description, taskId, deadline: deadlineTimestamp, difficulty, timeBox };
 
     if (subtask) {
       updateSubtask({ ...subtask, ...subtaskData });
@@ -165,6 +168,28 @@ const SubtaskModal: React.FC<SubtaskModalProps> = ({ subtask, onClose }) => {
                     />
                 </div>
             </div>
+
+            {/* Row for TimeBox */}
+            <div className="flex gap-3 bg-gray-800/30 p-2 rounded-lg border border-gray-700/50">
+                <div className="flex-1">
+                    <label className="block text-[10px] font-medium text-gray-400 mb-1">Hora Inicio (Opcional)</label>
+                    <input 
+                        type="time"
+                        value={startTime}
+                        onChange={e => setStartTime(e.target.value)}
+                        className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white focus:ring-primary focus:border-primary text-sm"
+                    />
+                </div>
+                <div className="flex-1">
+                    <label className="block text-[10px] font-medium text-gray-400 mb-1">Hora Fin (Opcional)</label>
+                    <input 
+                        type="time"
+                        value={endTime}
+                        onChange={e => setEndTime(e.target.value)}
+                        className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white focus:ring-primary focus:border-primary text-sm"
+                    />
+                </div>
+            </div>
             
             <p className="text-[10px] text-gray-500 text-center leading-tight">
                 Si la fecha está cerca, se organizará automáticamente.
@@ -184,3 +209,4 @@ const SubtaskModal: React.FC<SubtaskModalProps> = ({ subtask, onClose }) => {
 };
 
 export default SubtaskModal;
+

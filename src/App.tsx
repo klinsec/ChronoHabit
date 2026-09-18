@@ -7,11 +7,13 @@ import StatsViewUpdated from '@/components/views/StatsView';
 import TasksView from '@/components/views/TasksView';
 import RoutinesView from '@/components/views/RoutinesView';
 import BottomNav from '@/components/BottomNav';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ClockIcon, ChartIcon, ChecklistIcon, RoutineIcon } from '@/components/Icons';
 import { View } from '@/types';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { ToastProvider } from '@/context/ToastContext';
 
-const APP_VERSION = '1.5.15';
+const APP_VERSION = '1.6.1';
 
 const CloudIconIndicator = () => {
     const { cloudStatus } = useTimeTracker();
@@ -124,7 +126,18 @@ const AppContent: React.FC = () => {
       </header>
       
       <main className="flex-grow flex-1 p-4 overflow-y-auto pb-32 min-h-0 z-0 touch-pan-y">
-        {renderViewSafe()}
+        <AnimatePresence mode="wait">
+            <motion.div
+                key={currentView}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className="h-full"
+            >
+                {renderViewSafe()}
+            </motion.div>
+        </AnimatePresence>
       </main>
       <BottomNav items={navItems} currentView={currentView} setCurrentView={setCurrentView} />
     </div>
@@ -133,9 +146,11 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => (
     <ErrorBoundary>
-        <TimeTrackerProvider>
-            <AppContent />
-        </TimeTrackerProvider>
+        <ToastProvider>
+            <TimeTrackerProvider>
+                <AppContent />
+            </TimeTrackerProvider>
+        </ToastProvider>
     </ErrorBoundary>
 );
 

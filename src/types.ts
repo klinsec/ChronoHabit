@@ -27,6 +27,13 @@ export interface Subtask {
   status: SubtaskStatus;
   deadline?: number; // Timestamp for the deadline
   difficulty?: number; // 0-10 points
+  isFrog?: boolean;
+  timeBox?: {
+    date?: string;     // YYYY-MM-DD
+    startTime: string; // HH:mm
+    endTime: string;   // HH:mm
+    repeatDays: number[]; // 0=Sun, 1=Mon... empty array = just once
+  };
 }
 
 // --- Discipline Contract Types ---
@@ -48,6 +55,12 @@ export interface DailyRoutineHistory {
     streakLevel: number; // The potential level for that day (1-10)
     totalCommitments: number;
     completedCommitments: number;
+}
+
+export interface RoutineLog {
+    moduleId: string;
+    date: string; // YYYY-MM-DD
+    points: number;
 }
 
 export interface DisciplineContract {
@@ -90,6 +103,7 @@ export interface Reward {
     description?: string;
     cost: number;
     imageUrl?: string;
+    link?: string;
     redeemed: boolean;
     redeemedAt?: number;
     createdAt: number;
