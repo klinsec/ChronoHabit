@@ -104,6 +104,7 @@ const TimeBoxingTab: React.FC<TimeBoxingTabProps> = ({ subtasks, onEdit }) => {
     const handleDropOnDate = (e: React.DragEvent, targetDateStr: string) => {
         e.preventDefault();
         setDragHoverDateStr(null);
+        setDragHoverHour(null);
         
         const moveId = movingTask || e.dataTransfer.getData('move');
         if (moveId) {
@@ -112,13 +113,16 @@ const TimeBoxingTab: React.FC<TimeBoxingTabProps> = ({ subtasks, onEdit }) => {
                 // Ignore if dropped on the same day it already belongs to
                 if (task.timeBox.date === targetDateStr) return;
 
-                updateSubtask({
-                    ...task,
-                    timeBox: {
-                        ...task.timeBox,
-                        date: targetDateStr
-                    }
-                });
+                // Defer update so dragend can fire properly before unmount
+                setTimeout(() => {
+                    updateSubtask({
+                        ...task,
+                        timeBox: {
+                            ...task.timeBox,
+                            date: targetDateStr
+                        }
+                    });
+                }, 50);
             }
         }
     };
@@ -142,22 +146,27 @@ const TimeBoxingTab: React.FC<TimeBoxingTabProps> = ({ subtasks, onEdit }) => {
                 const newEndHour = Math.min(24, targetHour + duration);
                 const newEnd = `${newEndHour.toString().padStart(2, '0')}:00`;
                 
-                updateSubtask({
-                    ...task,
-                    timeBox: { startTime: newStart, endTime: newEnd, date: selectedDateStr, repeatDays: task.timeBox?.repeatDays || [] }
-                });
+                setTimeout(() => {
+                    updateSubtask({
+                        ...task,
+                        timeBox: { startTime: newStart, endTime: newEnd, date: selectedDateStr, repeatDays: task.timeBox?.repeatDays || [] }
+                    });
+                }, 50);
             }
         } else if (resizeId) {
             const task = subtasks.find(s => s.id === resizeId);
             if (task && task.timeBox) {
                 const startH = parseInt(task.timeBox.startTime);
+                // End time must be at least startH + 1
                 const newEndHour = Math.min(24, Math.max(startH + 1, targetHour + 1));
                 const newEnd = `${newEndHour.toString().padStart(2, '0')}:00`;
                 
-                updateSubtask({
-                    ...task,
-                    timeBox: { ...task.timeBox, endTime: newEnd }
-                });
+                setTimeout(() => {
+                    updateSubtask({
+                        ...task,
+                        timeBox: { ...task.timeBox, endTime: newEnd }
+                    });
+                }, 50);
             }
         }
         
@@ -232,7 +241,9 @@ const TimeBoxingTab: React.FC<TimeBoxingTabProps> = ({ subtasks, onEdit }) => {
                             if (task && task.timeBox) {
                                 const newTask = { ...task };
                                 delete newTask.timeBox;
-                                updateSubtask(newTask);
+                                setTimeout(() => {
+                                    updateSubtask(newTask);
+                                }, 50);
                             }
                         }
                     }}
