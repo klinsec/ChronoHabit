@@ -79,17 +79,19 @@ const TimeBoxingTab: React.FC<TimeBoxingTabProps> = ({ subtasks, onEdit }) => {
         if (s.status === 'log') return false;
         if (s.completed && !showCompleted) return false;
 
-        const assignedDateStr = getAssignedDateStr(s);
         const hasTimeBoxTime = !!(s.timeBox && s.timeBox.startTime);
+        if (hasTimeBoxTime) return false; // Hide if it's in the grid
 
+        // If it's explicitly 'today' in List Mode, treat it as a daily global unassigned task
+        if (s.status === 'today') return true;
+
+        const assignedDateStr = getAssignedDateStr(s);
         // If it has a specific date assigned, it ONLY appears on that date
         if (assignedDateStr) {
-            if (hasTimeBoxTime) return false;
             return assignedDateStr === selectedDateStr;
         }
 
         // Global tasks (no specific date)
-        if (hasTimeBoxTime) return false;
         if (s.status === 'idea') return false; // Hide global ideas
 
         return true;
