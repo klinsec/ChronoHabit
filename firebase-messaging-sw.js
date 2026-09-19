@@ -57,3 +57,7 @@ self.addEventListener('notificationclick', function(event) {
     })
   );
 });
+
+
+// PWA Install Requirement: Dummy fetch listener
+self.addEventListener('fetch', function(event) {});
