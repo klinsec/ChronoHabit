@@ -899,9 +899,10 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       try {
           await signInWithGoogle();
           // Auth listener in useEffect will handle the rest
-      } catch (e) {
+      } catch (e: any) {
           console.error("Login failed", e);
           setCloudStatus('error');
+          alert(`Error de inicio de sesión: ${e.message || JSON.stringify(e)}. (¿Falta el SHA-1 en Firebase?)`);
       }
   };
 
@@ -940,9 +941,13 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
   };
 
   // --- Firebase Ranking & Social ---
-  const handleLoginRanking = async () => {
-      await signInWithGoogle();
-  };
+    const handleLoginRanking = async () => {
+        try {
+            await signInWithGoogle();
+        } catch (e: any) {
+            alert(`Error de inicio de sesión: ${e.message || JSON.stringify(e)}`);
+        }
+    };
   const handleLogoutRanking = async () => {
       await logoutFirebase();
   };

@@ -12,6 +12,7 @@ import { ClockIcon, ChartIcon, ChecklistIcon, RoutineIcon } from '@/components/I
 import { View } from '@/types';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { ToastProvider } from '@/context/ToastContext';
+import NotificationAlertModal from '@/components/modals/NotificationAlertModal';
 
 const APP_VERSION = '1.6.2';
 
@@ -140,6 +141,7 @@ const AppContent: React.FC = () => {
             </motion.div>
         </AnimatePresence>
       </main>
+      <NotificationAlertModal />
       <BottomNav items={navItems} currentView={currentView} setCurrentView={setCurrentView} />
     </div>
   );
