@@ -1,4 +1,4 @@
-export const scheduleLocalNotification = async (title: string, body: string, timestampMs: number) => {
+export const scheduleLocalNotification = async (title: string, body: string, timestampMs: number, tag: string = 'chronohabit-scheduled') => {
     // Check permission
     if (Notification.permission !== 'granted') {
         const permission = await Notification.requestPermission();
@@ -17,12 +17,12 @@ export const scheduleLocalNotification = async (title: string, body: string, tim
             // @ts-ignore - Experimental API
             await registration.showNotification(title, {
                 body: body,
-                icon: './icon-192.png',
+                icon: '/ChronoHabit/icon-192.png',
                 // @ts-ignore
                 showTrigger: new TimestampTrigger(timestampMs),
-                tag: 'chronohabit-scheduled'
+                tag: tag
             });
-            console.log("Scheduled notification natively for", new Date(timestampMs));
+            console.log(`Scheduled native notification (${tag}) for`, new Date(timestampMs));
         } else {
             // Fallback: Local timeout if app remains open in background
             const delay = timestampMs - Date.now();
@@ -30,11 +30,11 @@ export const scheduleLocalNotification = async (title: string, body: string, tim
                 setTimeout(() => {
                     registration.showNotification(title, {
                         body: body,
-                        icon: './icon-192.png',
-                        tag: 'chronohabit-fallback'
+                        icon: '/ChronoHabit/icon-192.png',
+                        tag: tag
                     });
                 }, delay);
-                console.log("Scheduled fallback notification for", new Date(timestampMs));
+                console.log(`Scheduled fallback notification (${tag}) for`, new Date(timestampMs));
             }
         }
     } catch (err) {

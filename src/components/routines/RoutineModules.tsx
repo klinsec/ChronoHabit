@@ -1,6 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useTimeTracker } from '@/context/TimeTrackerContext';
-import { showImmediateNotification } from '@/utils/notifications';
+import { showImmediateNotification, scheduleLocalNotification } from '@/utils/notifications';
+
+const scheduleRoutineAlarm = async (timeStr: string, tag: string, title: string, body: string) => {
+    if (Notification.permission === 'default') {
+        await Notification.requestPermission();
+    }
+    if (Notification.permission !== 'granted') return;
+
+    const [h, m] = timeStr.split(':').map(Number);
+    const target = new Date();
+    target.setHours(h, m, 0, 0);
+    
+    // If time has already passed today, schedule for tomorrow
+    if (target.getTime() <= Date.now()) {
+        target.setDate(target.getDate() + 1);
+    }
+    
+    await scheduleLocalNotification(title, body, target.getTime(), tag);
+};
 
 export const MorningMomentumModule: React.FC<{ onRemove: () => void }> = ({ onRemove }) => {
     const { addRoutineLog, routineLogs } = useTimeTracker();
@@ -12,18 +30,12 @@ export const MorningMomentumModule: React.FC<{ onRemove: () => void }> = ({ onRe
 
     useEffect(() => {
         localStorage.setItem('morningRoutineTime', time);
-        const interval = setInterval(() => {
-            const now = new Date();
-            const currentHm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-            const todayStrLocal = now.toLocaleDateString('en-CA');
-            const lastFired = localStorage.getItem('morningRoutineFiredDate');
-            
-            if (currentHm === time && lastFired !== todayStrLocal) {
-                showImmediateNotification('¡Impulso Matutino!', '¡Hay que mover el esqueleto! 🌅 Empieza tus rutinas ahora.');
-                localStorage.setItem('morningRoutineFiredDate', todayStrLocal);
-            }
-        }, 30000);
-        return () => clearInterval(interval);
+        scheduleRoutineAlarm(
+            time, 
+            'chronohabit-morning', 
+            '¡Impulso Matutino!', 
+            '¡Hay que mover el esqueleto! 🏃‍♂️ Empieza tus rutinas ahora.'
+        );
     }, [time]);
 
     const toggleCheck = (index: number) => {
@@ -52,6 +64,9 @@ export const MorningMomentumModule: React.FC<{ onRemove: () => void }> = ({ onRe
                     type="time" 
                     value={time} 
                     onChange={e => setTime(e.target.value)}
+                    onClick={() => {
+                        if (Notification.permission === 'default') Notification.requestPermission();
+                    }}
                     className="bg-gray-900 border border-green-500/50 text-green-400 font-bold text-sm px-2 py-1 rounded outline-none focus:ring-1 focus:ring-green-400" 
                 />
             </div>
@@ -103,18 +118,12 @@ export const ShutdownModule: React.FC<{ onRemove: () => void }> = ({ onRemove })
 
     useEffect(() => {
         localStorage.setItem('shutdownRoutineTime', time);
-        const interval = setInterval(() => {
-            const now = new Date();
-            const currentHm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-            const todayStrLocal = now.toLocaleDateString('en-CA');
-            const lastFired = localStorage.getItem('shutdownRoutineFiredDate');
-            
-            if (currentHm === time && lastFired !== todayStrLocal) {
-                showImmediateNotification('🌙 Ritual de Desconexión', '¡Hora de cerrar! Vacía tu bandeja y desconecta por hoy.');
-                localStorage.setItem('shutdownRoutineFiredDate', todayStrLocal);
-            }
-        }, 30000);
-        return () => clearInterval(interval);
+        scheduleRoutineAlarm(
+            time, 
+            'chronohabit-shutdown', 
+            '🛑 Ritual de Desconexión', 
+            '¡Hora de cerrar! Vacía tu bandeja y desconecta por hoy.'
+        );
     }, [time]);
 
     return (
@@ -133,6 +142,9 @@ export const ShutdownModule: React.FC<{ onRemove: () => void }> = ({ onRemove })
                         type="time" 
                         value={time} 
                         onChange={e => setTime(e.target.value)}
+                        onClick={() => {
+                            if (Notification.permission === 'default') Notification.requestPermission();
+                        }}
                         className="bg-gray-900 border border-purple-500 text-white font-bold text-2xl p-2 rounded-lg outline-none focus:ring-2 focus:ring-purple-400" 
                     />
                 </div>
