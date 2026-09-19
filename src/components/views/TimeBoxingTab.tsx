@@ -57,18 +57,27 @@ const TimeBoxingTab: React.FC<TimeBoxingTabProps> = ({ subtasks, onEdit }) => {
 
     // Filter timeboxed tasks for the currently selected date
     const timeboxedTasks = subtasks.filter(s => {
-        if (!s.timeBox) return false;
         if (s.completed && !showCompleted) return false;
+        if (!s.timeBox) return false;
+        if (!s.timeBox.startTime) return false;
 
-        const isRepeatingToday = s.timeBox.repeatDays.includes(selectedDayOfWeek);
+        const isRepeatingToday = s.timeBox.repeatDays && s.timeBox.repeatDays.includes(selectedDate.getDay());
         const isScheduledForDate = s.timeBox.date === selectedDateStr;
-        // Backwards compat for old tasks without dates
         const isLegacyToday = !s.timeBox.date && s.timeBox.repeatDays.length === 0 && isTodaySelected;
 
         return isRepeatingToday || isScheduledForDate || isLegacyToday;
     });
 
-    const unassignedTasks = subtasks.filter(s => !s.timeBox && s.status !== 'log' && (showCompleted || !s.completed));
+    const unassignedTasks = subtasks.filter(s => {
+        if (s.status === 'idea' || s.status === 'log') return false;
+        if (s.completed && !showCompleted) return false;
+
+        if (!s.timeBox) return true;
+        if (s.timeBox && !s.timeBox.startTime) {
+            return s.timeBox.date === selectedDateStr;
+        }
+        return false;
+    });
 
     const [now, setNow] = useState(new Date());
     const [movingTask, setMovingTask] = useState<string | null>(null);
@@ -117,9 +126,14 @@ const TimeBoxingTab: React.FC<TimeBoxingTabProps> = ({ subtasks, onEdit }) => {
                 setTimeout(() => {
                     updateSubtask({
                         ...task,
-                        timeBox: {
+                        timeBox: task.timeBox ? {
                             ...task.timeBox,
                             date: targetDateStr
+                        } : {
+                            date: targetDateStr,
+                            startTime: '',
+                            endTime: '',
+                            repeatDays: []
                         }
                     });
                 }, 50);
@@ -138,9 +152,9 @@ const TimeBoxingTab: React.FC<TimeBoxingTabProps> = ({ subtasks, onEdit }) => {
         if (moveId) {
             const task = subtasks.find(s => s.id === moveId);
             if (task) {
-                const startH = task.timeBox ? parseInt(task.timeBox.startTime) : targetHour;
-                const endH = task.timeBox ? parseInt(task.timeBox.endTime) : targetHour + 1;
-                const duration = Math.max(1, endH - startH);
+                const startH = (task.timeBox && task.timeBox.startTime) ? parseInt(task.timeBox.startTime) : targetHour;
+                const endH = (task.timeBox && task.timeBox.endTime) ? parseInt(task.timeBox.endTime) : targetHour + 1;
+                const duration = isNaN(endH - startH) ? 1 : Math.max(1, endH - startH);
                 
                 const newStart = `${targetHour.toString().padStart(2, '0')}:00`;
                 const newEndHour = Math.min(24, targetHour + duration);
