@@ -55,28 +55,44 @@ const TimeBoxingTab: React.FC<TimeBoxingTabProps> = ({ subtasks, onEdit }) => {
     const todayStr = formatDate(new Date());
     const isTodaySelected = selectedDateStr === todayStr;
 
+    const getAssignedDateStr = (s: Subtask): string | null => {
+        if (s.timeBox && s.timeBox.date) return s.timeBox.date;
+        if (s.deadline) return formatDate(new Date(s.deadline));
+        return null;
+    };
+
     // Filter timeboxed tasks for the currently selected date
     const timeboxedTasks = subtasks.filter(s => {
         if (s.completed && !showCompleted) return false;
         if (!s.timeBox) return false;
         if (!s.timeBox.startTime) return false;
 
+        const assignedDateStr = getAssignedDateStr(s);
         const isRepeatingToday = s.timeBox.repeatDays && s.timeBox.repeatDays.includes(selectedDate.getDay());
-        const isScheduledForDate = s.timeBox.date === selectedDateStr;
-        const isLegacyToday = !s.timeBox.date && s.timeBox.repeatDays.length === 0 && isTodaySelected;
+        const isScheduledForDate = assignedDateStr === selectedDateStr;
+        const isLegacyToday = !assignedDateStr && s.timeBox.repeatDays.length === 0 && isTodaySelected;
 
         return isRepeatingToday || isScheduledForDate || isLegacyToday;
     });
 
     const unassignedTasks = subtasks.filter(s => {
-        if (s.status === 'idea' || s.status === 'log') return false;
+        if (s.status === 'log') return false;
         if (s.completed && !showCompleted) return false;
 
-        if (!s.timeBox) return true;
-        if (s.timeBox && !s.timeBox.startTime) {
-            return s.timeBox.date === selectedDateStr;
+        const assignedDateStr = getAssignedDateStr(s);
+        const hasTimeBoxTime = !!(s.timeBox && s.timeBox.startTime);
+
+        // If it has a specific date assigned, it ONLY appears on that date
+        if (assignedDateStr) {
+            if (hasTimeBoxTime) return false;
+            return assignedDateStr === selectedDateStr;
         }
-        return false;
+
+        // Global tasks (no specific date)
+        if (hasTimeBoxTime) return false;
+        if (s.status === 'idea') return false; // Hide global ideas
+
+        return true;
     });
 
     const [now, setNow] = useState(new Date());
