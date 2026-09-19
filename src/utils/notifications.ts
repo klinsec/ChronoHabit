@@ -55,7 +55,7 @@ export const scheduleLocalNotification = async (title: string, body: string, tim
             // @ts-ignore - Experimental API
             await registration.showNotification(title, {
                 body: body,
-                icon: '/ChronoHabit/icon-192.png',
+                icon: './icon-192.png',
                 // @ts-ignore
                 showTrigger: new TimestampTrigger(timestampMs),
                 tag: tag
@@ -66,7 +66,7 @@ export const scheduleLocalNotification = async (title: string, body: string, tim
             setTimeout(() => {
                 registration.showNotification(title, {
                     body: body,
-                    icon: '/ChronoHabit/icon-192.png',
+                    icon: './icon-192.png',
                     tag: tag
                 });
             }, delay);
