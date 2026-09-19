@@ -74,6 +74,7 @@ const TimeBoxingTab: React.FC<TimeBoxingTabProps> = ({ subtasks, onEdit }) => {
     const [movingTask, setMovingTask] = useState<string | null>(null);
     const [resizingTask, setResizingTask] = useState<string | null>(null);
     const [dragHoverHour, setDragHoverHour] = useState<number | null>(null);
+    const [dragHoverDateStr, setDragHoverDateStr] = useState<string | null>(null);
 
     useEffect(() => {
         const timer = setInterval(() => setNow(new Date()), 60000);
@@ -98,6 +99,28 @@ const TimeBoxingTab: React.FC<TimeBoxingTabProps> = ({ subtasks, onEdit }) => {
         e.dataTransfer.setDragImage(img, 0, 0);
         
         setTimeout(() => setResizingTask(taskId), 0);
+    };
+
+    const handleDropOnDate = (e: React.DragEvent, targetDateStr: string) => {
+        e.preventDefault();
+        setDragHoverDateStr(null);
+        
+        const moveId = movingTask || e.dataTransfer.getData('move');
+        if (moveId) {
+            const task = subtasks.find(s => s.id === moveId);
+            if (task && task.timeBox) {
+                // Ignore if dropped on the same day it already belongs to
+                if (task.timeBox.date === targetDateStr) return;
+
+                updateSubtask({
+                    ...task,
+                    timeBox: {
+                        ...task.timeBox,
+                        date: targetDateStr
+                    }
+                });
+            }
+        }
     };
 
     const handleDrop = (e: React.DragEvent, targetHour: number) => {
@@ -169,13 +192,20 @@ const TimeBoxingTab: React.FC<TimeBoxingTabProps> = ({ subtasks, onEdit }) => {
                 {/* Date Navigator */}
                 <div className="flex justify-between items-center mb-4 gap-2 overflow-x-auto pb-2 custom-scrollbar">
                     {weekDates.map((d, i) => {
-                        const isSelected = formatDate(d) === selectedDateStr;
-                        const isToday = formatDate(d) === todayStr;
+                        const dateStr = formatDate(d);
+                        const isSelected = dateStr === selectedDateStr;
+                        const isToday = dateStr === todayStr;
+                        const isHovered = dragHoverDateStr === dateStr;
+                        
                         return (
                             <div 
                                 key={i}
                                 onClick={() => setSelectedDate(d)}
-                                className={`flex flex-col items-center justify-center w-12 h-14 rounded-lg cursor-pointer flex-shrink-0 transition-all ${isSelected ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'} ${isToday && !isSelected ? 'border border-primary' : ''}`}
+                                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                                onDragEnter={() => setDragHoverDateStr(dateStr)}
+                                onDragLeave={() => setDragHoverDateStr(null)}
+                                onDrop={(e) => handleDropOnDate(e, dateStr)}
+                                className={`flex flex-col items-center justify-center w-12 h-14 rounded-lg cursor-pointer flex-shrink-0 transition-all ${isHovered ? 'bg-primary/50 border border-primary text-white scale-110 shadow-lg' : isSelected ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'} ${isToday && !isSelected && !isHovered ? 'border border-primary' : ''}`}
                             >
                                 <span className="text-[10px] uppercase font-bold">{dayNames[d.getDay()]}</span>
                                 <span className="text-lg font-black">{d.getDate()}</span>
