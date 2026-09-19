@@ -5,7 +5,9 @@ import { getMessaging, getToken, onMessage, Messaging } from 'firebase/messaging
 // @ts-ignore
 import { getAnalytics } from 'firebase/analytics';
 import { getDatabase, ref, set, onValue, query, orderByChild, limitToLast, get, child } from 'firebase/database';
-import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User } from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
+import { getAuth, signInWithPopup, signInWithRedirect, signInWithCredential, GoogleAuthProvider, signOut, onAuthStateChanged, User } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHmV3KCrZPym4Vep2dlwAbrgOegQAEQ8M",
@@ -137,12 +139,28 @@ export const subscribeToFriends = (userId: string, onData: (friends: string[]) =
 // --- AUTH ---
 export const signInWithGoogle = async () => {
     if (!auth) throw new Error("Auth not initialized");
-    const result = await signInWithPopup(auth, provider);
-    return result.user;
+    
+    if (Capacitor.isNativePlatform()) {
+        try {
+            const result = await FirebaseAuthentication.signInWithGoogle();
+            const credential = GoogleAuthProvider.credential(result.credential?.idToken);
+            const userCredential = await signInWithCredential(auth, credential);
+            return userCredential.user;
+        } catch (error) {
+            console.error("Native Google Sign-In Error:", error);
+            throw error;
+        }
+    } else {
+        const result = await signInWithPopup(auth, provider);
+        return result.user;
+    }
 };
 
 export const logoutFirebase = async () => {
     if (!auth) return;
+    if (Capacitor.isNativePlatform()) {
+        await FirebaseAuthentication.signOut();
+    }
     await signOut(auth);
 };
 
