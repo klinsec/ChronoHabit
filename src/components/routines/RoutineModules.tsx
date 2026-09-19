@@ -1,13 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useTimeTracker } from '@/context/TimeTrackerContext';
-import { showImmediateNotification, scheduleLocalNotification } from '@/utils/notifications';
+import { showImmediateNotification, scheduleLocalNotification, requestNotificationPermission } from '@/utils/notifications';
 
 const scheduleRoutineAlarm = async (timeStr: string, tag: string, title: string, body: string) => {
-    if (Notification.permission === 'default') {
-        await Notification.requestPermission();
-    }
-    if (Notification.permission !== 'granted') return;
-
     const [h, m] = timeStr.split(':').map(Number);
     const target = new Date();
     target.setHours(h, m, 0, 0);
@@ -64,9 +59,7 @@ export const MorningMomentumModule: React.FC<{ onRemove: () => void }> = ({ onRe
                     type="time" 
                     value={time} 
                     onChange={e => setTime(e.target.value)}
-                    onClick={() => {
-                        if (Notification.permission === 'default') Notification.requestPermission();
-                    }}
+                    onClick={() => requestNotificationPermission()}
                     className="bg-gray-900 border border-green-500/50 text-green-400 font-bold text-sm px-2 py-1 rounded outline-none focus:ring-1 focus:ring-green-400" 
                 />
             </div>
@@ -142,9 +135,7 @@ export const ShutdownModule: React.FC<{ onRemove: () => void }> = ({ onRemove })
                         type="time" 
                         value={time} 
                         onChange={e => setTime(e.target.value)}
-                        onClick={() => {
-                            if (Notification.permission === 'default') Notification.requestPermission();
-                        }}
+                        onClick={() => requestNotificationPermission()}
                         className="bg-gray-900 border border-purple-500 text-white font-bold text-2xl p-2 rounded-lg outline-none focus:ring-2 focus:ring-purple-400" 
                     />
                 </div>

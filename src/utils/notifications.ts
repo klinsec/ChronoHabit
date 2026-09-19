@@ -1,5 +1,43 @@
+import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
+
+// Helper to generate a numeric ID from a string tag
+const generateIdFromTag = (tag: string) => {
+    let hash = 0;
+    for (let i = 0; i < tag.length; i++) {
+        hash = ((hash << 5) - hash) + tag.charCodeAt(i);
+        hash |= 0; 
+    }
+    return Math.abs(hash);
+};
+
 export const scheduleLocalNotification = async (title: string, body: string, timestampMs: number, tag: string = 'chronohabit-scheduled') => {
-    // Check permission
+    const delay = timestampMs - Date.now();
+    if (delay <= 0) return; // Time already passed
+
+    if (Capacitor.isNativePlatform()) {
+        try {
+            const perm = await LocalNotifications.requestPermissions();
+            if (perm.display !== 'granted') return;
+
+            await LocalNotifications.schedule({
+                notifications: [
+                    {
+                        title,
+                        body,
+                        id: generateIdFromTag(tag),
+                        schedule: { at: new Date(timestampMs) }
+                    }
+                ]
+            });
+            console.log(`Scheduled Capacitor native notification (${tag}) for`, new Date(timestampMs));
+        } catch (err) {
+            console.error("Capacitor notification error:", err);
+        }
+        return;
+    }
+
+    // Web fallback
     if (Notification.permission !== 'granted') {
         const permission = await Notification.requestPermission();
         if (permission !== 'granted') return;
@@ -22,34 +60,66 @@ export const scheduleLocalNotification = async (title: string, body: string, tim
                 showTrigger: new TimestampTrigger(timestampMs),
                 tag: tag
             });
-            console.log(`Scheduled native notification (${tag}) for`, new Date(timestampMs));
+            console.log(`Scheduled web native notification (${tag}) for`, new Date(timestampMs));
         } else {
             // Fallback: Local timeout if app remains open in background
-            const delay = timestampMs - Date.now();
-            if (delay > 0) {
-                setTimeout(() => {
-                    registration.showNotification(title, {
-                        body: body,
-                        icon: '/ChronoHabit/icon-192.png',
-                        tag: tag
-                    });
-                }, delay);
-                console.log(`Scheduled fallback notification (${tag}) for`, new Date(timestampMs));
-            }
+            setTimeout(() => {
+                registration.showNotification(title, {
+                    body: body,
+                    icon: '/ChronoHabit/icon-192.png',
+                    tag: tag
+                });
+            }, delay);
+            console.log(`Scheduled web fallback notification (${tag}) for`, new Date(timestampMs));
         }
     } catch (err) {
-        console.error("Error scheduling notification:", err);
+        console.error("Error scheduling web notification:", err);
     }
 };
 
 export const showImmediateNotification = async (title: string, body: string) => {
+    if (Capacitor.isNativePlatform()) {
+        try {
+            const perm = await LocalNotifications.requestPermissions();
+            if (perm.display !== 'granted') return;
+            
+            await LocalNotifications.schedule({
+                notifications: [
+                    {
+                        title,
+                        body,
+                        id: Math.floor(Math.random() * 1000000),
+                        schedule: { at: new Date(Date.now() + 1000) } // immediate
+                    }
+                ]
+            });
+        } catch (err) {
+            console.error("Capacitor notification error:", err);
+        }
+        return;
+    }
+
     if (Notification.permission === 'granted') {
         const registration = await navigator.serviceWorker.getRegistration();
         if (registration) {
             registration.showNotification(title, {
                 body,
-                icon: './icon-192.png'
+                icon: '/ChronoHabit/icon-192.png'
             });
+        }
+    }
+};
+
+export const requestNotificationPermission = async () => {
+    if (Capacitor.isNativePlatform()) {
+        try {
+            await LocalNotifications.requestPermissions();
+        } catch (err) {
+            console.error("Capacitor perm error:", err);
+        }
+    } else {
+        if (Notification.permission === 'default') {
+            await Notification.requestPermission();
         }
     }
 };
