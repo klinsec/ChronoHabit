@@ -15,6 +15,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "818201828266-prg3ff79l2asmci29dd7nnqjsurg2gkd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "org.klinsec.chronohabit",
+            "certificate_hash": "355a6f42044425e6ed13bf23a8383110ccacd4c6"
+          }
+        },
+        {
           "client_id": "818201828266-ts1mheehutt0kj21aj2kljq73uks1sir.apps.googleusercontent.com",
           "client_type": 3
         }
