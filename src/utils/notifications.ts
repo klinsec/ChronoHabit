@@ -11,7 +11,33 @@ const generateIdFromTag = (tag: string) => {
     return Math.abs(hash);
 };
 
-export const scheduleLocalNotification = async (title: string, body: string, timestampMs: number, tag: string = 'chronohabit-scheduled') => {
+export const setupNotificationChannels = async () => {
+    if (Capacitor.isNativePlatform()) {
+        try {
+            await LocalNotifications.createChannel({
+                id: 'chronohabit-alarm',
+                name: 'Alarmas de Rutinas',
+                description: 'Alarmas que suenan fuerte para tus rutinas importantes',
+                importance: 5,
+                visibility: 1,
+                vibration: true,
+                sound: 'alarm.wav'
+            });
+            await LocalNotifications.createChannel({
+                id: 'chronohabit-default',
+                name: 'Notificaciones normales',
+                description: 'Avisos estA!ndar de la aplicaciA3n',
+                importance: 3,
+                visibility: 1,
+                vibration: true
+            });
+        } catch (e) {
+            console.error("Error creating notification channels:", e);
+        }
+    }
+};
+
+export const scheduleLocalNotification = async (title: string, body: string, timestampMs: number, tag: string = 'chronohabit-scheduled', isAlarm: boolean = false) => {
     const delay = timestampMs - Date.now();
     if (delay <= 0) return; // Time already passed
 
@@ -26,11 +52,13 @@ export const scheduleLocalNotification = async (title: string, body: string, tim
                         title,
                         body,
                         id: generateIdFromTag(tag),
-                        schedule: { at: new Date(timestampMs) }
+                        schedule: { at: new Date(timestampMs) },
+                        channelId: isAlarm ? 'chronohabit-alarm' : 'chronohabit-default',
+                        sound: isAlarm ? 'alarm.wav' : undefined
                     }
                 ]
             });
-            console.log(`Scheduled Capacitor native notification (${tag}) for`, new Date(timestampMs));
+            console.log(`Scheduled Capacitor native notification (${tag}) for`, new Date(timestampMs), isAlarm ? 'as ALARM' : '');
         } catch (err) {
             console.error("Capacitor notification error:", err);
         }

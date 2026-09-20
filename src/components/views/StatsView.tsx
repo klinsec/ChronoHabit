@@ -238,7 +238,6 @@ const RankingView = () => {
                 friendsList={friendsList}
                 showFooterSelf={true}
                 filterZero={false} 
-                limit={10}
             />
         </div>
     );

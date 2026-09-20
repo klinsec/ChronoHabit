@@ -13,6 +13,7 @@ import { View } from '@/types';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { ToastProvider } from '@/context/ToastContext';
 import NotificationAlertModal from '@/components/modals/NotificationAlertModal';
+import { setupNotificationChannels } from '@/utils/notifications';
 
 const APP_VERSION = '1.6.2';
 
@@ -49,6 +50,8 @@ const AppContent: React.FC = () => {
   }, [currentView]);
 
   useEffect(() => {
+    setupNotificationChannels();
+    
     // Strictly prevent default install prompt
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();

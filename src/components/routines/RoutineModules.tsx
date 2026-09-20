@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTimeTracker } from '@/context/TimeTrackerContext';
 import { showImmediateNotification, scheduleLocalNotification, requestNotificationPermission } from '@/utils/notifications';
 
-const scheduleRoutineAlarm = async (timeStr: string, tag: string, title: string, body: string) => {
+const scheduleRoutineAlarm = async (timeStr: string, tag: string, title: string, body: string, isAlarm: boolean = false) => {
     const [h, m] = timeStr.split(':').map(Number);
     const target = new Date();
     target.setHours(h, m, 0, 0);
@@ -12,26 +12,29 @@ const scheduleRoutineAlarm = async (timeStr: string, tag: string, title: string,
         target.setDate(target.getDate() + 1);
     }
     
-    await scheduleLocalNotification(title, body, target.getTime(), tag);
+    await scheduleLocalNotification(title, body, target.getTime(), tag, isAlarm);
 };
 
 export const MorningMomentumModule: React.FC<{ onRemove: () => void }> = ({ onRemove }) => {
     const { addRoutineLog, routineLogs } = useTimeTracker();
     const [checks, setChecks] = useState([false, false, false]);
     const [time, setTime] = useState(() => localStorage.getItem('morningRoutineTime') || '06:00');
+    const [isAlarm, setIsAlarm] = useState(() => localStorage.getItem('morningRoutineIsAlarm') !== 'false'); // Default true for appeal
 
     const todayStr = new Date().toLocaleDateString('en-CA');
     const isCompletedToday = routineLogs.some(log => log.moduleId === '202020' && log.date === todayStr);
 
     useEffect(() => {
         localStorage.setItem('morningRoutineTime', time);
+        localStorage.setItem('morningRoutineIsAlarm', isAlarm.toString());
         scheduleRoutineAlarm(
             time, 
             'chronohabit-morning', 
             '¡Impulso Matutino!', 
-            '¡Hay que mover el esqueleto! 🏃‍♂️ Empieza tus rutinas ahora.'
+            '¡Hay que mover el esqueleto! 🏃‍♂️💪 Empieza tus rutinas ahora.',
+            isAlarm
         );
-    }, [time]);
+    }, [time, isAlarm]);
 
     const toggleCheck = (index: number) => {
         if (isCompletedToday) return; // Blocked if already completed today
@@ -55,13 +58,21 @@ export const MorningMomentumModule: React.FC<{ onRemove: () => void }> = ({ onRe
                     <span className="text-2xl">🌅</span>
                     <h3 className="font-bold text-lg text-green-400">Impulso Matutino</h3>
                 </div>
-                <input 
-                    type="time" 
-                    value={time} 
-                    onChange={e => setTime(e.target.value)}
-                    onClick={() => requestNotificationPermission()}
-                    className="bg-gray-900 border border-green-500/50 text-green-400 font-bold text-sm px-2 py-1 rounded outline-none focus:ring-1 focus:ring-green-400" 
-                />
+                <div className="flex flex-col items-end gap-2">
+                    <input 
+                        type="time" 
+                        value={time} 
+                        onChange={e => setTime(e.target.value)}
+                        onClick={() => requestNotificationPermission()}
+                        className="bg-gray-900 border border-green-500/50 text-green-400 font-bold text-sm px-2 py-1 rounded outline-none focus:ring-1 focus:ring-green-400" 
+                    />
+                    <button 
+                        onClick={() => setIsAlarm(!isAlarm)}
+                        className={`text-[10px] px-2 py-1 rounded border flex items-center gap-1 transition-colors ${isAlarm ? 'bg-red-900/30 border-red-500/50 text-red-400' : 'bg-gray-800 border-gray-600 text-gray-400'}`}
+                    >
+                        {isAlarm ? '🔔 Alarma' : '📱 Notificación'}
+                    </button>
+                </div>
             </div>
             <p className="text-sm text-gray-400 mb-4">La rutina perfecta para arrancar el día con energía y atacar tu Sapo directamente.</p>
             
@@ -108,25 +119,36 @@ export const MorningMomentumModule: React.FC<{ onRemove: () => void }> = ({ onRe
 
 export const ShutdownModule: React.FC<{ onRemove: () => void }> = ({ onRemove }) => {
     const [time, setTime] = useState(() => localStorage.getItem('shutdownRoutineTime') || '19:00');
+    const [isAlarm, setIsAlarm] = useState(() => localStorage.getItem('shutdownRoutineIsAlarm') !== 'false');
 
     useEffect(() => {
         localStorage.setItem('shutdownRoutineTime', time);
+        localStorage.setItem('shutdownRoutineIsAlarm', isAlarm.toString());
         scheduleRoutineAlarm(
             time, 
             'chronohabit-shutdown', 
             '🛑 Ritual de Desconexión', 
-            '¡Hora de cerrar! Vacía tu bandeja y desconecta por hoy.'
+            '¡Hora de cerrar! Vacía tu bandeja y desconecta por hoy.',
+            isAlarm
         );
-    }, [time]);
+    }, [time, isAlarm]);
 
     return (
         <div className="relative bg-surface border border-purple-500/30 rounded-xl p-4 shadow-lg overflow-hidden">
             <button onClick={onRemove} className="absolute top-2 right-2 text-gray-500 hover:text-red-400 font-bold px-2 py-1 bg-gray-800 rounded">X</button>
-            <div className="flex items-center gap-2 mb-3">
-                <span className="text-2xl">🌙</span>
-                <h3 className="font-bold text-lg text-purple-400">Ritual de Desconexión</h3>
+            <div className="flex justify-between items-center mb-3 pr-8">
+                <div className="flex items-center gap-2">
+                    <span className="text-2xl">🌙</span>
+                    <h3 className="font-bold text-lg text-purple-400">Ritual de Desconexión</h3>
+                </div>
+                <button 
+                    onClick={() => setIsAlarm(!isAlarm)}
+                    className={`text-[10px] px-2 py-1 rounded border flex items-center gap-1 transition-colors ${isAlarm ? 'bg-red-900/30 border-red-500/50 text-red-400' : 'bg-gray-800 border-gray-600 text-gray-400'}`}
+                >
+                    {isAlarm ? '🔔 Alarma' : '📱 Notificación'}
+                </button>
             </div>
-            <p className="text-sm text-gray-400 mb-4">Establece un límite diario. A la hora indicada recibirás una notificación para cerrar todo y descansar.</p>
+            <p className="text-sm text-gray-400 mb-4">Establece un límite diario. A la hora indicada recibirás el aviso para cerrar todo y descansar.</p>
             
             <div className="bg-gray-800 p-4 rounded-lg flex flex-col items-center justify-center">
                 <div className="flex items-center gap-2 mb-2">
