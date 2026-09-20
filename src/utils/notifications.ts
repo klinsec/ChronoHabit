@@ -15,13 +15,13 @@ export const setupNotificationChannels = async () => {
     if (Capacitor.isNativePlatform()) {
         try {
             await LocalNotifications.createChannel({
-                id: 'chronohabit-alarm',
+                id: 'chronohabit-alarm-v2',
                 name: 'Alarmas de Rutinas',
                 description: 'Alarmas que suenan fuerte para tus rutinas importantes',
                 importance: 5,
                 visibility: 1,
                 vibration: true,
-                sound: 'alarm.wav'
+                sound: 'alarm' // WITHOUT extension!
             });
             await LocalNotifications.createChannel({
                 id: 'chronohabit-default',
@@ -52,9 +52,9 @@ export const scheduleLocalNotification = async (title: string, body: string, tim
                         title,
                         body,
                         id: generateIdFromTag(tag),
-                        schedule: { at: new Date(timestampMs) },
-                        channelId: isAlarm ? 'chronohabit-alarm' : 'chronohabit-default',
-                        sound: isAlarm ? 'alarm.wav' : undefined
+                        schedule: { at: new Date(timestampMs), allowWhileIdle: true },
+                        channelId: isAlarm ? 'chronohabit-alarm-v2' : 'chronohabit-default',
+                        sound: isAlarm ? 'alarm' : undefined
                     }
                 ]
             });
