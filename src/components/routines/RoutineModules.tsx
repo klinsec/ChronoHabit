@@ -15,7 +15,7 @@ const scheduleRoutineAlarm = async (timeStr: string, tag: string, title: string,
     await scheduleLocalNotification(title, body, target.getTime(), tag, isAlarm);
 };
 
-export const MorningMomentumModule: React.FC<{ onRemove: () => void }> = ({ onRemove }) => {
+export const MorningMomentumModule: React.FC<{ onRemove: () => void, onStateChange?: (finished: boolean) => void }> = ({ onRemove, onStateChange }) => {
     const { addRoutineLog, routineLogs } = useTimeTracker();
     const [checks, setChecks] = useState([false, false, false]);
     const [time, setTime] = useState(() => localStorage.getItem('morningRoutineTime') || '06:00');
@@ -67,6 +67,11 @@ export const MorningMomentumModule: React.FC<{ onRemove: () => void }> = ({ onRe
     // Logic: if alarm triggered today and it's within 20 mins
     const isActive = timeSinceAlarmMs >= 0 && timeSinceAlarmMs < 20 * 60 * 1000 && !checks[0];
     const isFailed = timeSinceAlarmMs >= 20 * 60 * 1000 && timeSinceAlarmMs < 24 * 60 * 60 * 1000 && !checks[0] && !isCompletedToday;
+    
+    const isFinished = isFailed || isCompletedToday;
+    useEffect(() => {
+        if (onStateChange) onStateChange(isFinished);
+    }, [isFinished, onStateChange]);
 
     const toggleCheck = (index: number) => {
         if (isCompletedToday || isFailed) return; 

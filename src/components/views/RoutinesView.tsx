@@ -30,6 +30,7 @@ const RoutinesView: React.FC = () => {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showLoadModal, setShowLoadModal] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
+  const [morningFinished, setMorningFinished] = useState(false);
   
   // Setup State
   const [newCommitments, setNewCommitments] = useState<Omit<Commitment, 'id' | 'status'>[]>([
@@ -101,21 +102,21 @@ const RoutinesView: React.FC = () => {
               </div>
           </div>
 
-          <div className="space-y-6 px-1">
-              <AnimatePresence>
-                  {activeModules.length === 0 && (
-                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12 text-gray-500 italic">
-                          No tienes rutinas activas. Abre la biblioteca para añadir una.
-                      </motion.div>
-                  )}
+          <div className="flex flex-col gap-6 px-1">
+            <AnimatePresence>
+                {activeModules.length === 0 && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12 text-gray-500 italic">
+                        No tienes rutinas activas. Abre la biblioteca para añadir una.
+                    </motion.div>
+                )}
 
-                  {activeModules.includes('202020') && (
-                      <motion.div layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }}>
-                          <MorningMomentumModule onRemove={() => removeModule('202020')} />
-                      </motion.div>
-                  )}
+                {activeModules.includes('202020') && (
+                    <motion.div layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }} className={morningFinished ? "order-last" : "order-first"}>
+                        <MorningMomentumModule onRemove={() => removeModule('202020')} onStateChange={setMorningFinished} />
+                    </motion.div>
+                )}
 
-                  {activeModules.includes('contract') && (
+                {activeModules.includes('contract') && (
                       <motion.div layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }} className="relative bg-surface border border-gray-700/50 rounded-xl p-4 shadow-lg">
                           <button onClick={() => removeModule('contract')} className="absolute top-2 right-2 text-gray-500 hover:text-red-400 z-10 w-6 h-6 flex items-center justify-center bg-gray-800 rounded-full">X</button>
                           

@@ -19,7 +19,10 @@ const NotificationAlertModal: React.FC = () => {
                 
                 // Clear them so it doesn't pop up again
                 await LocalNotifications.removeAllDeliveredNotifications();
-                window.dispatchEvent(new CustomEvent('switchTab', { detail: 'routines' }));
+                
+                if (notif.title.toLowerCase().includes('impulso') || notif.title.toLowerCase().includes('minutos')) {
+                    window.dispatchEvent(new CustomEvent('switchTab', { detail: 'routines' }));
+                }
             }
         } catch (e) {
             console.error("Error checking notifications:", e);
@@ -41,22 +44,30 @@ const NotificationAlertModal: React.FC = () => {
 
         // Listen for when notification is tapped while app is open or closed
         const actionListener = LocalNotifications.addListener('localNotificationActionPerformed', (notificationAction) => {
+            const title = notificationAction.notification.title;
             setAlertData({
-                title: notificationAction.notification.title,
+                title: title,
                 body: notificationAction.notification.body
             });
             LocalNotifications.removeAllDeliveredNotifications();
-            window.dispatchEvent(new CustomEvent('switchTab', { detail: 'routines' }));
+            
+            if (title.toLowerCase().includes('impulso') || title.toLowerCase().includes('minutos')) {
+                window.dispatchEvent(new CustomEvent('switchTab', { detail: 'routines' }));
+            }
         });
         
         // Listen for when notification is received while app is already open
         const receiveListener = LocalNotifications.addListener('localNotificationReceived', (notification) => {
+            const title = notification.title;
             setAlertData({
-                title: notification.title,
+                title: title,
                 body: notification.body
             });
             LocalNotifications.removeAllDeliveredNotifications();
-            window.dispatchEvent(new CustomEvent('switchTab', { detail: 'routines' }));
+            
+            if (title.toLowerCase().includes('impulso') || title.toLowerCase().includes('minutos')) {
+                window.dispatchEvent(new CustomEvent('switchTab', { detail: 'routines' }));
+            }
         });
 
         return () => {
