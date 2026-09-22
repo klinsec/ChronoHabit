@@ -1,5 +1,10 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
+
+const ChronohabitAlarm = registerPlugin<{
+    schedule(options: { id: number, timeAtMs: number, title: string, body: string }): Promise<void>;
+    cancel(options: { id: number }): Promise<void>;
+}>('ChronohabitAlarm');
 
 // Helper to generate a numeric ID from a string tag
 const generateIdFromTag = (tag: string) => {
@@ -40,7 +45,9 @@ export const setupNotificationChannels = async () => {
 export const cancelLocalNotification = async (tag: string) => {
     if (Capacitor.isNativePlatform()) {
         try {
-            await LocalNotifications.cancel({ notifications: [{ id: generateIdFromTag(tag) }] });
+            const id = generateIdFromTag(tag);
+            await LocalNotifications.cancel({ notifications: [{ id }] });
+            await ChronohabitAlarm.cancel({ id });
             console.log(`Cancelled notification with tag: ${tag}`);
         } catch (err) {
             console.error("Cancel notification error:", err);
@@ -57,19 +64,31 @@ export const scheduleLocalNotification = async (title: string, body: string, tim
             const perm = await LocalNotifications.requestPermissions();
             if (perm.display !== 'granted') return;
 
+            const id = generateIdFromTag(tag);
+
+            if (isAlarm) {
+                await ChronohabitAlarm.schedule({
+                    id,
+                    timeAtMs: timestampMs,
+                    title,
+                    body
+                });
+                console.log(`Scheduled native CUSTOM ALARM (${tag}) for`, new Date(timestampMs));
+                return;
+            }
+
             await LocalNotifications.schedule({
                 notifications: [
                     {
                         title,
                         body,
-                        id: generateIdFromTag(tag),
+                        id,
                         schedule: { at: new Date(timestampMs), allowWhileIdle: true },
-                        channelId: isAlarm ? 'chronohabit-alarm-v3' : 'chronohabit-default',
-                        sound: isAlarm ? 'alarmlong' : undefined
+                        channelId: 'chronohabit-default'
                     }
                 ]
             });
-            console.log(`Scheduled Capacitor native notification (${tag}) for`, new Date(timestampMs), isAlarm ? 'as ALARM' : '');
+            console.log(`Scheduled Capacitor native notification (${tag}) for`, new Date(timestampMs));
         } catch (err) {
             console.error("Capacitor notification error:", err);
         }
