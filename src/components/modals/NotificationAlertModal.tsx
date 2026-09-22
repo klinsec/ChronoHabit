@@ -114,13 +114,18 @@ const NotificationAlertModal: React.FC = () => {
                     className="fixed inset-0 z-[200] flex flex-col items-center justify-between bg-black text-white overflow-hidden"
                 >
                     {/* Background Image / Video Placeholder */}
-                    <div className="absolute inset-0 z-0">
+                    <div className="absolute inset-0 z-0 bg-black">
                         {/* 
-                          Aquí se mostrará el vídeo de fondo en el futuro.
-                          Actualmente usamos la imagen sin filtros oscuros para que se vea tal cual.
+                          Reproducimos el vídeo de fondo en bucle.
                         */}
-                        <img src="/assets/alarm-bg.webp" className="w-full h-full object-cover" alt="Alarm Background" />
-                        {/* <video src="/assets/alarm-video.mp4" autoPlay loop muted playsInline className="w-full h-full object-cover" /> */}
+                        <video 
+                            src="/assets/alarm-video.mp4" 
+                            autoPlay 
+                            loop 
+                            muted 
+                            playsInline 
+                            className="w-full h-full object-cover" 
+                        />
                     </div>
 
                     {/* Content */}
