@@ -75,6 +75,20 @@ const NotificationAlertModal: React.FC = () => {
         };
     }, []);
 
+    const [currentTime, setCurrentTime] = useState<string>('');
+
+    useEffect(() => {
+        const updateTime = () => {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            setCurrentTime(`${hours}:${minutes}`);
+        };
+        updateTime();
+        const interval = setInterval(updateTime, 1000);
+        return () => clearInterval(interval);
+    }, []);
+
     const dismissAlert = async () => {
         setAlertData(null);
         if (Capacitor.isNativePlatform()) {
@@ -87,6 +101,78 @@ const NotificationAlertModal: React.FC = () => {
     };
 
     if (!alertData) return null;
+
+    const isAlarm = alertData.title.toLowerCase().includes('impulso') || alertData.title.toLowerCase().includes('minutos');
+
+    if (isAlarm) {
+        return (
+            <AnimatePresence>
+                <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[200] flex flex-col items-center justify-between bg-black text-white overflow-hidden"
+                >
+                    {/* Background Image / Video Placeholder */}
+                    <div className="absolute inset-0 z-0">
+                        {/* 
+                          Aquí se mostrará el vídeo de fondo en el futuro.
+                          Actualmente usamos la imagen de prueba y se escalará a pantalla completa (1080x1920p).
+                        */}
+                        <img src="/assets/alarm-bg.webp" className="w-full h-full object-cover opacity-60" alt="Alarm Background" />
+                        {/* <video src="/assets/alarm-video.mp4" autoPlay loop muted playsInline className="w-full h-full object-cover opacity-60" /> */}
+                        
+                        {/* Viñeta/Degradado oscuro para que el texto resalte siempre */}
+                        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/90"></div>
+                    </div>
+
+                    {/* Content */}
+                    <div className="relative z-10 flex flex-col items-center w-full h-full justify-between py-24 px-6">
+                        {/* Top: Time and Text */}
+                        <div className="flex flex-col items-center mt-12 w-full">
+                            <motion.h1 
+                                initial={{ y: -20, opacity: 0 }}
+                                animate={{ y: 0, opacity: 1 }}
+                                transition={{ delay: 0.2 }}
+                                className="text-7xl font-light tracking-widest text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]"
+                            >
+                                {currentTime}
+                            </motion.h1>
+                            
+                            <motion.div 
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                transition={{ delay: 0.4 }}
+                                className="mt-8 flex flex-col items-center"
+                            >
+                                <h2 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 text-center drop-shadow-[0_0_15px_rgba(34,211,238,0.6)] uppercase tracking-wide">
+                                    {alertData.title}
+                                </h2>
+                                <p className="text-xl text-gray-300 mt-3 text-center px-4 font-medium">
+                                    {alertData.body}
+                                </p>
+                            </motion.div>
+                        </div>
+
+                        {/* Bottom: Glow Button */}
+                        <motion.div 
+                            initial={{ y: 30, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            transition={{ delay: 0.6 }}
+                            className="w-full max-w-xs mb-8"
+                        >
+                            <button 
+                                onClick={dismissAlert}
+                                className="w-full bg-black/40 backdrop-blur-md border-[3px] border-cyan-400 text-cyan-400 font-bold text-2xl py-5 px-8 rounded-full uppercase tracking-[0.2em] transition-all active:scale-95 shadow-[0_0_30px_rgba(34,211,238,0.7),inset_0_0_15px_rgba(34,211,238,0.4)]"
+                            >
+                                Aceptar
+                            </button>
+                        </motion.div>
+                    </div>
+                </motion.div>
+            </AnimatePresence>
+        );
+    }
 
     return (
         <AnimatePresence>
