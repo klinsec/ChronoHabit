@@ -126,46 +126,46 @@ const NotificationAlertModal: React.FC = () => {
                     {/* Content */}
                     <div className="relative z-10 flex flex-col items-center w-full h-full py-12 px-6">
                         
-                        {/* TOP: Time */}
-                        <div className="w-full flex flex-col items-center mt-12 flex-none">
+                        {/* TOP: Time and Text */}
+                        <div className="w-full flex flex-col items-center mt-10 flex-none">
                             <motion.h1 
                                 initial={{ y: -20, opacity: 0 }}
                                 animate={{ y: 0, opacity: 1 }}
                                 transition={{ delay: 0.2 }}
-                                className="text-8xl font-light tracking-widest text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]"
+                                className="text-6xl font-light tracking-widest text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]"
                             >
                                 {currentTime}
                             </motion.h1>
+
+                            <motion.div 
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                transition={{ delay: 0.4 }}
+                                className="flex flex-col items-center mt-4"
+                            >
+                                <h2 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 text-center drop-shadow-[0_0_15px_rgba(34,211,238,0.8)] uppercase tracking-wider">
+                                    {alertData.title}
+                                </h2>
+                                <p className="text-lg text-gray-100 mt-2 text-center px-4 font-semibold drop-shadow-md">
+                                    {alertData.body}
+                                </p>
+                            </motion.div>
                         </div>
 
                         {/* MIDDLE: Spacer to leave room for the logo */}
                         <div className="flex-1 w-full"></div>
 
-                        {/* BOTTOM: Text and Button */}
-                        <div className="w-full flex flex-col items-center justify-end mb-8 flex-none gap-6">
-                            <motion.div 
-                                initial={{ scale: 0.9, opacity: 0 }}
-                                animate={{ scale: 1, opacity: 1 }}
-                                transition={{ delay: 0.4 }}
-                                className="flex flex-col items-center"
-                            >
-                                <h2 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 text-center drop-shadow-[0_0_20px_rgba(34,211,238,0.8)] uppercase tracking-wider">
-                                    {alertData.title}
-                                </h2>
-                                <p className="text-xl text-gray-100 mt-2 text-center px-4 font-semibold drop-shadow-md">
-                                    {alertData.body}
-                                </p>
-                            </motion.div>
-
+                        {/* BOTTOM: Button */}
+                        <div className="w-full flex flex-col items-center justify-end mb-12 flex-none">
                             <motion.div 
                                 initial={{ y: 30, opacity: 0 }}
                                 animate={{ y: 0, opacity: 1 }}
                                 transition={{ delay: 0.6 }}
-                                className="w-full max-w-xs mt-2"
+                                className="w-full max-w-[16rem]"
                             >
                                 <button 
                                     onClick={dismissAlert}
-                                    className="w-full bg-black/20 backdrop-blur-sm border-[3px] border-cyan-400 text-cyan-400 font-bold text-2xl py-5 px-8 rounded-full uppercase tracking-[0.2em] transition-all active:scale-95 shadow-[0_0_30px_rgba(34,211,238,0.7),inset_0_0_15px_rgba(34,211,238,0.4)]"
+                                    className="w-full bg-black/20 backdrop-blur-sm border-[2px] border-cyan-400 text-cyan-400 font-bold text-xl py-3 px-6 rounded-full uppercase tracking-[0.2em] transition-all active:scale-95 shadow-[0_0_20px_rgba(34,211,238,0.5),inset_0_0_10px_rgba(34,211,238,0.3)]"
                                 >
                                     Aceptar
                                 </button>
