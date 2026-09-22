@@ -17,8 +17,8 @@ const NotificationAlertModal: React.FC = () => {
                 const notif = delivered.notifications[0];
                 setAlertData({ title: notif.title, body: notif.body });
                 
-                // Clear them so it doesn't pop up again
-                await LocalNotifications.removeAllDeliveredNotifications();
+                // Do NOT clear here, so the native alarm keeps playing!
+                // It will be cleared when the user taps "Entendido"
                 
                 if (notif.title.toLowerCase().includes('impulso') || notif.title.toLowerCase().includes('minutos')) {
                     window.dispatchEvent(new CustomEvent('switchTab', { detail: 'routines' }));
@@ -49,7 +49,6 @@ const NotificationAlertModal: React.FC = () => {
                 title: title,
                 body: notificationAction.notification.body
             });
-            LocalNotifications.removeAllDeliveredNotifications();
             
             if (title.toLowerCase().includes('impulso') || title.toLowerCase().includes('minutos')) {
                 window.dispatchEvent(new CustomEvent('switchTab', { detail: 'routines' }));
@@ -63,7 +62,6 @@ const NotificationAlertModal: React.FC = () => {
                 title: title,
                 body: notification.body
             });
-            LocalNotifications.removeAllDeliveredNotifications();
             
             if (title.toLowerCase().includes('impulso') || title.toLowerCase().includes('minutos')) {
                 window.dispatchEvent(new CustomEvent('switchTab', { detail: 'routines' }));
@@ -76,6 +74,17 @@ const NotificationAlertModal: React.FC = () => {
             receiveListener.then(l => l.remove());
         };
     }, []);
+
+    const dismissAlert = async () => {
+        setAlertData(null);
+        if (Capacitor.isNativePlatform()) {
+            try {
+                await LocalNotifications.removeAllDeliveredNotifications();
+            } catch (e) {
+                console.error("Error clearing notifications:", e);
+            }
+        }
+    };
 
     if (!alertData) return null;
 
@@ -105,7 +114,7 @@ const NotificationAlertModal: React.FC = () => {
                     <p className="text-gray-300 mb-8 text-lg">{alertData.body}</p>
                     
                     <button 
-                        onClick={() => setAlertData(null)}
+                        onClick={dismissAlert}
                         className="w-full bg-primary hover:bg-primary-dark text-black font-bold py-3 px-6 rounded-xl transition-transform active:scale-95 shadow-[0_0_15px_rgba(34,197,94,0.4)]"
                     >
                         ¡Entendido!
