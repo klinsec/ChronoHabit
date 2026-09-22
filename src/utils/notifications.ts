@@ -15,24 +15,35 @@ export const setupNotificationChannels = async () => {
     if (Capacitor.isNativePlatform()) {
         try {
             await LocalNotifications.createChannel({
-                id: 'chronohabit-alarm-v2',
+                id: 'chronohabit-alarm-v3', // updated ID for looping sound
                 name: 'Alarmas de Rutinas',
-                description: 'Alarmas que suenan fuerte para tus rutinas importantes',
+                description: 'Alarmas que suenan fuerte y en bucle para tus rutinas importantes',
                 importance: 5,
                 visibility: 1,
                 vibration: true,
-                sound: 'alarm' // WITHOUT extension!
+                sound: 'alarmlong' // new 3-min looped file
             });
             await LocalNotifications.createChannel({
                 id: 'chronohabit-default',
                 name: 'Notificaciones normales',
-                description: 'Avisos estA!ndar de la aplicaciA3n',
+                description: 'Avisos estándar de la aplicación',
                 importance: 3,
                 visibility: 1,
                 vibration: true
             });
         } catch (e) {
             console.error("Error creating notification channels:", e);
+        }
+    }
+};
+
+export const cancelLocalNotification = async (tag: string) => {
+    if (Capacitor.isNativePlatform()) {
+        try {
+            await LocalNotifications.cancel({ notifications: [{ id: generateIdFromTag(tag) }] });
+            console.log(`Cancelled notification with tag: ${tag}`);
+        } catch (err) {
+            console.error("Cancel notification error:", err);
         }
     }
 };
@@ -53,8 +64,8 @@ export const scheduleLocalNotification = async (title: string, body: string, tim
                         body,
                         id: generateIdFromTag(tag),
                         schedule: { at: new Date(timestampMs), allowWhileIdle: true },
-                        channelId: isAlarm ? 'chronohabit-alarm-v2' : 'chronohabit-default',
-                        sound: isAlarm ? 'alarm' : undefined
+                        channelId: isAlarm ? 'chronohabit-alarm-v3' : 'chronohabit-default',
+                        sound: isAlarm ? 'alarmlong' : undefined
                     }
                 ]
             });

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTimeTracker } from '@/context/TimeTrackerContext';
-import { showImmediateNotification, scheduleLocalNotification, requestNotificationPermission } from '@/utils/notifications';
+import { showImmediateNotification, scheduleLocalNotification, requestNotificationPermission, cancelLocalNotification } from '@/utils/notifications';
 
 const scheduleRoutineAlarm = async (timeStr: string, tag: string, title: string, body: string, isAlarm: boolean = false) => {
     const [h, m] = timeStr.split(':').map(Number);
@@ -19,10 +19,16 @@ export const MorningMomentumModule: React.FC<{ onRemove: () => void }> = ({ onRe
     const { addRoutineLog, routineLogs } = useTimeTracker();
     const [checks, setChecks] = useState([false, false, false]);
     const [time, setTime] = useState(() => localStorage.getItem('morningRoutineTime') || '06:00');
-    const [isAlarm, setIsAlarm] = useState(() => localStorage.getItem('morningRoutineIsAlarm') !== 'false'); // Default true for appeal
+    const [isAlarm, setIsAlarm] = useState(() => localStorage.getItem('morningRoutineIsAlarm') !== 'false');
+    const [now, setNow] = useState(Date.now());
 
     const todayStr = new Date().toLocaleDateString('en-CA');
     const isCompletedToday = routineLogs.some(log => log.moduleId === '202020' && log.date === todayStr);
+
+    useEffect(() => {
+        const timer = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, []);
 
     useEffect(() => {
         localStorage.setItem('morningRoutineTime', time);
@@ -31,32 +37,62 @@ export const MorningMomentumModule: React.FC<{ onRemove: () => void }> = ({ onRe
             time, 
             'chronohabit-morning', 
             '¡Impulso Matutino!', 
-            '¡Hay que mover el esqueleto! 🏃‍♂️💪 Empieza tus rutinas ahora.',
+            '¡Hay que mover el esqueleto! 🏃‍♂️ Empieza tus rutinas ahora.',
+            isAlarm
+        );
+
+        // Schedule 15-minute warning
+        const [h, m] = time.split(':').map(Number);
+        const target = new Date();
+        target.setHours(h, m, 0, 0);
+        if (target.getTime() <= Date.now()) {
+            target.setDate(target.getDate() + 1);
+        }
+        const warningTargetMs = target.getTime() + 15 * 60 * 1000;
+        
+        scheduleLocalNotification(
+            '¡Quedan 5 minutos!', 
+            '¿Ya terminaste de activar el cuerpo? ¡Date prisa!', 
+            warningTargetMs, 
+            'chronohabit-morning-warning', 
             isAlarm
         );
     }, [time, isAlarm]);
 
+    const [hours, minutes] = time.split(':').map(Number);
+    const alarmDate = new Date();
+    alarmDate.setHours(hours, minutes, 0, 0);
+    const timeSinceAlarmMs = now - alarmDate.getTime();
+    
+    // Logic: if alarm triggered today and it's within 20 mins
+    const isActive = timeSinceAlarmMs >= 0 && timeSinceAlarmMs < 20 * 60 * 1000 && !checks[0];
+    const isFailed = timeSinceAlarmMs >= 20 * 60 * 1000 && timeSinceAlarmMs < 24 * 60 * 60 * 1000 && !checks[0] && !isCompletedToday;
+
     const toggleCheck = (index: number) => {
-        if (isCompletedToday) return; // Blocked if already completed today
+        if (isCompletedToday || isFailed) return; 
 
         const newChecks = [...checks];
         newChecks[index] = !newChecks[index];
         setChecks(newChecks);
 
-        // If all 3 are checked right now, award point and lock
+        if (index === 0 && newChecks[0] === true) {
+            cancelLocalNotification('chronohabit-morning-warning');
+            cancelLocalNotification('chronohabit-morning');
+        }
+
         if (newChecks.every(c => c === true)) {
             addRoutineLog('202020', 1);
-            setChecks([false, false, false]); // Optional, will be hidden by isCompletedToday anyway
+            setChecks([false, false, false]); 
         }
     };
 
     return (
-        <div className="relative bg-surface border border-green-500/30 rounded-xl p-4 shadow-lg overflow-hidden">
+        <div className={`relative bg-surface border rounded-xl p-4 shadow-lg overflow-hidden ${isFailed ? 'border-red-500/50' : 'border-green-500/30'}`}>
             <button onClick={onRemove} className="absolute top-2 right-2 text-gray-500 hover:text-red-400 font-bold px-2 py-1 bg-gray-800 rounded">X</button>
             <div className="flex justify-between items-center mb-3 pr-8">
                 <div className="flex items-center gap-2">
                     <span className="text-2xl">🌅</span>
-                    <h3 className="font-bold text-lg text-green-400">Impulso Matutino</h3>
+                    <h3 className={`font-bold text-lg ${isFailed ? 'text-red-400' : 'text-green-400'}`}>Impulso Matutino</h3>
                 </div>
                 <div className="flex flex-col items-end gap-2">
                     <input 
@@ -64,7 +100,7 @@ export const MorningMomentumModule: React.FC<{ onRemove: () => void }> = ({ onRe
                         value={time} 
                         onChange={e => setTime(e.target.value)}
                         onClick={() => requestNotificationPermission()}
-                        className="bg-gray-900 border border-green-500/50 text-green-400 font-bold text-sm px-2 py-1 rounded outline-none focus:ring-1 focus:ring-green-400" 
+                        className={`bg-gray-900 border text-sm px-2 py-1 rounded outline-none font-bold ${isFailed ? 'border-red-500/50 text-red-400' : 'border-green-500/50 text-green-400 focus:ring-1 focus:ring-green-400'}`} 
                     />
                     <button 
                         onClick={() => setIsAlarm(!isAlarm)}
@@ -74,11 +110,28 @@ export const MorningMomentumModule: React.FC<{ onRemove: () => void }> = ({ onRe
                     </button>
                 </div>
             </div>
+            
             <p className="text-sm text-gray-400 mb-4">La rutina perfecta para arrancar el día con energía y atacar tu Sapo directamente.</p>
             
-            {isCompletedToday ? (
+            {isActive && !isCompletedToday && (
+                <div className="bg-red-900/40 border border-red-500/50 rounded-lg p-3 text-center mb-4 animate-pulse">
+                    <p className="text-xs text-red-200 mb-1">¡Tiempo para activar tu cuerpo!</p>
+                    <p className="text-2xl font-mono font-bold text-red-400">
+                        {Math.floor(((20 * 60 * 1000) - timeSinceAlarmMs) / 60000).toString().padStart(2, '0')}:
+                        {Math.floor((((20 * 60 * 1000) - timeSinceAlarmMs) % 60000) / 1000).toString().padStart(2, '0')}
+                    </p>
+                </div>
+            )}
+
+            {isFailed ? (
+                <div className="bg-red-900/30 border border-red-500 rounded-xl p-6 text-center">
+                    <span className="text-4xl block mb-2">❌</span>
+                    <h4 className="font-bold text-red-400 mb-1">¡Objetivo Fallido!</h4>
+                    <p className="text-sm text-gray-300">No activaste tu cuerpo a tiempo. El impulso matutino queda deshabilitado por hoy.</p>
+                </div>
+            ) : isCompletedToday ? (
                 <div className="bg-green-900/30 border border-green-500 rounded-xl p-6 text-center">
-                    <span className="text-4xl block mb-2">⭐</span>
+                    <span className="text-4xl block mb-2">🎯</span>
                     <h4 className="font-bold text-green-400 mb-1">¡Ciclo Completado!</h4>
                     <p className="text-sm text-gray-300">Has ganado 1 punto de disciplina. Vuelve mañana para un nuevo ciclo.</p>
                 </div>
