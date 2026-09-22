@@ -126,7 +126,7 @@ const NotificationAlertModal: React.FC = () => {
                     {/* Content */}
                     <div className="relative z-10 flex flex-col items-center w-full h-full py-12 px-6">
                         
-                        {/* TOP: Time and Text */}
+                        {/* TOP: Time and Title */}
                         <div className="w-full flex flex-col items-center mt-10 flex-none">
                             <motion.h1 
                                 initial={{ y: -20, opacity: 0 }}
@@ -146,17 +146,24 @@ const NotificationAlertModal: React.FC = () => {
                                 <h2 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 text-center drop-shadow-[0_0_15px_rgba(34,211,238,0.8)] uppercase tracking-wider">
                                     {alertData.title}
                                 </h2>
-                                <p className="text-lg text-gray-100 mt-2 text-center px-4 font-semibold drop-shadow-md">
-                                    {alertData.body}
-                                </p>
                             </motion.div>
                         </div>
 
                         {/* MIDDLE: Spacer to leave room for the logo */}
                         <div className="flex-1 w-full"></div>
 
-                        {/* BOTTOM: Button */}
+                        {/* BOTTOM: Body text and Button */}
                         <div className="w-full flex flex-col items-center justify-end mb-12 flex-none">
+                            
+                            <motion.p 
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: 0.5 }}
+                                className="text-lg text-gray-100 text-center px-4 font-semibold drop-shadow-md mb-6"
+                            >
+                                {alertData.body}
+                            </motion.p>
+
                             <motion.div 
                                 initial={{ y: 30, opacity: 0 }}
                                 animate={{ y: 0, opacity: 1 }}
