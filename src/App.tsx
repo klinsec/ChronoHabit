@@ -50,6 +50,12 @@ const AppContent: React.FC = () => {
   }, [currentView]);
 
   useEffect(() => {
+    const handleSwitch = (e: any) => setCurrentView(e.detail);
+    window.addEventListener('switchTab', handleSwitch);
+    return () => window.removeEventListener('switchTab', handleSwitch);
+  }, []);
+
+  useEffect(() => {
     setupNotificationChannels();
     
     // Strictly prevent default install prompt

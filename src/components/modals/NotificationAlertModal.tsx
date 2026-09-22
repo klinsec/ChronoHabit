@@ -19,6 +19,7 @@ const NotificationAlertModal: React.FC = () => {
                 
                 // Clear them so it doesn't pop up again
                 await LocalNotifications.removeAllDeliveredNotifications();
+                window.dispatchEvent(new CustomEvent('switchTab', { detail: 'routines' }));
             }
         } catch (e) {
             console.error("Error checking notifications:", e);
@@ -45,6 +46,7 @@ const NotificationAlertModal: React.FC = () => {
                 body: notificationAction.notification.body
             });
             LocalNotifications.removeAllDeliveredNotifications();
+            window.dispatchEvent(new CustomEvent('switchTab', { detail: 'routines' }));
         });
         
         // Listen for when notification is received while app is already open
@@ -54,6 +56,7 @@ const NotificationAlertModal: React.FC = () => {
                 body: notification.body
             });
             LocalNotifications.removeAllDeliveredNotifications();
+            window.dispatchEvent(new CustomEvent('switchTab', { detail: 'routines' }));
         });
 
         return () => {
