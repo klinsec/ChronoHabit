@@ -17,13 +17,26 @@ const scheduleRoutineAlarm = async (timeStr: string, tag: string, title: string,
 
 export const MorningMomentumModule: React.FC<{ onRemove: () => void, onStateChange?: (finished: boolean) => void }> = ({ onRemove, onStateChange }) => {
     const { addRoutineLog, routineLogs } = useTimeTracker();
-    const [checks, setChecks] = useState([false, false, false]);
+    const [checks, setChecks] = useState<boolean[]>(() => {
+        const saved = localStorage.getItem('morningRoutineChecks');
+        const savedDate = localStorage.getItem('morningRoutineDate');
+        const todayStr = new Date().toLocaleDateString('en-CA');
+        if (saved && savedDate === todayStr) {
+            return JSON.parse(saved);
+        }
+        return [false, false, false];
+    });
     const [time, setTime] = useState(() => localStorage.getItem('morningRoutineTime') || '06:00');
     const [isAlarm, setIsAlarm] = useState(() => localStorage.getItem('morningRoutineIsAlarm') !== 'false');
     const [now, setNow] = useState(Date.now());
 
     const todayStr = new Date().toLocaleDateString('en-CA');
     const isCompletedToday = routineLogs.some(log => log.moduleId === '202020' && log.date === todayStr);
+
+    useEffect(() => {
+        localStorage.setItem('morningRoutineChecks', JSON.stringify(checks));
+        localStorage.setItem('morningRoutineDate', todayStr);
+    }, [checks, todayStr]);
 
     useEffect(() => {
         const timer = setInterval(() => setNow(Date.now()), 1000);
