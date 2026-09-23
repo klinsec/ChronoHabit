@@ -20,7 +20,7 @@ const NotificationAlertModal: React.FC = () => {
                 // Do NOT clear here, so the native alarm keeps playing!
                 // It will be cleared when the user taps "Entendido"
                 
-                if (notif.title.toLowerCase().includes('impulso') || notif.title.toLowerCase().includes('minutos')) {
+                if (notif.title.toLowerCase().includes('impulso') || notif.title.toLowerCase().includes('minutos') || notif.title.toLowerCase().includes('ritual')) {
                     window.dispatchEvent(new CustomEvent('switchTab', { detail: 'routines' }));
                 }
             }
@@ -50,7 +50,7 @@ const NotificationAlertModal: React.FC = () => {
                 body: notificationAction.notification.body
             });
             
-            if (title.toLowerCase().includes('impulso') || title.toLowerCase().includes('minutos')) {
+            if (title.toLowerCase().includes('impulso') || title.toLowerCase().includes('minutos') || title.toLowerCase().includes('ritual')) {
                 window.dispatchEvent(new CustomEvent('switchTab', { detail: 'routines' }));
             }
         });
@@ -63,7 +63,7 @@ const NotificationAlertModal: React.FC = () => {
                 body: notification.body
             });
             
-            if (title.toLowerCase().includes('impulso') || title.toLowerCase().includes('minutos')) {
+            if (title.toLowerCase().includes('impulso') || title.toLowerCase().includes('minutos') || title.toLowerCase().includes('ritual')) {
                 window.dispatchEvent(new CustomEvent('switchTab', { detail: 'routines' }));
             }
         });
@@ -102,7 +102,7 @@ const NotificationAlertModal: React.FC = () => {
 
     if (!alertData) return null;
 
-    const isAlarm = alertData.title.toLowerCase().includes('impulso') || alertData.title.toLowerCase().includes('minutos');
+    const isAlarm = alertData.title.toLowerCase().includes('impulso') || alertData.title.toLowerCase().includes('minutos') || alertData.title.toLowerCase().includes('ritual');
 
     if (isAlarm) {
         return (
