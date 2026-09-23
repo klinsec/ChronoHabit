@@ -308,6 +308,38 @@ export const TimeTrackerProvider: React.FC<{ children: ReactNode }> = ({ childre
       }
   }, [notificationsEnabled]);
 
+  // Normalize Overdue/Today Tasks
+  useEffect(() => {
+      const todayStr = getTodayStr();
+      setSubtasks(prev => {
+          let changed = false;
+          const normalized = prev.map(s => {
+              if (s.completed) return s;
+              
+              if (s.timeBox && s.timeBox.date && (!s.timeBox.repeatDays || s.timeBox.repeatDays.length === 0)) {
+                  if (s.timeBox.date < todayStr) {
+                      changed = true;
+                      return {
+                          ...s,
+                          status: 'today',
+                          timeBox: {
+                              ...s.timeBox,
+                              date: todayStr,
+                              startTime: '',
+                              endTime: ''
+                          }
+                      };
+                  } else if (s.timeBox.date === todayStr && s.status !== 'today') {
+                      changed = true;
+                      return { ...s, status: 'today' };
+                  }
+              }
+              return s;
+          });
+          return changed ? normalized : prev;
+      });
+  }, [getTodayStr]);
+
   // Persistence Effects (Local)
   useEffect(() => localStorage.setItem('tasks', JSON.stringify(tasks)), [tasks]);
   useEffect(() => localStorage.setItem('timeEntries', JSON.stringify(timeEntries)), [timeEntries]);
